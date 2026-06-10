@@ -5,9 +5,6 @@ public enum ComposeLabels {
     public static let service = "com.docker.compose.service"
 
     public static func runFlags(projectName: String, serviceName: String) -> [String] {
-        [
-            "-l", "\(project)=\(projectName)",
-            "-l", "\(service)=\(serviceName)",
-        ]
+        ["-l", "\(project)=\(projectName)", "-l", "\(service)=\(serviceName)"]
     }
 }

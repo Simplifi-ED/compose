@@ -7,6 +7,18 @@ public struct ServicePlan: Sendable, Equatable {
 }
 
 public enum ServicePlanner {
+    public static func plans(
+        for composeFile: ComposeFile,
+        projectName: String,
+        composeDirectory: URL
+    ) throws -> [ServicePlan] {
+        try startupLayers(
+            for: composeFile,
+            projectName: projectName,
+            composeDirectory: composeDirectory
+        ).flatMap { $0 }
+    }
+
     public static func startupLayers(
         for composeFile: ComposeFile,
         projectName: String,
@@ -28,59 +40,16 @@ public enum ServicePlanner {
         for composeFile: ComposeFile
     ) throws -> [[(serviceName: String, service: ComposeService)]] {
         let services = composeFile.services
-        var inDegree: [String: Int] = [:]
-        var dependents: [String: [String]] = [:]
-
-        for serviceName in services.keys {
-            inDegree[serviceName] = 0
-            dependents[serviceName] = []
+        return try DependencyGraph.serviceLayers(for: services).map { layer in
+            layer.map { ($0, services[$0]!) }
         }
-
-        for (serviceName, service) in services {
-            var seenDependencies: Set<String> = []
-            let dependencies = service.dependsOn.filter { seenDependencies.insert($0).inserted }
-            inDegree[serviceName] = dependencies.count
-            for dependency in dependencies {
-                guard services.keys.contains(dependency) else {
-                    throw ComposeError.unknownDependency(service: serviceName, dependency: dependency)
-                }
-                dependents[dependency, default: []].append(serviceName)
-            }
-        }
-
-        var layers: [[(serviceName: String, service: ComposeService)]] = []
-        var remaining = services.count
-
-        while remaining > 0 {
-            let layer = inDegree
-                .filter { $0.value == 0 }
-                .map(\.key)
-                .sorted()
-
-            guard !layer.isEmpty else {
-                throw ComposeError.circularDependency(services: findCycle(in: services))
-            }
-
-            layers.append(layer.map { ($0, services[$0]!) })
-            remaining -= layer.count
-
-            for serviceName in layer {
-                inDegree.removeValue(forKey: serviceName)
-                for dependent in dependents[serviceName, default: []] {
-                    inDegree[dependent, default: 0] -= 1
-                }
-            }
-        }
-
-        return layers
     }
 
     static func shutdownLayers(
         for composeFile: ComposeFile,
         discoveredServiceNames: Set<String>
     ) throws -> [[String]] {
-        try dependencyLayers(for: composeFile)
-            .map { $0.map(\.serviceName) }
+        try DependencyGraph.serviceLayers(for: composeFile.services)
             .reversed()
             .map { layer in layer.filter { discoveredServiceNames.contains($0) } }
             .filter { !$0.isEmpty }
@@ -89,7 +58,7 @@ public enum ServicePlanner {
     public static func shutdownContainerLayers(
         for composeFile: ComposeFile,
         containers: [DiscoveredContainer]
-    ) throws -> [[DiscoveredContainer]] {
+    ) throws -> ShutdownContainerPlan {
         let byService = Dictionary(grouping: containers.compactMap { container -> (String, DiscoveredContainer)? in
             guard let serviceName = container.serviceName else { return nil }
             return (serviceName, container)
@@ -101,7 +70,7 @@ public enum ServicePlanner {
             discoveredServiceNames: discoveredServiceNames
         )
 
-        var layers = serviceLayers.map { layer in
+        let layers = serviceLayers.map { layer in
             layer.flatMap { byService[$0, default: []] }
         }
 
@@ -110,51 +79,14 @@ public enum ServicePlanner {
             guard let serviceName = container.serviceName else { return true }
             return !knownServices.contains(serviceName)
         }
+        .sorted { $0.name < $1.name }
+
+        var allLayers = layers
         if !orphans.isEmpty {
-            layers.append(orphans.sorted { $0.name < $1.name })
+            allLayers.append(orphans)
         }
 
-        return layers
-    }
-
-    private static func findCycle(in services: [String: ComposeService]) -> [String] {
-        var visited: Set<String> = []
-        var stack: Set<String> = []
-        var path: [String] = []
-
-        func dfs(_ serviceName: String) -> [String]? {
-            if stack.contains(serviceName) {
-                if let start = path.firstIndex(of: serviceName) {
-                    return Array(path[start...]) + [serviceName]
-                }
-                return [serviceName, serviceName]
-            }
-            if visited.contains(serviceName) {
-                return nil
-            }
-
-            visited.insert(serviceName)
-            stack.insert(serviceName)
-            path.append(serviceName)
-
-            for dependency in services[serviceName]?.dependsOn ?? [] {
-                if let cycle = dfs(dependency) {
-                    return cycle
-                }
-            }
-
-            path.removeLast()
-            stack.remove(serviceName)
-            return nil
-        }
-
-        for serviceName in services.keys.sorted() {
-            if let cycle = dfs(serviceName) {
-                return cycle
-            }
-        }
-
-        return Array(services.keys.sorted())
+        return ShutdownContainerPlan(layers: allLayers, orphans: orphans)
     }
 
     public static func containerName(

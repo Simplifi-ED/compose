@@ -1,0 +1,18 @@
+# CLT-only hosts: SWIFTLINT_DISABLE_SOURCEKIT=1 (see scripts/lint.sh)
+
+included:
+  - Sources
+
+excluded:
+  - .build
+  - dist
+  - .swiftpm
+
+line_length:
+  warning: 120
+  ignores_urls: true
+
+type_name:
+  min_length: 2
+  excluded:
+    - Up

@@ -11,7 +11,7 @@ public enum ServiceRunner {
         do {
             for layer in layers {
                 let result = await parallelRun(
-                    layer.map { (label: $0.serviceName, successValue: $0.name, value: $0) }
+                    layer.map { ParallelWorkItem(label: $0.serviceName, successValue: $0.name, value: $0) }
                 ) { plan in
                     let command = try Application.ContainerRun.parse(plan.runArguments)
                     try await command.run()
@@ -30,10 +30,11 @@ public enum ServiceRunner {
             })
             if !rollbackFailures.isEmpty {
                 let started = startedWaves.flatMap { $0 }
-                fputs(
-                    "Warning: \(ComposeError.rollbackFailed(started: started, failures: rollbackFailures).localizedDescription)\n",
-                    stderr
-                )
+                let rollbackMessage = ComposeError.rollbackFailed(
+                    started: started,
+                    failures: rollbackFailures
+                ).localizedDescription
+                fputs("Warning: \(rollbackMessage)\n", stderr)
             }
             throw error
         }
@@ -46,7 +47,7 @@ public enum ServiceRunner {
     public static func down(layers: [[DiscoveredContainer]]) async throws {
         for (index, layer) in layers.enumerated() {
             let result = await parallelRun(
-                layer.map { (label: $0.name, successValue: nil as String?, value: $0) }
+                layer.map { ParallelWorkItem(label: $0.name, successValue: nil, value: $0) }
             ) { container in
                 try await ContainerTeardown.teardown(id: container.name)
             }
@@ -54,8 +55,12 @@ public enum ServiceRunner {
                 let completed = index
                 let remaining = layers.count - completed - 1
                 if remaining > 0 {
+                    let wave = completed + 1
                     fputs(
-                        "Warning: compose down failed in wave \(completed + 1) of \(layers.count); \(remaining) later wave(s) were not run.\n",
+                        """
+                        Warning: compose down failed in wave \(wave) of \(layers.count); \
+                        \(remaining) later wave(s) were not run.\n
+                        """,
                         stderr
                     )
                 }
@@ -74,7 +79,7 @@ public enum ServiceRunner {
         for wave in waves {
             guard !wave.isEmpty else { continue }
             let result = await parallelRun(
-                wave.map { (label: $0, successValue: nil as String?, value: $0) }
+                wave.map { ParallelWorkItem(label: $0, successValue: nil, value: $0) }
             ) { name in
                 try await teardown(name)
             }
@@ -83,13 +88,19 @@ public enum ServiceRunner {
         return failures
     }
 
+    private struct ParallelWorkItem<T: Sendable>: Sendable {
+        let label: String
+        let successValue: String?
+        let value: T
+    }
+
     private struct ParallelRunResult: Sendable {
         let succeeded: [String]
         let failures: [(service: String, error: Error)]
     }
 
     private static func parallelRun<T: Sendable>(
-        _ items: [(label: String, successValue: String?, value: T)],
+        _ items: [ParallelWorkItem<T>],
         work: @escaping @Sendable (T) async throws -> Void
     ) async -> ParallelRunResult {
         guard !items.isEmpty else {
