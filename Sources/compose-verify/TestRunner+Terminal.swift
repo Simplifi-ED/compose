@@ -46,6 +46,10 @@ extension TestRunner {
             TerminalMode.resolve(isTTY: false, environment: ["CI": "true"]) == .pipe,
             "non-TTY wins over CI"
         )
+        expect(
+            TerminalMode.resolve(fileDescriptor: -1, environment: [:]) == .pipe,
+            "invalid file descriptor resolves pipe"
+        )
     }
 
     private mutating func runTerminalLayoutTests() {
@@ -118,14 +122,6 @@ extension TestRunner {
         expect(
             strippedHeader == plainHeader,
             "interactive header matches plain header once ANSI is stripped"
-        )
-    }
-
-    private func stripANSI(_ string: String) -> String {
-        string.replacingOccurrences(
-            of: "\u{001B}\\[[0-9;]*m",
-            with: "",
-            options: .regularExpression
         )
     }
 }

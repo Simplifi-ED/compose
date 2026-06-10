@@ -11,6 +11,9 @@ public struct Up: AsyncParsableCommand {
     @OptionGroup
     var projectOptions: ProjectOptions
 
+    @OptionGroup
+    var progressOptions: ProgressOptions
+
     public func run() async throws {
         let fileURLs = try projectOptions.resolvedFileURLs()
         let composeFile = try ComposeParser.parse(fileURLs: fileURLs)
@@ -25,7 +28,13 @@ public struct Up: AsyncParsableCommand {
             composeDirectory: composeDirectory
         )
 
-        try await ServiceRunner.up(layers: layers)
+        let orchestration = makeProgressOrchestration(
+            display: progressOptions.resolvedDisplay(),
+            phase: .starting
+        )
+        try await runWithProgress(lines: orchestration.lines) {
+            try await ServiceRunner.up(layers: layers, progress: orchestration.handlers)
+        }
 
         for plan in layers.flatMap({ $0 }) {
             print(plan.name)

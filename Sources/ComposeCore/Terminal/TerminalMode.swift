@@ -26,11 +26,18 @@ package enum TerminalMode: Equatable, Sendable {
         return .interactive
     }
 
+    package static func resolve(
+        fileDescriptor: Int32,
+        environment: [String: String] = ProcessInfo.processInfo.environment
+    ) -> TerminalMode {
+        resolve(isTTY: isatty(fileDescriptor) == 1, environment: environment)
+    }
+
     /// Resolves against the live standard output file descriptor.
     package static func resolve(
         environment: [String: String] = ProcessInfo.processInfo.environment
     ) -> TerminalMode {
-        resolve(isTTY: isatty(FileHandle.standardOutput.fileDescriptor) == 1, environment: environment)
+        resolve(fileDescriptor: FileHandle.standardOutput.fileDescriptor, environment: environment)
     }
 
     /// `NO_COLOR` disables color when present with any non-empty value.
