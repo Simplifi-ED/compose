@@ -19,8 +19,7 @@ package enum ANSIPrefix {
         mode: TerminalMode,
         width: Int = defaultWidth
     ) -> String {
-        let fitted = fit(serviceName, width: width)
-        let padded = fitted.padding(toLength: max(width, fitted.count), withPad: " ", startingAt: 0)
+        let padded = TerminalLayout.fit(serviceName, width: width, alignment: .left)
         switch mode {
         case .interactive:
             let color = palette[colorIndex(for: serviceName)]
@@ -38,11 +37,5 @@ package enum ANSIPrefix {
             hash = hash &* 0x100000001b3
         }
         return Int(hash % UInt64(palette.count))
-    }
-
-    /// Truncates names longer than `width` to `width - 1` characters plus an ellipsis.
-    private static func fit(_ name: String, width: Int) -> String {
-        guard name.count > width else { return name }
-        return String(name.prefix(max(width - 1, 0))) + "…"
     }
 }

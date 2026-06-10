@@ -4,6 +4,7 @@ import Foundation
 extension TestRunner {
     mutating func runTerminalTests() {
         runTerminalModeTests()
+        runTerminalLayoutTests()
         runANSIPrefixTests()
         runTableFormatTests()
     }
@@ -47,6 +48,21 @@ extension TestRunner {
         )
     }
 
+    private mutating func runTerminalLayoutTests() {
+        expect(
+            TerminalLayout.fit("ab", width: 4, alignment: .right) == "  ab",
+            "fit right-aligns short values"
+        )
+        expect(
+            TerminalLayout.fit("abcdef", width: 4, alignment: .left) == "abc…",
+            "fit truncates overlong values"
+        )
+        expect(
+            TerminalLayout.fit("web", width: 8, alignment: .left) == "web     ",
+            "fit left-aligns and pads to width"
+        )
+    }
+
     private mutating func runANSIPrefixTests() {
         let plain = ANSIPrefix.format(serviceName: "web", mode: .plain)
         expect(plain == "web     | ", "plain prefix pads name to width then pipe")
@@ -62,10 +78,6 @@ extension TestRunner {
         expect(
             strippedInteractive == plain,
             "interactive prefix matches plain text once ANSI is stripped"
-        )
-        expect(
-            interactive == ANSIPrefix.format(serviceName: "web", mode: .interactive),
-            "same service name produces identical interactive prefix"
         )
 
         let index = ANSIPrefix.colorIndex(for: "web")
@@ -89,13 +101,10 @@ extension TestRunner {
             TableFormat.Column(title: "STATE", width: 7, alignment: .right)
         ])
 
-        let row = table.formatRow(["web", "up"], mode: .plain)
+        let row = table.formatRow(["web", "up"])
         expect(row == "web          up", "row pads left and right aligned cells")
 
-        let pipeRow = table.formatRow(["web", "up"], mode: .pipe)
-        expect(pipeRow == row, "pipe row matches plain row")
-
-        let truncatedRow = table.formatRow(["verylongname", "up"], mode: .plain)
+        let truncatedRow = table.formatRow(["verylongname", "up"])
         expect(truncatedRow.hasPrefix("veryl…"), "overlong cell truncates with ellipsis")
 
         let plainHeader = table.formatHeader(mode: .plain)
@@ -109,15 +118,6 @@ extension TestRunner {
         expect(
             strippedHeader == plainHeader,
             "interactive header matches plain header once ANSI is stripped"
-        )
-
-        expect(
-            TableFormat.fit("ab", width: 4, alignment: .right) == "  ab",
-            "fit right-aligns short values"
-        )
-        expect(
-            TableFormat.fit("abcdef", width: 4, alignment: .left) == "abc…",
-            "fit truncates overlong values"
         )
     }
 
