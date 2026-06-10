@@ -16,7 +16,7 @@ package actor ProgressLines {
     private var services: [String] = []
     private var statuses: [String: ProgressStatus] = [:]
     private var prefixWidth = ANSIPrefix.defaultWidth
-    private var renderedLineCount = 0
+    private var inPlaceWriter = InPlaceTerminalWriter()
     private var spinnerIndex = 0
     private var ticker: Task<Void, Never>?
 
@@ -39,7 +39,7 @@ package actor ProgressLines {
         self.services = services
         statuses = Dictionary(services.map { ($0, ProgressStatus.inProgress) }, uniquingKeysWith: { first, _ in first })
         prefixWidth = max(ANSIPrefix.defaultWidth, services.map(\.count).max() ?? 0)
-        renderedLineCount = 0
+        inPlaceWriter.reset()
 
         switch display {
         case .plain:
@@ -100,23 +100,20 @@ package actor ProgressLines {
     }
 
     private func render() {
-        var output = ""
-        if renderedLineCount > 0 {
-            output += "\u{001B}[\(renderedLineCount)A"
-        }
+        var output = inPlaceWriter.beginRedraw(newLineCount: services.count)
         for service in services {
-            output += "\r\u{001B}[K"
-            output += line(for: service, status: statuses[service] ?? .inProgress)
-            output += "\n"
+            output += InPlaceTerminalWriter.formattedLine(
+                line(for: service, status: statuses[service] ?? .inProgress)
+            )
         }
-        renderedLineCount = services.count
+        inPlaceWriter.commit(lineCount: services.count)
         write(output)
     }
 
     private func resetState() {
         services = []
         statuses = [:]
-        renderedLineCount = 0
+        inPlaceWriter.reset()
     }
 
     private func startTicker() {

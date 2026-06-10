@@ -7,6 +7,7 @@ extension TestRunner {
         runTerminalLayoutTests()
         runANSIPrefixTests()
         runTableFormatTests()
+        runInPlaceTerminalWriterTests()
     }
 
     private mutating func runTerminalModeTests() {
@@ -97,6 +98,34 @@ extension TestRunner {
 
         let wide = ANSIPrefix.format(serviceName: "db", mode: .plain, width: 4)
         expect(wide == "db  | ", "custom width pads correctly")
+    }
+
+    private mutating func runInPlaceTerminalWriterTests() {
+        expect(
+            InPlaceTerminalWriter.redrawPrefix(previousLineCount: 0, newLineCount: 2).isEmpty,
+            "first redraw has no cursor motion"
+        )
+        expect(
+            InPlaceTerminalWriter.redrawPrefix(previousLineCount: 2, newLineCount: 2) == "\u{001B}[2A",
+            "steady redraw moves cursor up by prior line count"
+        )
+        expect(
+            InPlaceTerminalWriter.redrawPrefix(previousLineCount: 3, newLineCount: 1)
+                .contains("\u{001B}[3A"),
+            "shrinking redraw clears extra lines then moves cursor up"
+        )
+        expect(
+            InPlaceTerminalWriter.formattedLine("web").hasPrefix("\r\u{001B}[K"),
+            "formatted line clears before writing"
+        )
+
+        var writer = InPlaceTerminalWriter()
+        _ = writer.beginRedraw(newLineCount: 2)
+        writer.commit(lineCount: 2)
+        let prefix = writer.beginRedraw(newLineCount: 2)
+        expect(prefix == "\u{001B}[2A", "writer tracks line count across redraws")
+        writer.reset()
+        expect(writer.renderedLineCount == 0, "writer reset clears rendered line count")
     }
 
     private mutating func runTableFormatTests() {
