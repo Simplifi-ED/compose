@@ -14,6 +14,7 @@ public struct ComposeService: Sendable, Equatable {
     public let image: String?
     public let command: ComposeCommandValue?
     public let ports: [String]
+    public let volumes: [String]
     public let environment: ComposeEnvironment?
     public let containerName: String?
 
@@ -21,12 +22,14 @@ public struct ComposeService: Sendable, Equatable {
         image: String?,
         command: ComposeCommandValue?,
         ports: [String],
+        volumes: [String] = [],
         environment: ComposeEnvironment?,
         containerName: String?
     ) {
         self.image = image
         self.command = command
         self.ports = ports
+        self.volumes = volumes
         self.environment = environment
         self.containerName = containerName
     }
@@ -37,6 +40,7 @@ extension ComposeService: Decodable {
         case image
         case command
         case ports
+        case volumes
         case environment
         case containerName = "container_name"
     }
@@ -46,8 +50,19 @@ extension ComposeService: Decodable {
         image = try container.decodeIfPresent(String.self, forKey: .image)
         command = try Self.decodeCommand(from: container)
         ports = try container.decodeIfPresent([String].self, forKey: .ports) ?? []
+        volumes = try Self.decodeVolumes(from: container)
         environment = try Self.decodeEnvironment(from: container)
         containerName = try container.decodeIfPresent(String.self, forKey: .containerName)
+    }
+
+    private static func decodeVolumes(
+        from container: KeyedDecodingContainer<CodingKeys>
+    ) throws -> [String] {
+        guard container.contains(.volumes) else { return [] }
+        if let value = try? container.decode([String].self, forKey: .volumes) {
+            return value
+        }
+        throw ComposeError.invalidField("volumes", reason: "expected a list of host:container strings")
     }
 
     private static func decodeCommand(
