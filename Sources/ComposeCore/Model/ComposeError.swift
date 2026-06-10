@@ -16,6 +16,7 @@ public enum ComposeError: LocalizedError, Sendable {
     case multipleServiceFailures([(service: String, error: Error)])
     case unknownDependency(service: String, dependency: String)
     case circularDependency(services: [String])
+    case rollbackFailed(started: [String], failures: [(container: String, error: Error)])
 
     public var errorDescription: String? {
         switch self {
@@ -51,6 +52,10 @@ public enum ComposeError: LocalizedError, Sendable {
         case .circularDependency(let services):
             let path = services.joined(separator: " → ")
             return "Circular dependency: \(path). Remove or reorder depends_on entries."
+        case .rollbackFailed(let started, let failures):
+            let startedList = started.joined(separator: ", ")
+            let details = failures.map { "'\($0.container)': \($0.error.localizedDescription)" }.joined(separator: "; ")
+            return "Startup failed and rollback couldn't remove all containers (started: \(startedList)): \(details)"
         }
     }
 }

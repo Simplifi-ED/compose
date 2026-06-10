@@ -15,6 +15,8 @@ You are building a **Minimal Real Compose Plugin**—NOT a generic orchestration
 * Basic container lifecycles: Starting (via `ContainerRun`) and Stopping (via `ContainerStop`) [1].
 * Attributes to map: `image`, `command`, `environment`, standard host-to-container `ports`, short-syntax bind-mount `volumes` (`host:container`), and short-form `depends_on` (list of service names) [1].
 * Dependency-aware startup ordering: topological sort with parallel waves via structured concurrency [1].
+* Partial-`up` rollback: tear down containers from successful waves when a later wave fails [1].
+* Reverse-topological `down` when a compose file is available; parallel `down` fallback for `-p`-only [1].
 
 ### **Out of Scope (DO NOT CODE):**
 

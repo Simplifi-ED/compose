@@ -75,6 +75,48 @@ public enum ServicePlanner {
         return layers
     }
 
+    static func shutdownLayers(
+        for composeFile: ComposeFile,
+        discoveredServiceNames: Set<String>
+    ) throws -> [[String]] {
+        try dependencyLayers(for: composeFile)
+            .map { $0.map(\.serviceName) }
+            .reversed()
+            .map { layer in layer.filter { discoveredServiceNames.contains($0) } }
+            .filter { !$0.isEmpty }
+    }
+
+    public static func shutdownContainerLayers(
+        for composeFile: ComposeFile,
+        containers: [DiscoveredContainer]
+    ) throws -> [[DiscoveredContainer]] {
+        let byService = Dictionary(grouping: containers.compactMap { container -> (String, DiscoveredContainer)? in
+            guard let serviceName = container.serviceName else { return nil }
+            return (serviceName, container)
+        }) { $0.0 }
+            .mapValues { pairs in pairs.map(\.1) }
+        let discoveredServiceNames = Set(byService.keys)
+        let serviceLayers = try shutdownLayers(
+            for: composeFile,
+            discoveredServiceNames: discoveredServiceNames
+        )
+
+        var layers = serviceLayers.map { layer in
+            layer.flatMap { byService[$0, default: []] }
+        }
+
+        let knownServices = Set(composeFile.services.keys)
+        let orphans = containers.filter { container in
+            guard let serviceName = container.serviceName else { return true }
+            return !knownServices.contains(serviceName)
+        }
+        if !orphans.isEmpty {
+            layers.append(orphans.sorted { $0.name < $1.name })
+        }
+
+        return layers
+    }
+
     private static func findCycle(in services: [String: ComposeService]) -> [String] {
         var visited: Set<String> = []
         var stack: Set<String> = []

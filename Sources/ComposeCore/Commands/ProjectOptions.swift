@@ -10,10 +10,19 @@ public struct ProjectOptions: ParsableArguments {
     var projectName: String?
 
     func resolvedFileURL() throws -> URL {
+        guard let url = resolvedFileURLIfPresent() else {
+            let url = URL(fileURLWithPath: file, relativeTo: URL(fileURLWithPath: FileManager.default.currentDirectoryPath))
+                .standardizedFileURL
+            throw ComposeError.fileNotFound(url.path)
+        }
+        return url
+    }
+
+    func resolvedFileURLIfPresent() -> URL? {
         let url = URL(fileURLWithPath: file, relativeTo: URL(fileURLWithPath: FileManager.default.currentDirectoryPath))
             .standardizedFileURL
         guard FileManager.default.fileExists(atPath: url.path) else {
-            throw ComposeError.fileNotFound(url.path)
+            return nil
         }
         return url
     }

@@ -17,6 +17,9 @@ Maintained by [Omnivya](https://www.omnivya.fr) ([Simplifi-ED](https://github.co
 - Per service: `image`, `command`, `ports`, `volumes` (bind mounts), `environment`, `container_name`, `depends_on` (list form)
 - `container compose up` (detached) and `container compose down` (stop and remove)
 - Dependency-aware startup: services start in `depends_on` order (start order only, not health/readiness); independent services run in parallel
+- Failed `up` rolls back containers started in earlier waves
+- `down` stops dependents before dependencies when the compose file is present; `-p`-only `down` stops containers in parallel
+- Containers without a `com.docker.compose.service` label (or not listed in the compose file) stop last and may not follow `depends_on` order
 - Container labels for project tracking (`com.docker.compose.project`, `com.docker.compose.service`)
 
 Not supported yet: long-form `depends_on` with health conditions, networks, named volumes, volume drivers, read-only mounts (`:ro`), `build`, profiles, multi-file merge.

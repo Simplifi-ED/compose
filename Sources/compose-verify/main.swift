@@ -243,6 +243,79 @@ struct TestRunner {
         }
     }
 
+    mutating func runShutdownLayerTests() throws {
+        let dependsFixture = try ComposeParser.parse(fileURL: Self.fixtureURL("depends-compose.yml"))
+
+        let serviceNames = ["api", "cache", "db", "web"]
+        let allContainers = serviceNames.map { service in
+            DiscoveredContainer(name: "demo_" + service, serviceName: service)
+        }
+        let allLayers = try ServicePlanner.shutdownContainerLayers(
+            for: dependsFixture,
+            containers: allContainers
+        )
+        expect(allLayers.count == 2, "shutdown layers wave count")
+        expect(allLayers[0].map(\.serviceName) == ["api", "web"], "shutdown layer 0 dependents")
+        expect(allLayers[1].map(\.serviceName) == ["cache", "db"], "shutdown layer 1 dependencies")
+
+        let subsetContainers = [
+            DiscoveredContainer(name: "demo_web", serviceName: "web"),
+            DiscoveredContainer(name: "demo_db", serviceName: "db"),
+        ]
+        let subsetLayers = try ServicePlanner.shutdownContainerLayers(
+            for: dependsFixture,
+            containers: subsetContainers
+        )
+        expect(subsetLayers.count == 2, "shutdown subset wave count")
+        expect(subsetLayers[0].map(\.serviceName) == ["web"], "shutdown subset layer 0")
+        expect(subsetLayers[1].map(\.serviceName) == ["db"], "shutdown subset layer 1")
+
+        let containers = [
+            DiscoveredContainer(name: "demo_web", serviceName: "web"),
+            DiscoveredContainer(name: "demo_db", serviceName: "db"),
+            DiscoveredContainer(name: "legacy", serviceName: nil),
+        ]
+        let containerLayers = try ServicePlanner.shutdownContainerLayers(
+            for: dependsFixture,
+            containers: containers
+        )
+        expect(containerLayers.count == 3, "shutdown container layers include orphan wave")
+        expect(containerLayers[0].map(\.name) == ["demo_web"], "shutdown container layer 0")
+        expect(containerLayers[1].map(\.name) == ["demo_db"], "shutdown container layer 1")
+        expect(containerLayers[2].map(\.name) == ["legacy"], "shutdown orphan final wave")
+
+        expectComposeError("invalid compose file", matching: { if case .parseFailed = $0 { true } else { false } }) {
+            _ = try ComposeParser.parse(fileURL: Self.fixtureURL("invalid-compose.yml"))
+        }
+    }
+
+    mutating func runRollbackTests() {
+        let rollbackResult = blockingAwait {
+            let recorder = TearDownRecorder()
+            let failures = await ServiceRunner.rollbackStartedContainers([["demo_db", "demo_web"]]) { name in
+                await recorder.record(name)
+            }
+            let tornDown = await recorder.names
+            return (failures, tornDown)
+        }
+        expect(rollbackResult.0.isEmpty, "rollback no failures")
+        expect(
+            Set(rollbackResult.1) == ["demo_db", "demo_web"],
+            "rollback tears down all started containers"
+        )
+
+        enum TestError: Error { case boom }
+        let rollbackFailures = blockingAwait {
+            await ServiceRunner.rollbackStartedContainers([["bad"]]) { _ in
+                throw TestError.boom
+            }
+        }
+        expect(rollbackFailures.count == 1, "rollback records teardown failures")
+        if rollbackFailures.count == 1 {
+            expect(rollbackFailures[0].container == "bad", "rollback failure container name")
+        }
+    }
+
     mutating func runTeardownErrorTests() {
         let notFound = ContainerizationError(.notFound, message: "container with ID demo_web not found")
         expect(ContainerTeardown.isIgnorableError(notFound), "notFound is ignorable")
@@ -273,13 +346,38 @@ struct TestRunner {
     }
 }
 
+private actor TearDownRecorder {
+    private(set) var names: [String] = []
+
+    func record(_ name: String) {
+        names.append(name)
+    }
+}
+
+func blockingAwait<T>(_ body: @escaping @Sendable () async -> T) -> T {
+    let semaphore = DispatchSemaphore(value: 0)
+    let resultBox = BlockingResultBox<T>()
+    Task {
+        resultBox.value = await body()
+        semaphore.signal()
+    }
+    semaphore.wait()
+    return resultBox.value
+}
+
+private final class BlockingResultBox<T>: @unchecked Sendable {
+    var value: T!
+}
+
 var runner = TestRunner()
 
 do {
     try runner.runParserTests()
     try runner.runPlannerTests()
     try runner.runDependencyTests()
+    try runner.runShutdownLayerTests()
     runner.runLabelTests()
+    runner.runRollbackTests()
     runner.runTeardownErrorTests()
 } catch {
     fputs("FAIL: unexpected error: \(error)\n", stderr)
