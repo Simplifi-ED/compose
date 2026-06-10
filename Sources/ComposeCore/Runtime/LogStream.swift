@@ -287,6 +287,13 @@ package actor LogMultiplexer {
     }
 }
 
+/// Builds log stream sources from startup plans started by `compose up`.
+package func makeLogSources(from plans: [ServicePlan]) -> [ServiceLogSource] {
+    plans.map { plan in
+        ServiceLogSource(containerName: plan.name, serviceLabel: plan.serviceName)
+    }
+}
+
 /// Builds log stream sources for the selected project containers.
 package func makeLogSources(
     from containers: [ProjectContainer],

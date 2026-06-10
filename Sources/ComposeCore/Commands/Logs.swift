@@ -1,5 +1,4 @@
 import ArgumentParser
-import Darwin
 import Foundation
 
 public struct Logs: AsyncParsableCommand {
@@ -38,24 +37,18 @@ public struct Logs: AsyncParsableCommand {
         let sources = makeLogSources(from: containers, services: services)
         guard !sources.isEmpty else { return }
 
-        if follow {
-            fflush(stdout)
-            setbuf(stdout, nil)
-        }
-
         let mode = TerminalMode.resolve()
         let options = LogStreamOptions(tail: tail, follow: follow, boot: boot, mode: mode)
 
         if follow {
-            let outcome = try await SignalForwarding.runUntilCancelled(
+            _ = try await LogFollowSession.runUntilCancelled(
+                sources: sources,
+                options: options,
                 policy: .cancelOnly,
-                body: {
-                    try await LogMultiplexer.run(sources: sources, options: options)
+                onQuietCancel: {
+                    fputs("Log follow ended.\n", stderr)
                 }
             )
-            if outcome == .cancelledQuietly {
-                fputs("Log follow ended.\n", stderr)
-            }
         } else {
             try await LogMultiplexer.run(sources: sources, options: options)
         }

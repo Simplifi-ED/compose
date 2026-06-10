@@ -33,10 +33,20 @@ Ctrl+C (SIGINT) or SIGTERM during long-running commands is handled gracefully:
 |---------|----------|
 | `logs -f` | Stops following logs; containers keep running |
 | `up` (mid-wave) | Stops scheduling new waves; already-started containers keep running (no rollback) |
+| `up --attach` | SIGTERM project containers, wait `-t` seconds (default 10), then SIGKILL |
 | `down` (mid-wave) | Stops after the current wave; some containers may remain |
-| Future `attach up`, `top`, `exec` | SIGTERM project containers, wait `-t` seconds (default 10), then SIGKILL |
+| Future `top`, `exec` | SIGTERM project containers, wait `-t` seconds (default 10), then SIGKILL |
 
 Interrupt stops scheduling new waves immediately and cancels in-flight container work; partially created containers are force-removed. Exit status follows the shell convention: 130 for SIGINT, 143 for SIGTERM.
+
+### Attach mode
+
+`container compose up --attach` starts containers detached (same as `up`), then follows multiplexed service logs in the foreground until every started service stops or you interrupt.
+
+- Ctrl+C or SIGTERM during attach stops **all** project containers (unlike `logs -f`, which leaves them running).
+- Use `-t` / `--timeout` with `up --attach` to set the SIGTERM grace period before SIGKILL (default 10 seconds).
+- **Exit codes (v1):** `0` when all watched services reach `stopped`; 130 for SIGINT or 143 for SIGTERM during attach. Attach-phase errors do not roll back containers that already started.
+- Per-container process exit codes are not available yet; attach detects completion by polling runtime status until containers stop. When the container API exposes init-process wait, compose will adopt first-non-zero exit aggregation (Docker parity).
 
 ### Multi-file merge
 
