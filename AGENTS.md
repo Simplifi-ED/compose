@@ -104,6 +104,8 @@ The output of the discovery command **must** show the `compose` plugin. If it do
 - v1 scope is minimal real compose (parse `docker-compose.yml`, start/stop services), not full Docker Compose parity.
 - Load project skills under `.agents/skills/` (especially `swift-concurrency`, `swift-testing-pro`, `writing-for-interfaces`) when implementing features.
 - Prefer structured-concurrency parallelism (`withTaskGroup`) for multi-service orchestration.
+- Develop on Command Line Tools only (no full Xcode.app); use `mint install realm/SwiftLint` instead of `brew install swiftlint`.
+- Deliver merge-ready PRs with polish included—not deferred follow-up cleanup.
 
 ## Learned Workspace Facts
 
@@ -111,8 +113,11 @@ The output of the discovery command **must** show the `compose` plugin. If it do
 - User plugin install path is `{INSTALL_ROOT}/libexec/container-plugins/compose` where `INSTALL_ROOT = dirname(dirname(which container))` — not `/opt/homebrew/opt/container/...`.
 - Plugin install under `/usr/local` requires `sudo`; use `scripts/install-plugin.sh` (prints manual sudo commands when the directory is not writable).
 - Run `container system start` before plugin discovery; without the API server, `PLUGINS:` is unavailable.
-- Plugin layout: `compose/bin/compose` plus `config.toml` (plugin directory name must match the binary name).
 - Package targets: `ComposeCore` library, `compose` CLI executable, and `compose-verify` verification executable.
 - On Command Line Tools builds, use `swift run -c release compose-verify` instead of `swift test` (Swift Testing/XCTest unavailable).
-- v1 `compose down` stops and removes project containers (no volume/network prune).
+- `compose down` uses reverse-topological ordering when a compose file is present; parallel fallback for explicit `-p` only.
 - Host Linux kernel must be configured (`container system kernel set`) before `container run` or `compose up` succeed.
+- `-f` and `-p` are options on `up`/`down`, not on `compose` (e.g. `container compose up -f <file> -p <project>`).
+- Run SwiftLint via `scripts/lint.sh` with `SWIFTLINT_DISABLE_SOURCEKIT=1` on CLT-only hosts.
+- State tracking uses compose/project/service labels on `ContainerRun`; discovery reads `snapshot.configuration.labels`.
+- Relative bind-mount paths resolve against the compose file directory, not the shell CWD.
