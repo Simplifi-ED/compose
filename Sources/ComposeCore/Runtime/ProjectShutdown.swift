@@ -28,7 +28,10 @@ package enum ProjectShutdown {
 
         fputs("Stopping project containers…\n", stderr)
 
-        let layers = try shutdownLayers(for: context.composeFile, containers: containers)
+        let layers = try ServicePlanner.shutdownLayers(
+            for: context.composeFile,
+            containers: containers
+        )
         let failures = try await ServiceRunner.stopGracefully(
             layers: layers,
             options: context.options
@@ -47,13 +50,4 @@ package enum ProjectShutdown {
         }
     }
 
-    private static func shutdownLayers(
-        for composeFile: ComposeFile?,
-        containers: [DiscoveredContainer]
-    ) throws -> [[DiscoveredContainer]] {
-        guard let composeFile else {
-            return [containers]
-        }
-        return try ServicePlanner.shutdownContainerLayers(for: composeFile, containers: containers)
-    }
 }

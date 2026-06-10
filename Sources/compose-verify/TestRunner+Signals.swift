@@ -10,6 +10,7 @@ extension TestRunner {
         runShutdownTimeoutValidationTests()
         runInterruptExitCodeTests()
         runWaveCancellationTests()
+        runSignalForwardingPolicyTests()
     }
 
     private mutating func runGracefulStopOptionsTests() {
@@ -33,29 +34,69 @@ extension TestRunner {
     private mutating func runInterruptExitCodeTests() {
         expect(InterruptSignal(number: SIGINT).exitCode == 130, "SIGINT maps to exit 130")
         expect(InterruptSignal(number: SIGTERM).exitCode == 143, "SIGTERM maps to exit 143")
+        expect(
+            orchestrationInterruptedExitCode(for: InterruptSignal(number: SIGINT)) == 130,
+            "orchestration interrupt maps to exit 130"
+        )
+        expect(
+            orchestrationInterruptedExitCode(for: InterruptSignal(number: SIGTERM)) == 143,
+            "orchestration interrupt maps to exit 143"
+        )
     }
 
     private mutating func runWaveCancellationTests() {
         let interrupted = blockingAwait {
-            await signalsWaveCancellationProbe()
+            await ServiceRunner.parallelRunHonorsCancellation()
         }
-        expect(interrupted, "wave loop honors task cancellation")
+        expect(interrupted, "parallelRun honors parent task cancellation")
     }
-}
 
-private func signalsWaveCancellationProbe() async -> Bool {
-    let task = Task {
-        do {
-            for _ in 0 ..< 100 {
-                try Task.checkCancellation()
-                try await Task.sleep(for: .milliseconds(10))
-            }
-            return false
-        } catch is CancellationError {
-            return true
+    private mutating func runSignalForwardingPolicyTests() {
+        let signal = InterruptSignal(number: SIGINT)
+
+        let cancelOnly = blockingAwait {
+            try? await SignalForwarding.interruptedOutcome(policy: .cancelOnly, signal: signal)
         }
+        expect(cancelOnly == .cancelledQuietly, "cancelOnly maps to cancelledQuietly")
+
+        let orchestration = blockingAwait {
+            try? await SignalForwarding.interruptedOutcome(policy: .orchestration, signal: signal)
+        }
+        expect(orchestration == .interrupted(signal), "orchestration maps to interrupted(signal)")
+
+        let stopProject = blockingAwait {
+            try? await SignalForwarding.interruptedOutcome(
+                policy: .stopProject(
+                    ProjectShutdownContext(
+                        projectName: "demo",
+                        composeFile: nil,
+                        fileURLs: nil,
+                        options: GracefulStopOptions()
+                    )
+                ),
+                signal: signal,
+                stopProject: { _ in }
+            )
+        }
+        expect(stopProject == .interrupted(signal), "stopProject maps to interrupted(signal)")
+
+        let cleanupCount = blockingAwait { () -> Int in
+            final class Counter: @unchecked Sendable {
+                var value = 0
+            }
+            let counter = Counter()
+            _ = try? await SignalForwarding.interruptedOutcome(
+                policy: .cancelOnly,
+                signal: signal,
+                terminalCleanup: { counter.value += 1 }
+            )
+            return counter.value
+        }
+        expect(cleanupCount == 1, "interruptedOutcome runs terminalCleanup once")
+
+        let completed = blockingAwait {
+            try? await SignalForwarding.runUntilCancelled(policy: .cancelOnly) { }
+        }
+        expect(completed == .completed, "runUntilCancelled returns completed when body finishes")
     }
-    try? await Task.sleep(for: .milliseconds(25))
-    task.cancel()
-    return (try? await task.value) ?? true
 }

@@ -2,11 +2,93 @@ import ContainerCommands
 import Foundation
 
 public enum ServiceRunner {
+    /// Verifies `parallelRun` marks interruption when its parent task is cancelled (compose-verify).
+    package static func parallelRunHonorsCancellation() async -> Bool {
+        let task = Task {
+            let result = await parallelRun(
+                [(label: "work", collectOnSuccess: nil, value: ())],
+                work: { _ in
+                    try await Task.sleep(for: .seconds(30))
+                }
+            )
+            return result.wasInterrupted
+        }
+        try? await Task.sleep(for: .milliseconds(50))
+        task.cancel()
+        return await task.value == true
+    }
+
     public static func up(plans: [ServicePlan]) async throws {
         try await up(layers: [plans])
     }
 
     public static func up(layers: [[ServicePlan]], progress: WaveProgressHandlers? = nil) async throws {
+        try await up(
+            layers: layers,
+            progress: progress,
+            runContainer: { plan in
+                try await ContainerTeardown.teardownRespectingCancellation(id: plan.name) {
+                    let command = try Application.ContainerRun.parse(plan.runArguments)
+                    try await command.run()
+                }
+            },
+            rollbackTeardown: { name in
+                try await ContainerTeardown.teardown(id: name)
+            }
+        )
+    }
+
+    /// Verifies `up` does not roll back prior waves when cancelled mid-orchestration (compose-verify).
+    package static func upSkipsRollbackOnCancellation() async -> (started: [String], rollback: [String]) {
+        actor Recorder {
+            private(set) var started: [String] = []
+            private(set) var rollback: [String] = []
+
+            func recordStarted(_ name: String) {
+                started.append(name)
+            }
+
+            func recordRollback(_ name: String) {
+                rollback.append(name)
+            }
+        }
+
+        let recorder = Recorder()
+        let fast = ServicePlan(serviceName: "fast", name: "demo_fast", runArguments: [])
+        let slow = ServicePlan(serviceName: "slow", name: "demo_slow", runArguments: [])
+
+        let task = Task {
+            try await up(
+                layers: [[fast], [slow]],
+                progress: nil,
+                runContainer: { plan in
+                    if plan.serviceName == "slow" {
+                        try await Task.sleep(for: .seconds(30))
+                    }
+                    await recorder.recordStarted(plan.name)
+                },
+                rollbackTeardown: { name in
+                    await recorder.recordRollback(name)
+                }
+            )
+        }
+
+        while await recorder.started.isEmpty {
+            try? await Task.sleep(for: .milliseconds(5))
+        }
+        try? await Task.sleep(for: .milliseconds(25))
+        task.cancel()
+        _ = try? await task.value
+
+        return (await recorder.started, await recorder.rollback)
+    }
+
+    private static func up(
+        layers: [[ServicePlan]],
+        progress: WaveProgressHandlers?,
+        runContainer: @escaping @Sendable (ServicePlan) async throws -> Void,
+        rollbackTeardown: @escaping @Sendable (String) async throws -> Void
+    ) async throws {
         var startedWaves: [[String]] = []
         do {
             for (index, layer) in layers.enumerated() {
@@ -16,12 +98,7 @@ public enum ServiceRunner {
                     layer.map { (label: $0.serviceName, collectOnSuccess: $0.name, value: $0) },
                     onCompletion: progress?.onServiceComplete
                 ) { plan in
-                    try await ContainerTeardown.runDetachedContainerRespectingCancellation(
-                        containerName: plan.name
-                    ) {
-                        let command = try Application.ContainerRun.parse(plan.runArguments)
-                        try await command.run()
-                    }
+                    try await runContainer(plan)
                 }
                 if result.wasInterrupted {
                     throw CancellationError()
@@ -34,14 +111,11 @@ public enum ServiceRunner {
                 }
                 await progress?.onWaveComplete?(index + 1)
             }
+        } catch is CancellationError {
+            throw CancellationError()
         } catch {
-            if error is CancellationError {
-                throw error
-            }
             // Roll back in reverse startup order; parallel within each wave.
-            let rollbackFailures = await rollbackStartedContainers(startedWaves.reversed(), teardown: { name in
-                try await ContainerTeardown.teardown(id: name)
-            })
+            let rollbackFailures = await rollbackStartedContainers(startedWaves.reversed(), teardown: rollbackTeardown)
             if !rollbackFailures.isEmpty {
                 let started = startedWaves.flatMap { $0 }
                 let rollbackMessage = ComposeError.rollbackFailed(
@@ -67,12 +141,73 @@ public enum ServiceRunner {
         onRemoved: (@Sendable (String) -> Void)? = nil,
         progress: WaveProgressHandlers? = nil
     ) async throws {
+        try await down(
+            layers: layers,
+            onRemoved: onRemoved,
+            progress: progress,
+            teardown: { container in
+                try await ContainerTeardown.teardownRespectingCancellation(id: container.name)
+            }
+        )
+    }
+
+    /// Verifies `down` reports removals for containers torn down before interrupt (compose-verify).
+    package static func downReportsPartialRemovalOnInterrupt() async -> [String] {
+        final class Recorder: @unchecked Sendable {
+            private let lock = NSLock()
+            private var names: [String] = []
+
+            func add(_ name: String) {
+                lock.lock()
+                defer { lock.unlock() }
+                names.append(name)
+            }
+
+            var snapshot: [String] {
+                lock.lock()
+                defer { lock.unlock() }
+                return names
+            }
+        }
+
+        let recorder = Recorder()
+        let fast = DiscoveredContainer(name: "demo_fast", serviceName: "fast")
+        let slow = DiscoveredContainer(name: "demo_slow", serviceName: "slow")
+
+        let task = Task {
+            try await down(
+                layers: [[fast, slow]],
+                onRemoved: { name in
+                    recorder.add(name)
+                },
+                progress: nil,
+                teardown: { container in
+                    if container.name == "demo_slow" {
+                        try await Task.sleep(for: .seconds(30))
+                    }
+                }
+            )
+        }
+
+        try? await Task.sleep(for: .milliseconds(50))
+        task.cancel()
+        _ = await task.result
+
+        return recorder.snapshot
+    }
+
+    private static func down(
+        layers: [[DiscoveredContainer]],
+        onRemoved: (@Sendable (String) -> Void)?,
+        progress: WaveProgressHandlers?,
+        teardown: @escaping @Sendable (DiscoveredContainer) async throws -> Void
+    ) async throws {
         _ = try await runContainerWaves(
             layers: layers,
             progress: progress,
             failFast: true
         ) { container in
-            try await ContainerTeardown.teardownRespectingCancellation(id: container.name)
+            try await teardown(container)
         } onWaveComplete: { layer in
             if let onRemoved {
                 for container in layer {
@@ -125,6 +260,7 @@ public enum ServiceRunner {
 
     private struct ParallelRunResult: Sendable {
         let succeeded: [String]
+        let completed: [String]
         let failures: [(service: String, error: Error)]
         let wasInterrupted: Bool
     }
@@ -148,6 +284,10 @@ public enum ServiceRunner {
                 try await work(container)
             }
             if result.wasInterrupted {
+                let removed = layer.filter { result.completed.contains($0.name) }
+                if !removed.isEmpty {
+                    await onWaveComplete(removed)
+                }
                 throw CancellationError()
             }
             if !result.failures.isEmpty {
@@ -179,14 +319,15 @@ public enum ServiceRunner {
         work: @escaping @Sendable (T) async throws -> Void
     ) async -> ParallelRunResult {
         guard !items.isEmpty else {
-            return ParallelRunResult(succeeded: [], failures: [], wasInterrupted: false)
+            return ParallelRunResult(succeeded: [], completed: [], failures: [], wasInterrupted: false)
         }
 
         if Task.isCancelled {
-            return ParallelRunResult(succeeded: [], failures: [], wasInterrupted: true)
+            return ParallelRunResult(succeeded: [], completed: [], failures: [], wasInterrupted: true)
         }
 
         var succeeded: [String] = []
+        var completed: [String] = []
         var failures: [(service: String, error: Error)] = []
         var wasInterrupted = false
 
@@ -219,6 +360,7 @@ public enum ServiceRunner {
                         await onCompletion?(result.0, false)
                     }
                 } else {
+                    completed.append(result.0)
                     if let collected = result.1 {
                         succeeded.append(collected)
                     }
@@ -229,6 +371,7 @@ public enum ServiceRunner {
 
         return ParallelRunResult(
             succeeded: succeeded,
+            completed: completed,
             failures: failures,
             wasInterrupted: wasInterrupted || Task.isCancelled
         )

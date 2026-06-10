@@ -45,6 +45,11 @@ package func runWithProgress(
     await lines.finish()
 }
 
+/// Exit code thrown when orchestration is interrupted (compose-verify).
+package func orchestrationInterruptedExitCode(for signal: InterruptSignal) -> Int32 {
+    signal.exitCode
+}
+
 /// Wraps `up`/`down` work with signal handling, progress cleanup, and exit 130 on interrupt.
 package func runOrchestrationCommand(
     lines: ProgressLines,

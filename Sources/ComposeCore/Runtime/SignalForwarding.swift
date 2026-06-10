@@ -72,7 +72,13 @@ package enum SignalForwarding {
                 return .bodyFinished
             case .signalled(let signal):
                 group.cancelAll()
-                try await drainCancelledBodyErrors(group: &group)
+                while !group.isEmpty {
+                    do {
+                        _ = try await group.next()
+                    } catch let error where !(error is CancellationError) {
+                        throw error
+                    }
+                }
                 return .signalled(signal)
             }
         }
@@ -81,31 +87,30 @@ package enum SignalForwarding {
         case .bodyFinished:
             return .completed
         case .signalled(let signal):
-            switch policy {
-            case .cancelOnly:
-                await terminalCleanup()
-                return .cancelledQuietly
-            case .orchestration:
-                await terminalCleanup()
-                return .interrupted(signal)
-            case .stopProject(let context):
-                await terminalCleanup()
-                try await ProjectShutdown.stop(context: context)
-                return .interrupted(signal)
-            }
+            return try await interruptedOutcome(
+                policy: policy,
+                signal: signal,
+                terminalCleanup: terminalCleanup
+            )
         }
     }
 
-    /// After a signal wins the race, prefer a real compose failure from the body over interrupt.
-    private static func drainCancelledBodyErrors<GroupResult: Sendable>(
-        group: inout ThrowingTaskGroup<GroupResult, Error>
-    ) async throws {
-        while !group.isEmpty {
-            do {
-                _ = try await group.next()
-            } catch let error where !(error is CancellationError) {
-                throw error
-            }
+    /// Maps a winning signal through `policy` after `terminalCleanup` (compose-verify; no POSIX signals).
+    package static func interruptedOutcome(
+        policy: InterruptPolicy,
+        signal: InterruptSignal,
+        terminalCleanup: @Sendable () async -> Void = {},
+        stopProject: @Sendable (ProjectShutdownContext) async throws -> Void = { try await ProjectShutdown.stop(context: $0) }
+    ) async throws -> ExitOutcome {
+        await terminalCleanup()
+        switch policy {
+        case .cancelOnly:
+            return .cancelledQuietly
+        case .orchestration:
+            return .interrupted(signal)
+        case .stopProject(let context):
+            try await stopProject(context)
+            return .interrupted(signal)
         }
     }
 }

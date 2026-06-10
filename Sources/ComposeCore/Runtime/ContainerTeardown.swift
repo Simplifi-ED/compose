@@ -26,36 +26,20 @@ public enum ContainerTeardown {
     }
 
     /// Stops and removes a container, force-removing on task cancellation.
-    package static func teardownRespectingCancellation(
-        id: String,
-        perform: (@Sendable () async throws -> Void)? = nil
-    ) async throws {
-        try await withTaskCancellationHandler {
-            try Task.checkCancellation()
-            if let perform {
-                try await perform()
-            } else {
-                try await teardown(id: id)
-            }
-        } onCancel: {
-            Task {
-                await forceRemoveAfterInterrupt(id: id)
-            }
+    package static func teardownRespectingCancellation(id: String) async throws {
+        try await teardownRespectingCancellation(id: id) {
+            try await teardown(id: id)
         }
     }
 
-    /// Runs a detached `ContainerRun`, removing the container on task cancellation.
-    package static func runDetachedContainerRespectingCancellation(
-        containerName: String,
-        run: @Sendable @escaping () async throws -> Void
+    /// Runs container work, force-removing `id` on task cancellation.
+    package static func teardownRespectingCancellation(
+        id: String,
+        perform: @escaping @Sendable () async throws -> Void
     ) async throws {
-        try await withTaskCancellationHandler {
+        try await withInterruptCleanup(id: id) {
             try Task.checkCancellation()
-            try await run()
-        } onCancel: {
-            Task {
-                await forceRemoveAfterInterrupt(id: containerName)
-            }
+            try await perform()
         }
     }
 
@@ -85,12 +69,22 @@ public enum ContainerTeardown {
     }
 
     package static func stopGracefully(id: String, options: GracefulStopOptions) async throws {
-        try await withTaskCancellationHandler {
+        try await withInterruptCleanup(id: id, onInterrupt: forceKillAfterInterrupt) {
             try Task.checkCancellation()
             try await stopGracefullyUnchecked(id: id, options: options)
+        }
+    }
+
+    private static func withInterruptCleanup(
+        id: String,
+        onInterrupt: @escaping @Sendable (String) async -> Void = forceRemoveAfterInterrupt,
+        _ body: @escaping @Sendable () async throws -> Void
+    ) async throws {
+        try await withTaskCancellationHandler {
+            try await body()
         } onCancel: {
             Task {
-                await forceRemoveAfterInterrupt(id: id)
+                await onInterrupt(id)
             }
         }
     }
@@ -114,6 +108,11 @@ public enum ContainerTeardown {
                 throw stopError
             }
         }
+    }
+
+    private static func forceKillAfterInterrupt(id: String) async {
+        let client = ContainerClient()
+        try? await client.kill(id: id, signal: "SIGKILL")
     }
 
     private static func forceRemoveAfterInterrupt(id: String) async {

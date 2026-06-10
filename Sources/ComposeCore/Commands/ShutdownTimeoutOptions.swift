@@ -1,6 +1,7 @@
 import ArgumentParser
 import Foundation
 
+/// Reserved for future `attach up`, `exec`, and `top` commands that stop project containers (#21–#20).
 public struct ShutdownTimeoutOptions: ParsableArguments {
     public init() {}
 
