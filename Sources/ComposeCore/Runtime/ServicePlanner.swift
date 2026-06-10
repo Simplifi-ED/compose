@@ -7,29 +7,16 @@ public struct ServicePlan: Sendable, Equatable {
 }
 
 public enum ServicePlanner {
-    public static func plans(
-        for composeFile: ComposeFile,
-        projectName: String,
-        composeDirectory: URL
-    ) throws -> [ServicePlan] {
-        try startupLayers(
-            for: composeFile,
-            projectName: projectName,
-            composeDirectory: composeDirectory
-        ).flatMap { $0 }
-    }
-
     public static func startupLayers(
         for composeFile: ComposeFile,
         projectName: String,
         composeDirectory: URL
     ) throws -> [[ServicePlan]] {
-        let serviceNames = try dependencyLayers(for: composeFile)
-        return try serviceNames.map { layer in
-            try layer.map { serviceName in
+        try dependencyLayers(for: composeFile).map { layer in
+            try layer.map { serviceName, service in
                 try plan(
                     serviceName: serviceName,
-                    service: composeFile.services[serviceName]!,
+                    service: service,
                     projectName: projectName,
                     composeDirectory: composeDirectory
                 )
@@ -37,7 +24,9 @@ public enum ServicePlanner {
         }
     }
 
-    static func dependencyLayers(for composeFile: ComposeFile) throws -> [[String]] {
+    static func dependencyLayers(
+        for composeFile: ComposeFile
+    ) throws -> [[(serviceName: String, service: ComposeService)]] {
         let services = composeFile.services
         var inDegree: [String: Int] = [:]
         var dependents: [String: [String]] = [:]
@@ -48,13 +37,18 @@ public enum ServicePlanner {
         }
 
         for (serviceName, service) in services {
-            inDegree[serviceName] = service.dependsOn.count
-            for dependency in service.dependsOn {
+            var seenDependencies: Set<String> = []
+            let dependencies = service.dependsOn.filter { seenDependencies.insert($0).inserted }
+            inDegree[serviceName] = dependencies.count
+            for dependency in dependencies {
+                guard services.keys.contains(dependency) else {
+                    throw ComposeError.unknownDependency(service: serviceName, dependency: dependency)
+                }
                 dependents[dependency, default: []].append(serviceName)
             }
         }
 
-        var layers: [[String]] = []
+        var layers: [[(serviceName: String, service: ComposeService)]] = []
         var remaining = services.count
 
         while remaining > 0 {
@@ -67,7 +61,7 @@ public enum ServicePlanner {
                 throw ComposeError.circularDependency(services: findCycle(in: services))
             }
 
-            layers.append(layer)
+            layers.append(layer.map { ($0, services[$0]!) })
             remaining -= layer.count
 
             for serviceName in layer {

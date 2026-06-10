@@ -19,11 +19,27 @@ public enum ComposeParser {
         do {
             composeFile = try YAMLDecoder().decode(ComposeFile.self, from: contents)
         } catch {
+            if let composeError = Self.extractComposeError(from: error) {
+                throw composeError
+            }
             throw ComposeError.parseFailed(path, underlying: error)
         }
 
         try validate(composeFile)
         return composeFile
+    }
+
+    /// Yams wraps `ComposeError` thrown from `Decodable` in `DecodingError.dataCorrupted`.
+    static func extractComposeError(from error: Error) -> ComposeError? {
+        if let composeError = error as? ComposeError {
+            return composeError
+        }
+        if case DecodingError.dataCorrupted(let context) = error,
+           let underlying = context.underlyingError
+        {
+            return extractComposeError(from: underlying)
+        }
+        return nil
     }
 
     static func validate(_ composeFile: ComposeFile) throws {
@@ -40,5 +56,7 @@ public enum ComposeParser {
                 throw ComposeError.unknownDependency(service: serviceName, dependency: dependency)
             }
         }
+
+        _ = try ServicePlanner.dependencyLayers(for: composeFile)
     }
 }

@@ -221,22 +221,24 @@ struct TestRunner {
             _ = try ComposeParser.parse(fileURL: Self.fixtureURL("unknown-dependency-compose.yml"))
         }
 
-        let circularFixture = try ComposeParser.parse(fileURL: Self.fixtureURL("circular-dependency-compose.yml"))
         expectComposeError("circular dependency", matching: { if case .circularDependency = $0 { true } else { false } }) {
-            _ = try ServicePlanner.startupLayers(
-                for: circularFixture,
-                projectName: "demo",
-                composeDirectory: fixturesDirectory
-            )
+            _ = try ComposeParser.parse(fileURL: Self.fixtureURL("circular-dependency-compose.yml"))
         }
 
-        expectComposeError("longform depends_on", matching: { error in
-            guard case .parseFailed(_, let underlying) = error,
-                  let composeError = underlying as? ComposeError,
-                  case .invalidField("depends_on", _) = composeError
-            else { return false }
-            return true
-        }) {
+        expectComposeError("self dependency", matching: { if case .circularDependency = $0 { true } else { false } }) {
+            _ = try ComposeParser.parse(fileURL: Self.fixtureURL("self-dependency-compose.yml"))
+        }
+
+        let duplicateDependsFixture = try ComposeParser.parse(fileURL: Self.fixtureURL("duplicate-depends-compose.yml"))
+        let duplicateLayers = try ServicePlanner.startupLayers(
+            for: duplicateDependsFixture,
+            projectName: "demo",
+            composeDirectory: fixturesDirectory
+        )
+        expect(duplicateLayers.count == 2, "duplicate depends_on layers wave count")
+        expect(duplicateLayers[1].map(\.serviceName) == ["web"], "duplicate depends_on single dependent wave")
+
+        expectComposeError("longform depends_on", matching: { if case .invalidField("depends_on", _) = $0 { true } else { false } }) {
             _ = try ComposeParser.parse(fileURL: Self.fixtureURL("longform-depends-compose.yml"))
         }
     }
