@@ -20,24 +20,19 @@ public struct Down: AsyncParsableCommand {
 
         let useOrderedShutdown = context.fileURLs != nil && !projectOptions.hasExplicitProjectName
 
-        // Progress shows compose service names where known; stdout keeps container names.
         let displayNames = Dictionary(
-            uniqueKeysWithValues: containers.map { ($0.name, $0.serviceName ?? $0.name) }
-        )
-        let lines = ProgressLines(display: progressOptions.resolvedDisplay(), phase: .stopping)
-        let progress = WaveProgressHandlers(
-            onWaveStart: { wave, total, names in
-                await lines.beginWave(wave: wave, total: total, services: names.map { displayNames[$0] ?? $0 })
+            containers.map {
+                ($0.name, progressServiceLabel(containerName: $0.name, serviceName: $0.serviceName))
             },
-            onServiceComplete: { name, succeeded in
-                await lines.markComplete(service: displayNames[name] ?? name, succeeded: succeeded)
-            },
-            onWaveComplete: { _ in
-                await lines.finishWave()
-            }
+            uniquingKeysWith: { _, last in last }
         )
 
-        do {
+        let orchestration = makeProgressOrchestration(
+            display: progressOptions.resolvedDisplay(),
+            phase: .stopping,
+            label: { displayNames[$0] ?? $0 }
+        )
+        try await runWithProgress(lines: orchestration.lines) {
             if useOrderedShutdown, let composeFile = context.composeFile {
                 let layers = try ServicePlanner.shutdownContainerLayers(
                     for: composeFile,
@@ -57,14 +52,10 @@ public struct Down: AsyncParsableCommand {
                         stderr
                     )
                 }
-                try await ServiceRunner.down(layers: layers, onRemoved: { print($0) }, progress: progress)
+                try await ServiceRunner.down(layers: layers, onRemoved: { print($0) }, progress: orchestration.handlers)
             } else {
-                try await ServiceRunner.down(containers: containers, onRemoved: { print($0) }, progress: progress)
+                try await ServiceRunner.down(containers: containers, onRemoved: { print($0) }, progress: orchestration.handlers)
             }
-        } catch {
-            await lines.finish()
-            throw error
         }
-        await lines.finish()
     }
 }

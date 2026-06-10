@@ -46,6 +46,10 @@ extension TestRunner {
             TerminalMode.resolve(isTTY: false, environment: ["CI": "true"]) == .pipe,
             "non-TTY wins over CI"
         )
+        expect(
+            TerminalMode.resolve(fileDescriptor: -1, environment: [:]) == .pipe,
+            "invalid file descriptor resolves pipe"
+        )
     }
 
     private mutating func runTerminalLayoutTests() {

@@ -28,26 +28,13 @@ public struct Up: AsyncParsableCommand {
             composeDirectory: composeDirectory
         )
 
-        let lines = ProgressLines(display: progressOptions.resolvedDisplay(), phase: .starting)
-        let progress = WaveProgressHandlers(
-            onWaveStart: { wave, total, services in
-                await lines.beginWave(wave: wave, total: total, services: services)
-            },
-            onServiceComplete: { service, succeeded in
-                await lines.markComplete(service: service, succeeded: succeeded)
-            },
-            onWaveComplete: { _ in
-                await lines.finishWave()
-            }
+        let orchestration = makeProgressOrchestration(
+            display: progressOptions.resolvedDisplay(),
+            phase: .starting
         )
-
-        do {
-            try await ServiceRunner.up(layers: layers, progress: progress)
-        } catch {
-            await lines.finish()
-            throw error
+        try await runWithProgress(lines: orchestration.lines) {
+            try await ServiceRunner.up(layers: layers, progress: orchestration.handlers)
         }
-        await lines.finish()
 
         for plan in layers.flatMap({ $0 }) {
             print(plan.name)

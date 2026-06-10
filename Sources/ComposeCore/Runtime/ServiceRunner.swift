@@ -1,27 +1,6 @@
 import ContainerCommands
 import Foundation
 
-/// Optional orchestration progress callbacks for `up`/`down` waves.
-/// Purely observational: wave ordering and rollback behavior are unaffected.
-public struct WaveProgressHandlers: Sendable {
-    /// Called before a wave runs with the 1-based wave number, total waves, and service labels.
-    public var onWaveStart: (@Sendable (_ wave: Int, _ totalWaves: Int, _ services: [String]) async -> Void)?
-    /// Called as each service in a wave finishes, with its label and whether it succeeded.
-    public var onServiceComplete: (@Sendable (_ service: String, _ succeeded: Bool) async -> Void)?
-    /// Called after a wave completes without failures, with the 1-based wave number.
-    public var onWaveComplete: (@Sendable (_ wave: Int) async -> Void)?
-
-    public init(
-        onWaveStart: (@Sendable (Int, Int, [String]) async -> Void)? = nil,
-        onServiceComplete: (@Sendable (String, Bool) async -> Void)? = nil,
-        onWaveComplete: (@Sendable (Int) async -> Void)? = nil
-    ) {
-        self.onWaveStart = onWaveStart
-        self.onServiceComplete = onServiceComplete
-        self.onWaveComplete = onWaveComplete
-    }
-}
-
 public enum ServiceRunner {
     public static func up(plans: [ServicePlan]) async throws {
         try await up(layers: [plans])
