@@ -34,8 +34,9 @@ Ctrl+C (SIGINT) or SIGTERM during long-running commands is handled gracefully:
 | `logs -f` | Stops following logs; containers keep running |
 | `up` (mid-wave) | Stops scheduling new waves; already-started containers keep running (no rollback) |
 | `up --attach` | SIGTERM project containers, wait `-t` seconds (default 10), then SIGKILL |
+| `exec` | SIGTERM project containers, wait `--timeout` seconds (default 10), then SIGKILL |
 | `down` (mid-wave) | Stops after the current wave; some containers may remain |
-| Future `top`, `exec` | SIGTERM project containers, wait `-t` seconds (default 10), then SIGKILL |
+| Future `top` | SIGTERM project containers, wait `-t` seconds (default 10), then SIGKILL |
 
 Interrupt stops scheduling new waves immediately and cancels in-flight container work; partially created containers are force-removed. Exit status follows the shell convention: 130 for SIGINT, 143 for SIGTERM.
 
@@ -47,6 +48,22 @@ Interrupt stops scheduling new waves immediately and cancels in-flight container
 - Use `-t` / `--timeout` with `up --attach` to set the SIGTERM grace period before SIGKILL (default 10 seconds).
 - **Exit codes (v1):** `0` when all watched services reach `stopped`; 130 for SIGINT or 143 for SIGTERM during attach. Attach-phase errors do not roll back containers that already started.
 - Per-container process exit codes are not available yet; attach detects completion by polling runtime status until containers stop. When the container API exposes init-process wait, compose will adopt first-non-zero exit aggregation (Docker parity).
+
+### Exec
+
+`container compose exec SERVICE COMMAND [ARGS...]` runs a command in a running service container.
+
+```bash
+container compose exec web sh
+container compose exec -f docker-compose.yml -p demo db psql -U postgres
+```
+
+- Resolves the container by `com.docker.compose.project` and `com.docker.compose.service` labels (no arbitrary container ID passthrough).
+- Passes `COMMAND` and `ARGS` directly to the container runtime without wrapping in `/bin/sh -c` unless you supply that yourself.
+- When stdin is a TTY, `-i` and `-t` are enabled automatically. Piped or redirected stdin stays non-interactive unless you pass `-i`. There is no `-T` flag yet to disable auto-allocation from an interactive terminal.
+- Use `--timeout` to set the SIGTERM grace period before SIGKILL when you interrupt (default 10 seconds). On `exec`, `-t` allocates a pseudo-TTY (not the shutdown timeout).
+- **Exit codes:** the exec process exit code on normal completion; 130 for SIGINT or 143 for SIGTERM when interrupted (project containers are stopped).
+- Not supported at the compose layer yet: `-e`, `-w`, `-u`, detach, or service scale/index selection.
 
 ### Multi-file merge
 

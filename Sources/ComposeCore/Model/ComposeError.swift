@@ -20,6 +20,10 @@ public enum ComposeError: LocalizedError, Sendable {
     case rollbackFailed(started: [String], failures: [(container: String, error: Error)])
     case invalidProjectName(String)
     case invalidComposeFilePath(String)
+    case serviceNotFound(service: String, project: String)
+    case serviceNotRunning(service: String, state: String)
+    case ambiguousService(service: String, containers: [String])
+    case containerProjectMismatch(container: String, project: String)
 
     public var errorDescription: String? {
         switch self {
@@ -67,6 +71,15 @@ public enum ComposeError: LocalizedError, Sendable {
             return "Invalid project name '\(name)'. Use lowercase letters, numbers, dashes, and underscores."
         case .invalidComposeFilePath(let path):
             return "Invalid compose file path '\(path)'. Expected a regular file."
+        case .serviceNotFound(let service, let project):
+            return "No container for service '\(service)' in project '\(project)'. Check the service name and run compose up."
+        case .serviceNotRunning(let service, let state):
+            return "Service '\(service)' isn't running (state: \(state)). Start it with compose up."
+        case .ambiguousService(let service, let containers):
+            let names = containers.joined(separator: ", ")
+            return "Service '\(service)' matches multiple containers (\(names)). Scale isn't supported yet."
+        case .containerProjectMismatch(let container, let project):
+            return "Container '\(container)' isn't part of project '\(project)'."
         }
     }
 }

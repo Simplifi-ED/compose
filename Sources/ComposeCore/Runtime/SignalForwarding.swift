@@ -2,9 +2,9 @@ import ContainerizationOS
 import Darwin
 import Foundation
 
-// Future long-running commands:
-// - #21 attach up / #19 exec: `.stopProject(context)` → `ProjectShutdown.stop`
-// - #20 top streaming: `.cancelOnly` + alternate-screen `terminalCleanup`
+// Long-running commands using `.stopProject(context)` → `ProjectShutdown.stop`:
+// - `up --attach`, `exec`
+// - #20 top: `.cancelOnly` + alternate-screen `terminalCleanup`
 
 /// POSIX shell convention: exit status = 128 + signal number.
 package struct InterruptSignal: Sendable, Equatable {
