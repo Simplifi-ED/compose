@@ -1,0 +1,7 @@
+services:
+  web:
+    image: ${IMAGE}
+    ports:
+      - "${APP_PORT}:80"
+    environment:
+      FOO: ${FOO}

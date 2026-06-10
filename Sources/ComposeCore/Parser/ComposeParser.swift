@@ -40,8 +40,11 @@ public enum ComposeParser {
             throw ComposeError.readFailed(path, underlying: error)
         }
 
+        let variables = try DotEnv.loadVariables(beside: fileURL)
+        let hydrated = try DotEnv.substitute(contents, variables: variables, composePath: path)
+
         do {
-            return try YAMLDecoder().decode(ComposeFile.self, from: contents)
+            return try YAMLDecoder().decode(ComposeFile.self, from: hydrated)
         } catch {
             if let composeError = Self.extractComposeError(from: error) {
                 throw composeError

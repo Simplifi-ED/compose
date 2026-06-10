@@ -16,6 +16,7 @@ public enum ComposeError: LocalizedError, Sendable {
     case multipleServiceFailures([(service: String, error: Error)])
     case unknownDependency(service: String, dependency: String)
     case circularDependency(services: [String])
+    case unresolvedVariable(name: String, composePath: String)
     case rollbackFailed(started: [String], failures: [(container: String, error: Error)])
 
     public var errorDescription: String? {
@@ -53,6 +54,9 @@ public enum ComposeError: LocalizedError, Sendable {
         case .circularDependency(let services):
             let path = services.joined(separator: " → ")
             return "Circular dependency: \(path). Remove or reorder depends_on entries."
+        case .unresolvedVariable(let name, let composePath):
+            return "Unresolved variable '${name}' in \(composePath). "
+                + "Add \(name) to .env beside the compose file."
         case .rollbackFailed(let started, let failures):
             let startedList = started.joined(separator: ", ")
             let details = failures.map { "'\($0.container)': \($0.error.localizedDescription)" }.joined(separator: "; ")
