@@ -7,7 +7,7 @@ cd "$ROOT_DIR"
 WORK_DIR=""
 cleanup() {
   if [[ -n "$WORK_DIR" && -d "$WORK_DIR" ]]; then
-    container compose -f "$WORK_DIR/docker-compose.yml" -p bindmounttest down 2>/dev/null || true
+    container compose down -f "$WORK_DIR/docker-compose.yml" -p bindmounttest 2>/dev/null || true
     rm -rf "$WORK_DIR"
   fi
 }
@@ -34,7 +34,7 @@ echo "==> Starting compose project from a different working directory..."
 OTHER_DIR="$(mktemp -d)"
 (
   cd "$OTHER_DIR"
-  container compose -f "$WORK_DIR/docker-compose.yml" -p bindmounttest up
+  container compose up -f "$WORK_DIR/docker-compose.yml" -p bindmounttest
 )
 
 CONTAINER_NAME="bindmounttest_web"
@@ -48,6 +48,6 @@ fi
 rm -rf "$OTHER_DIR"
 
 echo "==> Stopping compose project..."
-container compose -f "$WORK_DIR/docker-compose.yml" -p bindmounttest down
+container compose down -f "$WORK_DIR/docker-compose.yml" -p bindmounttest
 
 echo "PASS: bind mount verified"
