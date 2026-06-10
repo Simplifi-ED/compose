@@ -4,7 +4,7 @@ import Foundation
 public enum ServiceRunner {
     public static func up(plans: [ServicePlan]) async throws {
         try await runInParallel(plans.map { (label: $0.serviceName, value: $0) }) { plan in
-            var command = try Application.ContainerRun.parse(plan.runArguments)
+            let command = try Application.ContainerRun.parse(plan.runArguments)
             try await command.run()
         }
     }
