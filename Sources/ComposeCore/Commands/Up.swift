@@ -15,7 +15,12 @@ public struct Up: AsyncParsableCommand {
         let fileURL = try projectOptions.resolvedFileURL()
         let projectName = try projectOptions.resolvedProjectName(fileURL: fileURL)
         let composeFile = try ComposeParser.parse(fileURL: fileURL)
-        let plans = try ServicePlanner.plans(for: composeFile, projectName: projectName)
+        let composeDirectory = fileURL.deletingLastPathComponent()
+        let plans = try ServicePlanner.plans(
+            for: composeFile,
+            projectName: projectName,
+            composeDirectory: composeDirectory
+        )
 
         try await ServiceRunner.up(plans: plans)
 

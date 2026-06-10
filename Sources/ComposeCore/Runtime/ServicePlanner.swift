@@ -7,14 +7,19 @@ public struct ServicePlan: Sendable, Equatable {
 }
 
 public enum ServicePlanner {
-    public static func plans(for composeFile: ComposeFile, projectName: String) throws -> [ServicePlan] {
+    public static func plans(
+        for composeFile: ComposeFile,
+        projectName: String,
+        composeDirectory: URL
+    ) throws -> [ServicePlan] {
         try composeFile.services
             .sorted { $0.key < $1.key }
             .map { serviceName, service in
                 try plan(
                     serviceName: serviceName,
                     service: service,
-                    projectName: projectName
+                    projectName: projectName,
+                    composeDirectory: composeDirectory
                 )
             }
     }
@@ -33,7 +38,8 @@ public enum ServicePlanner {
     public static func plan(
         serviceName: String,
         service: ComposeService,
-        projectName: String
+        projectName: String,
+        composeDirectory: URL
     ) throws -> ServicePlan {
         guard let image = service.image, !image.isEmpty else {
             throw ComposeError.missingImage(service: serviceName)
@@ -50,6 +56,9 @@ public enum ServicePlanner {
         arguments.append(contentsOf: environmentFlags(service.environment))
         for port in service.ports {
             arguments.append(contentsOf: ["-p", try publishFlag(for: port)])
+        }
+        for volume in service.volumes {
+            arguments.append(contentsOf: ["-v", try volumeFlag(for: volume, relativeTo: composeDirectory)])
         }
         arguments.append(image)
         arguments.append(contentsOf: commandArguments(service.command))
@@ -109,5 +118,49 @@ public enum ServicePlanner {
             return "127.0.0.1:\(hostContainerPart)"
         }
         return "127.0.0.1:\(hostContainerPart)\(protocolSuffix)"
+    }
+
+    public static func volumeFlag(for volume: String, relativeTo composeDirectory: URL) throws -> String {
+        let trimmed = volume.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            throw ComposeError.unsupportedVolume(volume)
+        }
+
+        let parts = trimmed.split(separator: ":", omittingEmptySubsequences: false)
+        if parts.count == 3 {
+            throw ComposeError.unsupportedVolumeOption(volume)
+        }
+        guard parts.count == 2 else {
+            throw ComposeError.unsupportedVolume(volume)
+        }
+
+        let hostPath = String(parts[0])
+        let containerPath = String(parts[1])
+
+        guard !hostPath.isEmpty, !containerPath.isEmpty else {
+            throw ComposeError.unsupportedVolume(volume)
+        }
+        guard containerPath.hasPrefix("/") else {
+            throw ComposeError.unsupportedVolume(volume)
+        }
+
+        let isBindMountSource = hostPath.contains("/") || hostPath == "." || hostPath == ".."
+        guard isBindMountSource else {
+            throw ComposeError.unsupportedNamedVolume(volume)
+        }
+
+        let resolvedHostURL: URL
+        if hostPath.hasPrefix("/") {
+            resolvedHostURL = URL(fileURLWithPath: hostPath)
+        } else {
+            resolvedHostURL = composeDirectory.appendingPathComponent(hostPath)
+        }
+        let absoluteHostPath = resolvedHostURL.standardizedFileURL.path
+
+        guard FileManager.default.fileExists(atPath: absoluteHostPath) else {
+            throw ComposeError.volumeHostPathNotFound(path: absoluteHostPath)
+        }
+
+        return "\(absoluteHostPath):\(containerPath)"
     }
 }
