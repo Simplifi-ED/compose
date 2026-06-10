@@ -5,22 +5,20 @@ public struct Down: AsyncParsableCommand {
     public init() {}
 
     public static let configuration = CommandConfiguration(
-        abstract: "Stop and remove containers defined in the compose file."
+        abstract: "Stop and remove containers for the compose project."
     )
 
     @OptionGroup
     var projectOptions: ProjectOptions
 
     public func run() async throws {
-        let fileURL = try projectOptions.resolvedFileURL()
-        let projectName = projectOptions.resolvedProjectName(fileURL: fileURL)
-        let composeFile = try ComposeParser.parse(fileURL: fileURL)
-        let plans = try ServicePlanner.plans(for: composeFile, projectName: projectName)
+        let projectName = try projectOptions.resolvedProjectName()
+        let containers = try await ContainerDiscovery.containers(forProject: projectName)
 
-        try await ServiceRunner.down(plans: plans)
+        try await ServiceRunner.down(containers: containers)
 
-        for plan in plans {
-            print(plan.containerID)
+        for container in containers {
+            print(container.name)
         }
     }
 }

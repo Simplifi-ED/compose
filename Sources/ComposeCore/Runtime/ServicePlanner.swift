@@ -2,7 +2,7 @@ import Foundation
 
 public struct ServicePlan: Sendable, Equatable {
     public let serviceName: String
-    public let containerID: String
+    public let name: String
     public let runArguments: [String]
 }
 
@@ -19,7 +19,7 @@ public enum ServicePlanner {
             }
     }
 
-    public static func containerID(
+    public static func containerName(
         serviceName: String,
         service: ComposeService,
         projectName: String
@@ -39,13 +39,14 @@ public enum ServicePlanner {
             throw ComposeError.missingImage(service: serviceName)
         }
 
-        let containerID = containerID(
+        let name = containerName(
             serviceName: serviceName,
             service: service,
             projectName: projectName
         )
 
-        var arguments = ["-d", "--name", containerID]
+        var arguments = ["-d", "--name", name]
+        arguments.append(contentsOf: ComposeLabels.runFlags(projectName: projectName, serviceName: serviceName))
         arguments.append(contentsOf: environmentFlags(service.environment))
         for port in service.ports {
             arguments.append(contentsOf: ["-p", try publishFlag(for: port)])
@@ -55,7 +56,7 @@ public enum ServicePlanner {
 
         return ServicePlan(
             serviceName: serviceName,
-            containerID: containerID,
+            name: name,
             runArguments: arguments
         )
     }

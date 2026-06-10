@@ -20,7 +20,7 @@ public struct Up: AsyncParsableCommand {
         try await ServiceRunner.up(plans: plans)
 
         for plan in plans {
-            print(plan.containerID)
+            print(plan.name)
         }
     }
 }

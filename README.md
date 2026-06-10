@@ -17,8 +17,22 @@ Maintained by [Omnivya](https://www.omnivya.fr) ([Simplifi-ED](https://github.co
 - Per service: `image`, `command`, `ports`, `environment`, `container_name`
 - `container compose up` (detached) and `container compose down` (stop and remove)
 - Parallel service orchestration via Swift structured concurrency
+- Container labels for project tracking (`com.docker.compose.project`, `com.docker.compose.service`)
 
 Not supported yet: `depends_on`, networks, volumes, `build`, profiles, multi-file merge.
+
+### Container labels
+
+Each container started by `compose up` gets two metadata labels:
+
+| Label | Value |
+|-------|-------|
+| `com.docker.compose.project` | Project name (`-p`, or the compose file's parent directory) |
+| `com.docker.compose.service` | Service name from the compose file |
+
+`compose down` finds containers by `com.docker.compose.project`. Use the same `-p` value you used with `up`. With `-p`, the compose file does not need to exist. Services removed from the compose file are still stopped if they carry the project label.
+
+Containers created before label support have no labels. `compose down` cannot find them, and `compose up` fails if the container name already exists. Remove them first with `container rm <name>`, then run `compose up`.
 
 ## Quick start
 

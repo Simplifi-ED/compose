@@ -69,9 +69,18 @@ struct TestRunner {
             containerName: nil
         )
         let plan = try ServicePlanner.plan(serviceName: "web", service: service, projectName: "demo")
-        expect(plan.containerID == "demo_web", "planner container id")
+        expect(plan.name == "demo_web", "planner container name")
         expect(plan.runArguments.contains("-d"), "planner detach")
         expect(plan.runArguments.contains("127.0.0.1:18080:80"), "planner publish")
+        expect(plan.runArguments.contains("-l"), "planner label flag")
+        expect(
+            plan.runArguments.contains("\(ComposeLabels.project)=demo"),
+            "planner project label"
+        )
+        expect(
+            plan.runArguments.contains("\(ComposeLabels.service)=web"),
+            "planner service label"
+        )
 
         let named = ComposeService(
             image: "docker.io/library/alpine:latest",
@@ -81,13 +90,32 @@ struct TestRunner {
             containerName: "custom-worker"
         )
         let namedPlan = try ServicePlanner.plan(serviceName: "worker", service: named, projectName: "demo")
-        expect(namedPlan.containerID == "custom-worker", "planner container name override")
+        expect(namedPlan.name == "custom-worker", "planner container name override")
 
         let publishFlag = try ServicePlanner.publishFlag(for: "8080:80/tcp")
         expect(publishFlag == "127.0.0.1:8080:80/tcp", "planner protocol suffix")
         expectThrows(ComposeError.self, "invalid port") {
             _ = try ServicePlanner.publishFlag(for: "not-a-port")
         }
+    }
+
+    mutating func runLabelTests() {
+        expect(
+            ComposeLabels.exactMatchRegex("demo.v2") == "^demo\\.v2$",
+            "exact match regex escapes dots"
+        )
+        expect(
+            ComposeLabels.exactMatchRegex("demo") == "^demo$",
+            "exact match regex anchors plain name"
+        )
+        let flags = ComposeLabels.runFlags(projectName: "demo", serviceName: "web")
+        expect(flags == ["-l", "com.docker.compose.project=demo", "-l", "com.docker.compose.service=web"], "run label flags")
+
+        let filters = ContainerDiscovery.listFilters(forProject: "demo.v2")
+        expect(
+            filters.labels[ComposeLabels.project] == ComposeLabels.exactMatchRegex("demo.v2"),
+            "discovery project label filter"
+        )
     }
 
     mutating func runTeardownErrorTests() {
@@ -125,6 +153,7 @@ var runner = TestRunner()
 do {
     try runner.runParserTests()
     try runner.runPlannerTests()
+    runner.runLabelTests()
     runner.runTeardownErrorTests()
 } catch {
     fputs("FAIL: unexpected error: \(error)\n", stderr)

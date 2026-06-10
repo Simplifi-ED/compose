@@ -9,9 +9,9 @@ public enum ServiceRunner {
         }
     }
 
-    public static func down(plans: [ServicePlan]) async throws {
-        try await runInParallel(plans.map { (label: $0.serviceName, value: $0.containerID) }) { containerID in
-            try await ContainerTeardown.teardown(id: containerID)
+    public static func down(containers: [DiscoveredContainer]) async throws {
+        try await runInParallel(containers.map { (label: $0.service, value: $0.name) }) { name in
+            try await ContainerTeardown.teardown(id: name)
         }
     }
 

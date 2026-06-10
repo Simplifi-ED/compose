@@ -28,4 +28,12 @@ public struct ProjectOptions: ParsableArguments {
         }
         return directoryName
     }
+
+    func resolvedProjectName() throws -> String {
+        if let projectName, !projectName.isEmpty {
+            return projectName
+        }
+        let fileURL = try resolvedFileURL()
+        return resolvedProjectName(fileURL: fileURL)
+    }
 }
