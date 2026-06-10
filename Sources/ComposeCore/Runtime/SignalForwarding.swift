@@ -4,7 +4,7 @@ import Foundation
 
 // Long-running commands using `.stopProject(context)` → `ProjectShutdown.stop`:
 // - `up --attach`, `exec`
-// - #20 top: `.cancelOnly` + alternate-screen `terminalCleanup`
+// - #20 top: `.cancelOnly` + `StatsTableRenderer.finish()` terminal cleanup
 
 /// POSIX shell convention: exit status = 128 + signal number.
 package struct InterruptSignal: Sendable, Equatable {

@@ -22,6 +22,7 @@ Maintained by [Omnivya](https://www.omnivya.fr) ([Simplifi-ED](https://github.co
 - `down` validates only the dependency graph (not `image` or other startup fields), so teardown still works if the file was edited after `up`
 - Containers without a `com.docker.compose.service` label (or not listed in the compose file) stop last and may not follow `depends_on` order
 - Container labels for project tracking (`com.docker.compose.project`, `com.docker.compose.service`)
+- `container compose ps` (list project containers) and `container compose top` (live CPU/memory stats stream)
 
 Not supported yet: long-form `depends_on` with health conditions, networks, named volumes, volume drivers, read-only mounts (`:ro`), `build`, profiles, YAML `extends` / `include`.
 
@@ -36,7 +37,7 @@ Ctrl+C (SIGINT) or SIGTERM during long-running commands is handled gracefully:
 | `up --attach` | SIGTERM project containers, wait `-t` seconds (default 10), then SIGKILL |
 | `exec` | SIGTERM project containers, wait `--timeout` seconds (default 10), then SIGKILL |
 | `down` (mid-wave) | Stops after the current wave; some containers may remain |
-| Future `top` | SIGTERM project containers, wait `-t` seconds (default 10), then SIGKILL |
+| `top` | Stops streaming stats; containers keep running |
 
 Interrupt stops scheduling new waves immediately and cancels in-flight container work; partially created containers are force-removed. Exit status follows the shell convention: 130 for SIGINT, 143 for SIGTERM.
 
@@ -48,6 +49,21 @@ Interrupt stops scheduling new waves immediately and cancels in-flight container
 - Use `-t` / `--timeout` with `up --attach` to set the SIGTERM grace period before SIGKILL (default 10 seconds).
 - **Exit codes (v1):** `0` when all watched services reach `stopped`; 130 for SIGINT or 143 for SIGTERM during attach. Attach-phase errors do not roll back containers that already started.
 - Per-container process exit codes are not available yet; attach detects completion by polling runtime status until containers stop. When the container API exposes init-process wait, compose will adopt first-non-zero exit aggregation (Docker parity).
+
+### Top
+
+`container compose top` displays a live resource table for project containers (CPU, memory, network, block I/O, PIDs).
+
+```bash
+container compose top
+container compose top -f docker-compose.yml -p demo web db
+container compose top | cat    # single snapshot when stdout is not a TTY
+```
+
+- Uses the same project scoping and service filter as `ps` (`-f`, `-p`, optional service names).
+- Refreshes about once per second on an interactive TTY with in-place table redraw.
+- Redirected output (`pipe` mode) prints one snapshot and exits.
+- Ctrl+C (interactive, plain, or pipe) stops with exit code 0 via quiet cancel; containers keep running.
 
 ### Exec
 
@@ -169,7 +185,7 @@ swift run -c release compose-verify
 
 ## Architecture
 
-- `ComposeCore` — YAML parsing, service planning, `ContainerRun` for up, `ContainerTeardown` (stop + delete) for down
+- `ComposeCore` — YAML parsing, service planning, `ContainerRun` for up, `ContainerTeardown` (stop + delete) for down, observability commands (`ps`, `logs`, `top`)
 - `compose` — CLI plugin binary registered by `container`
 - `compose-verify` — parser/planner checks (Command Line Tools friendly)
 

@@ -1,4 +1,3 @@
-import Darwin
 import Foundation
 
 /// Shared foreground log-follow orchestration for `logs -f` and `up --attach`.
@@ -6,11 +5,6 @@ package enum LogFollowSession {
     private enum ParallelResult: Sendable {
         case multiplexFinished
         case parallelFinished
-    }
-
-    package static func prepareStdout() {
-        fflush(stdout)
-        setbuf(stdout, nil)
     }
 
     package static func runUntilCancelled(
@@ -25,7 +19,7 @@ package enum LogFollowSession {
         onMultiplexError: (@Sendable (Error) -> Void)? = nil,
         onQuietCancel: (@Sendable () -> Void)? = nil
     ) async throws -> SignalForwarding.ExitOutcome {
-        prepareStdout()
+        TerminalOutput.prepareStdout()
 
         let outcome = try await SignalForwarding.runUntilCancelled(
             policy: policy,
