@@ -1,4 +1,5 @@
 import ComposeCore
+import ContainerizationError
 import ContainerResource
 import Foundation
 
@@ -6,8 +7,10 @@ extension TestRunner {
     mutating func runLogsTests() {
         runLogFormatTests()
         runLogLineAssemblerTests()
+        runLogTailReaderTests()
         runLogMultiplexerTests()
         runProjectStatusFilterTests()
+        runLogsExitPathTests()
     }
 
     private mutating func runLogFormatTests() {
@@ -35,11 +38,91 @@ extension TestRunner {
         expect(assembler.finish() == ["tail"], "finish flushes trailing text")
     }
 
+    private mutating func runLogTailReaderTests() {
+        runLogTailReaderSplitTests()
+        runLogTailReaderFullReadTests()
+        runLogTailReaderTailTests()
+        runLogTailReaderUTF8BoundaryTests()
+        runLogTailReaderErrorTests()
+    }
+
+    private mutating func runLogTailReaderSplitTests() {
+        expect(LogTailReader.splitLogLines("") == [], "split on empty string is empty")
+        expect(LogTailReader.splitLogLines("a") == ["a"], "split without newline is one line")
+        expect(
+            LogTailReader.splitLogLines("\n\nfirst\nsecond\n") == ["", "", "first", "second"],
+            "split preserves leading blank lines"
+        )
+        expect(
+            LogTailReader.splitLogLines("first\n\nsecond\n") == ["first", "", "second"],
+            "split preserves interior blank lines"
+        )
+    }
+
+    private mutating func runLogTailReaderFullReadTests() {
+        do {
+            let handle = try logFileHandle(with: "\n\nfirst\nsecond\n")
+            defer { try? handle.close() }
+            let lines = try LogTailReader.readLines(from: handle, tail: nil)
+            expect(lines == ["", "", "first", "second"], "full read preserves leading blank lines")
+        } catch {
+            fputs("FAIL: full read test setup: \(error)\n", stderr)
+            failures += 1
+        }
+    }
+
+    private mutating func runLogTailReaderTailTests() {
+        do {
+            let handle = try logFileHandle(with: "alpha\n\nbeta\ngamma\n")
+            defer { try? handle.close() }
+            let lines = try LogTailReader.readLines(from: handle, tail: 3)
+            expect(lines == ["", "beta", "gamma"], "tail count includes blank lines")
+        } catch {
+            fputs("FAIL: tail read test setup: \(error)\n", stderr)
+            failures += 1
+        }
+    }
+
+    private mutating func runLogTailReaderUTF8BoundaryTests() {
+        do {
+            let prefix = String(repeating: "x", count: 1023)
+            let handle = try logFileHandle(with: "\(prefix)é\nvisible\n")
+            defer { try? handle.close() }
+            let lines = try LogTailReader.readLines(from: handle, tail: 1)
+            expect(lines == ["visible"], "tail read decodes multibyte UTF-8 split across read boundary")
+        } catch {
+            fputs("FAIL: UTF-8 tail test setup: \(error)\n", stderr)
+            failures += 1
+        }
+    }
+
+    private mutating func runLogTailReaderErrorTests() {
+        do {
+            let url = FileManager.default.temporaryDirectory
+                .appendingPathComponent("compose-verify-logs-\(UUID().uuidString).log")
+            try Data([0xFF, 0xFE, 0x0A]).write(to: url)
+            let handle = try FileHandle(forReadingFrom: url)
+            defer { try? handle.close() }
+            expectThrows(ContainerizationError.self, "invalid utf8 log file") {
+                _ = try LogTailReader.readLines(from: handle, tail: nil)
+            }
+        } catch {
+            fputs("FAIL: invalid utf8 test setup: \(error)\n", stderr)
+            failures += 1
+        }
+    }
+
+    private func logFileHandle(with content: String) throws -> FileHandle {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("compose-verify-logs-\(UUID().uuidString).log")
+        try content.write(to: url, atomically: true, encoding: .utf8)
+        return try FileHandle(forReadingFrom: url)
+    }
+
     private mutating func runLogMultiplexerTests() {
         runLogMultiplexerInterleaveTests()
         runLogMultiplexerWidthTests()
         runLogMultiplexerPipeModeTests()
-        runProjectStatusFilterTests()
     }
 
     private mutating func runLogMultiplexerInterleaveTests() {
@@ -106,5 +189,37 @@ extension TestRunner {
 
         let missing = ProjectStatus.filteredContainers(from: containers, filter: ["cache"])
         expect(missing.isEmpty, "unknown service filter returns empty list")
+    }
+
+    private mutating func runLogsExitPathTests() {
+        let sources = makeLogSources(from: [], services: [])
+        expect(sources.isEmpty, "no containers yields no log sources")
+
+        let filteredOut = makeLogSources(
+            from: [
+                ProjectContainer(name: "demo_web", serviceName: "web", status: .running, publishedPorts: [])
+            ],
+            services: ["missing"]
+        )
+        expect(filteredOut.isEmpty, "unknown service filter yields no log sources")
+
+        let buffer = LineBuffer()
+        blockingAwait {
+            let options = LogStreamOptions(tail: nil, follow: false, boot: false, mode: .plain)
+            _ = try? await LogMultiplexer.run(sources: [], options: options) { buffer.append($0) }
+        }
+        expect(buffer.lines.isEmpty, "empty sources produce no streamed output")
+
+        do {
+            _ = try Logs.parse(["--tail", "0"])
+            fputs("FAIL: expected throw for non-positive tail rejected\n", stderr)
+            failures += 1
+        } catch {
+            let description = String(describing: error)
+            expect(
+                description.contains("--tail must be a positive integer"),
+                "non-positive tail rejected at parse time"
+            )
+        }
     }
 }

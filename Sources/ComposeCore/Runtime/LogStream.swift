@@ -70,6 +70,17 @@ package struct LogStreamOptions: Sendable {
 
 /// Reads historical log content from a file handle.
 package enum LogTailReader {
+    /// Splits log text into lines, preserving intentional blank lines.
+    /// Strips only the trailing empty segment produced by a final newline.
+    package static func splitLogLines(_ text: String) -> [String] {
+        guard !text.isEmpty else { return [] }
+        var lines = text.components(separatedBy: .newlines)
+        if lines.last == "" {
+            lines.removeLast()
+        }
+        return lines
+    }
+
     package static func readLines(from handle: FileHandle, tail: Int?) throws -> [String] {
         if let tail {
             return try readLastLines(from: handle, count: tail)
@@ -81,9 +92,7 @@ package enum LogTailReader {
                 message: "failed to convert container logs to utf8"
             )
         }
-        let trimmed = text.trimmingCharacters(in: .newlines)
-        guard !trimmed.isEmpty else { return [] }
-        return trimmed.components(separatedBy: .newlines)
+        return splitLogLines(text)
     }
 
     private static func readLastLines(from handle: FileHandle, count: Int) throws -> [String] {
@@ -92,7 +101,11 @@ package enum LogTailReader {
         var offset = size
         var lines: [String] = []
 
-        while offset > 0, lines.count < count {
+        while offset > 0 {
+            if lines.count >= count, String(data: buffer, encoding: .utf8) != nil {
+                break
+            }
+
             let readSize = min(1024, offset)
             offset -= readSize
             try handle.seek(toOffset: offset)
@@ -100,12 +113,19 @@ package enum LogTailReader {
             let data = handle.readData(ofLength: Int(readSize))
             buffer.insert(contentsOf: data, at: 0)
 
-            if let chunk = String(data: buffer, encoding: .utf8) {
-                lines = chunk.components(separatedBy: .newlines).filter { !$0.isEmpty }
+            guard let text = String(data: buffer, encoding: .utf8) else {
+                continue
             }
+            lines = splitLogLines(text)
         }
 
-        return Array(lines.suffix(count))
+        guard let text = String(data: buffer, encoding: .utf8) else {
+            throw ContainerizationError(
+                .internalError,
+                message: "failed to convert container logs to utf8"
+            )
+        }
+        return Array(splitLogLines(text).suffix(count))
     }
 }
 
@@ -256,5 +276,23 @@ package actor LogMultiplexer {
             await multiplexer.ingest(service: source.serviceLabel, chunk: chunk)
         }
         await multiplexer.finishPending(service: source.serviceLabel)
+    }
+}
+
+/// Builds log stream sources for the selected project containers.
+package func makeLogSources(
+    from containers: [ProjectContainer],
+    services: [String]
+) -> [ServiceLogSource] {
+    let filter = services.isEmpty ? nil : Set(services)
+    let filtered = ProjectStatus.filteredContainers(from: containers, filter: filter)
+    return filtered.map { container in
+        ServiceLogSource(
+            containerName: container.name,
+            serviceLabel: progressServiceLabel(
+                containerName: container.name,
+                serviceName: container.serviceName
+            )
+        )
     }
 }

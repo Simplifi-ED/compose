@@ -35,19 +35,8 @@ public struct Logs: AsyncParsableCommand {
             skipComposeFileOnExplicitProject: true
         )
         let containers = try await ContainerDiscovery.projectContainers(forProject: context.projectName)
-        let filter = services.isEmpty ? nil : Set(services)
-        let filtered = ProjectStatus.filteredContainers(from: containers, filter: filter)
-        guard !filtered.isEmpty else { return }
-
-        let sources = filtered.map { container in
-            ServiceLogSource(
-                containerName: container.name,
-                serviceLabel: progressServiceLabel(
-                    containerName: container.name,
-                    serviceName: container.serviceName
-                )
-            )
-        }
+        let sources = makeLogSources(from: containers, services: services)
+        guard !sources.isEmpty else { return }
 
         if follow {
             fflush(stdout)
