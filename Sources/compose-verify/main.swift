@@ -186,6 +186,61 @@ struct TestRunner {
         expect(flags == ["-l", "com.docker.compose.project=demo", "-l", "com.docker.compose.service=web"], "run label flags")
     }
 
+    mutating func runDependencyTests() throws {
+        let fixturesDirectory = Self.fixtureURL("depends-compose.yml").deletingLastPathComponent()
+
+        let dependsFixture = try ComposeParser.parse(fileURL: Self.fixtureURL("depends-compose.yml"))
+        expect(dependsFixture.services["web"]?.dependsOn == ["db", "cache"], "depends_on decode")
+        expect(dependsFixture.services["api"]?.dependsOn == ["db"], "depends_on single dep decode")
+        expect(dependsFixture.services["db"]?.dependsOn == [], "depends_on default empty")
+
+        let layers = try ServicePlanner.startupLayers(
+            for: dependsFixture,
+            projectName: "demo",
+            composeDirectory: fixturesDirectory
+        )
+        expect(layers.count == 2, "depends layers wave count")
+        expect(
+            Set(layers[0].map(\.serviceName)) == ["cache", "db"],
+            "depends layer 0 independent services"
+        )
+        expect(
+            Set(layers[1].map(\.serviceName)) == ["api", "web"],
+            "depends layer 1 dependents"
+        )
+
+        let flattened = layers.flatMap { $0 }
+        let dbIndex = flattened.firstIndex { $0.serviceName == "db" }
+        let webIndex = flattened.firstIndex { $0.serviceName == "web" }
+        expect(dbIndex != nil && webIndex != nil, "depends flattened contains db and web")
+        if let dbIndex, let webIndex {
+            expect(dbIndex < webIndex, "depends db before web")
+        }
+
+        expectComposeError("unknown dependency", matching: { if case .unknownDependency = $0 { true } else { false } }) {
+            _ = try ComposeParser.parse(fileURL: Self.fixtureURL("unknown-dependency-compose.yml"))
+        }
+
+        let circularFixture = try ComposeParser.parse(fileURL: Self.fixtureURL("circular-dependency-compose.yml"))
+        expectComposeError("circular dependency", matching: { if case .circularDependency = $0 { true } else { false } }) {
+            _ = try ServicePlanner.startupLayers(
+                for: circularFixture,
+                projectName: "demo",
+                composeDirectory: fixturesDirectory
+            )
+        }
+
+        expectComposeError("longform depends_on", matching: { error in
+            guard case .parseFailed(_, let underlying) = error,
+                  let composeError = underlying as? ComposeError,
+                  case .invalidField("depends_on", _) = composeError
+            else { return false }
+            return true
+        }) {
+            _ = try ComposeParser.parse(fileURL: Self.fixtureURL("longform-depends-compose.yml"))
+        }
+    }
+
     mutating func runTeardownErrorTests() {
         let notFound = ContainerizationError(.notFound, message: "container with ID demo_web not found")
         expect(ContainerTeardown.isIgnorableError(notFound), "notFound is ignorable")
@@ -221,6 +276,7 @@ var runner = TestRunner()
 do {
     try runner.runParserTests()
     try runner.runPlannerTests()
+    try runner.runDependencyTests()
     runner.runLabelTests()
     runner.runTeardownErrorTests()
 } catch {

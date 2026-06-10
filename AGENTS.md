@@ -13,13 +13,14 @@ You are building a **Minimal Real Compose Plugin**—NOT a generic orchestration
 * Parsing a standard, single-file `docker-compose.yml` [1].
 * Instantiating and mapping configuration directly into Apple's programmatic `ContainerCommands` API [1].
 * Basic container lifecycles: Starting (via `ContainerRun`) and Stopping (via `ContainerStop`) [1].
-* Attributes to map: `image`, `command`, `environment`, standard host-to-container `ports`, and short-syntax bind-mount `volumes` (`host:container`) [1].
+* Attributes to map: `image`, `command`, `environment`, standard host-to-container `ports`, short-syntax bind-mount `volumes` (`host:container`), and short-form `depends_on` (list of service names) [1].
+* Dependency-aware startup ordering: topological sort with parallel waves via structured concurrency [1].
 
 ### **Out of Scope (DO NOT CODE):**
 
 * Custom bridging networks, overlay networks, or advanced routing [1].
 * Named volume declarations, volume drivers, read-only mount suffixes (`:ro`), and root-level `volumes:` blocks [1].
-* Complex orchestration constraints like `depends_on`, health checks, or restart policies [1].
+* Long-form `depends_on` with `condition:` (for example `service_healthy`), health-check gating, or restart policies [1].
 * Image-building lifecycles (no parsing of `build:` blocks or running Dockerfiles) [1].
 
 ---

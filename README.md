@@ -14,12 +14,12 @@ Maintained by [Omnivya](https://www.omnivya.fr) ([Simplifi-ED](https://github.co
 
 - Single compose file (`-f`, default `docker-compose.yml`)
 - Project name (`-p`, default: parent directory of compose file)
-- Per service: `image`, `command`, `ports`, `volumes` (bind mounts), `environment`, `container_name`
+- Per service: `image`, `command`, `ports`, `volumes` (bind mounts), `environment`, `container_name`, `depends_on` (list form)
 - `container compose up` (detached) and `container compose down` (stop and remove)
-- Parallel service orchestration via Swift structured concurrency
+- Dependency-aware startup: services start in `depends_on` order; independent services run in parallel
 - Container labels for project tracking (`com.docker.compose.project`, `com.docker.compose.service`)
 
-Not supported yet: `depends_on`, networks, named volumes, volume drivers, read-only mounts (`:ro`), `build`, profiles, multi-file merge.
+Not supported yet: long-form `depends_on` with health conditions, networks, named volumes, volume drivers, read-only mounts (`:ro`), `build`, profiles, multi-file merge.
 
 ### Container labels
 

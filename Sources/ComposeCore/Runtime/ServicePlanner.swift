@@ -12,16 +12,113 @@ public enum ServicePlanner {
         projectName: String,
         composeDirectory: URL
     ) throws -> [ServicePlan] {
-        try composeFile.services
-            .sorted { $0.key < $1.key }
-            .map { serviceName, service in
+        try startupLayers(
+            for: composeFile,
+            projectName: projectName,
+            composeDirectory: composeDirectory
+        ).flatMap { $0 }
+    }
+
+    public static func startupLayers(
+        for composeFile: ComposeFile,
+        projectName: String,
+        composeDirectory: URL
+    ) throws -> [[ServicePlan]] {
+        let serviceNames = try dependencyLayers(for: composeFile)
+        return try serviceNames.map { layer in
+            try layer.map { serviceName in
                 try plan(
                     serviceName: serviceName,
-                    service: service,
+                    service: composeFile.services[serviceName]!,
                     projectName: projectName,
                     composeDirectory: composeDirectory
                 )
             }
+        }
+    }
+
+    static func dependencyLayers(for composeFile: ComposeFile) throws -> [[String]] {
+        let services = composeFile.services
+        var inDegree: [String: Int] = [:]
+        var dependents: [String: [String]] = [:]
+
+        for serviceName in services.keys {
+            inDegree[serviceName] = 0
+            dependents[serviceName] = []
+        }
+
+        for (serviceName, service) in services {
+            inDegree[serviceName] = service.dependsOn.count
+            for dependency in service.dependsOn {
+                dependents[dependency, default: []].append(serviceName)
+            }
+        }
+
+        var layers: [[String]] = []
+        var remaining = services.count
+
+        while remaining > 0 {
+            let layer = inDegree
+                .filter { $0.value == 0 }
+                .map(\.key)
+                .sorted()
+
+            guard !layer.isEmpty else {
+                throw ComposeError.circularDependency(services: findCycle(in: services))
+            }
+
+            layers.append(layer)
+            remaining -= layer.count
+
+            for serviceName in layer {
+                inDegree.removeValue(forKey: serviceName)
+                for dependent in dependents[serviceName, default: []] {
+                    inDegree[dependent, default: 0] -= 1
+                }
+            }
+        }
+
+        return layers
+    }
+
+    private static func findCycle(in services: [String: ComposeService]) -> [String] {
+        var visited: Set<String> = []
+        var stack: Set<String> = []
+        var path: [String] = []
+
+        func dfs(_ serviceName: String) -> [String]? {
+            if stack.contains(serviceName) {
+                if let start = path.firstIndex(of: serviceName) {
+                    return Array(path[start...]) + [serviceName]
+                }
+                return [serviceName, serviceName]
+            }
+            if visited.contains(serviceName) {
+                return nil
+            }
+
+            visited.insert(serviceName)
+            stack.insert(serviceName)
+            path.append(serviceName)
+
+            for dependency in services[serviceName]?.dependsOn ?? [] {
+                if let cycle = dfs(dependency) {
+                    return cycle
+                }
+            }
+
+            path.removeLast()
+            stack.remove(serviceName)
+            return nil
+        }
+
+        for serviceName in services.keys.sorted() {
+            if let cycle = dfs(serviceName) {
+                return cycle
+            }
+        }
+
+        return Array(services.keys.sorted())
     }
 
     public static func containerName(

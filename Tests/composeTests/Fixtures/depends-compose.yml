@@ -1,0 +1,18 @@
+services:
+  db:
+    image: docker.io/library/alpine:latest
+    command: sleep 300
+  cache:
+    image: docker.io/library/alpine:latest
+    command: sleep 300
+  web:
+    image: docker.io/library/alpine:latest
+    command: sleep 300
+    depends_on:
+      - db
+      - cache
+  api:
+    image: docker.io/library/alpine:latest
+    command: sleep 300
+    depends_on:
+      - db

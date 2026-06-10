@@ -14,6 +14,8 @@ public enum ComposeError: LocalizedError, Sendable {
     case volumeHostPathNotFound(path: String)
     case serviceFailed(service: String, underlying: Error)
     case multipleServiceFailures([(service: String, error: Error)])
+    case unknownDependency(service: String, dependency: String)
+    case circularDependency(services: [String])
 
     public var errorDescription: String? {
         switch self {
@@ -44,6 +46,11 @@ public enum ComposeError: LocalizedError, Sendable {
         case .multipleServiceFailures(let failures):
             let details = failures.map { "'\($0.service)': \($0.error.localizedDescription)" }.joined(separator: "; ")
             return "One or more services failed: \(details)"
+        case .unknownDependency(let service, let dependency):
+            return "Service '\(service)' depends on '\(dependency)', which isn't defined. Check service names in depends_on."
+        case .circularDependency(let services):
+            let path = services.joined(separator: " → ")
+            return "Circular dependency: \(path). Remove or reorder depends_on entries."
         }
     }
 }

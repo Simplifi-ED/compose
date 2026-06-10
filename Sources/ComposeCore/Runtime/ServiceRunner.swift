@@ -3,9 +3,15 @@ import Foundation
 
 public enum ServiceRunner {
     public static func up(plans: [ServicePlan]) async throws {
-        try await runInParallel(plans.map { (label: $0.serviceName, value: $0) }) { plan in
-            let command = try Application.ContainerRun.parse(plan.runArguments)
-            try await command.run()
+        try await up(layers: [plans])
+    }
+
+    public static func up(layers: [[ServicePlan]]) async throws {
+        for layer in layers {
+            try await runInParallel(layer.map { (label: $0.serviceName, value: $0) }) { plan in
+                let command = try Application.ContainerRun.parse(plan.runArguments)
+                try await command.run()
+            }
         }
     }
 

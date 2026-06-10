@@ -35,6 +35,10 @@ public enum ComposeParser {
             guard let image = service.image, !image.isEmpty else {
                 throw ComposeError.missingImage(service: serviceName)
             }
+
+            for dependency in service.dependsOn where !composeFile.services.keys.contains(dependency) {
+                throw ComposeError.unknownDependency(service: serviceName, dependency: dependency)
+            }
         }
     }
 }
