@@ -18,22 +18,15 @@ public struct ProjectOptions: ParsableArguments {
         return url
     }
 
-    func resolvedProjectName(fileURL: URL) -> String {
+    func resolvedProjectName(fileURL: URL? = nil) throws -> String {
         if let projectName, !projectName.isEmpty {
             return projectName
         }
-        let directoryName = fileURL.deletingLastPathComponent().lastPathComponent
+        let resolvedURL = try fileURL ?? resolvedFileURL()
+        let directoryName = resolvedURL.deletingLastPathComponent().lastPathComponent
         if directoryName.isEmpty || directoryName == "/" {
             return "default"
         }
         return directoryName
-    }
-
-    func resolvedProjectName() throws -> String {
-        if let projectName, !projectName.isEmpty {
-            return projectName
-        }
-        let fileURL = try resolvedFileURL()
-        return resolvedProjectName(fileURL: fileURL)
     }
 }

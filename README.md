@@ -32,6 +32,8 @@ Each container started by `compose up` gets two metadata labels:
 
 `compose down` finds containers by `com.docker.compose.project`. Use the same `-p` value you used with `up`. With `-p`, the compose file does not need to exist. Services removed from the compose file are still stopped if they carry the project label.
 
+`compose down` prints one line per removed container name (discovered at runtime, not from the compose file). If no labeled containers match the project, it prints nothing and exits successfully.
+
 Containers created before label support have no labels. `compose down` cannot find them, and `compose up` fails if the container name already exists. Remove them first with `container rm <name>`, then run `compose up`.
 
 ## Quick start

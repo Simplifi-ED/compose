@@ -10,8 +10,4 @@ public enum ComposeLabels {
             "-l", "\(service)=\(serviceName)",
         ]
     }
-
-    public static func exactMatchRegex(_ value: String) -> String {
-        "^\(NSRegularExpression.escapedPattern(for: value))$"
-    }
 }

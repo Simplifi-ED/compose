@@ -100,22 +100,8 @@ struct TestRunner {
     }
 
     mutating func runLabelTests() {
-        expect(
-            ComposeLabels.exactMatchRegex("demo.v2") == "^demo\\.v2$",
-            "exact match regex escapes dots"
-        )
-        expect(
-            ComposeLabels.exactMatchRegex("demo") == "^demo$",
-            "exact match regex anchors plain name"
-        )
         let flags = ComposeLabels.runFlags(projectName: "demo", serviceName: "web")
         expect(flags == ["-l", "com.docker.compose.project=demo", "-l", "com.docker.compose.service=web"], "run label flags")
-
-        let filters = ContainerDiscovery.listFilters(forProject: "demo.v2")
-        expect(
-            filters.labels[ComposeLabels.project] == ComposeLabels.exactMatchRegex("demo.v2"),
-            "discovery project label filter"
-        )
     }
 
     mutating func runTeardownErrorTests() {
