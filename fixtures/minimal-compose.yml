@@ -1,0 +1,6 @@
+services:
+  web:
+    image: docker.io/library/busybox:latest
+    command: httpd -f -p 80
+    ports:
+      - "18080:80"

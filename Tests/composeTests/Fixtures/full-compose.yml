@@ -1,0 +1,15 @@
+name: demo
+services:
+  api:
+    image: docker.io/library/alpine:latest
+    command: ["sleep", "600"]
+    ports:
+      - "18081:80/tcp"
+    environment:
+      FOO: bar
+  worker:
+    image: docker.io/library/alpine:latest
+    command: sleep 300
+    environment:
+      - BAZ=qux
+    container_name: custom-worker
