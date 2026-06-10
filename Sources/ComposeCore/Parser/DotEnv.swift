@@ -55,11 +55,12 @@ package enum DotEnv {
     ) throws -> String {
         let nsText = text as NSString
         let fullRange = NSRange(location: 0, length: nsText.length)
+        let matches = placeholderRegex.matches(in: text, options: [], range: fullRange)
         var result = ""
         var lastIndex = 0
 
-        placeholderRegex.enumerateMatches(in: text, options: [], range: fullRange) { match, _, _ in
-            guard let match, match.numberOfRanges >= 2 else { return }
+        for match in matches {
+            guard match.numberOfRanges >= 2 else { continue }
 
             let matchRange = match.range(at: 0)
             let key = nsText.substring(with: match.range(at: 1))
@@ -67,27 +68,13 @@ package enum DotEnv {
             result += nsText.substring(with: NSRange(location: lastIndex, length: matchRange.location - lastIndex))
 
             guard let value = variables[key] else {
-                // Throwing from enumerateMatches closure is unsafe; record via a captured error.
-                return
+                throw ComposeError.unresolvedVariable(name: key, composePath: composePath)
             }
             result += value
-
             lastIndex = matchRange.location + matchRange.length
         }
 
         result += nsText.substring(from: lastIndex)
-
-        // Re-scan for unresolved placeholders (missing keys left literal in the loop above).
-        let resultText = result as NSString
-        let unresolvedRange = NSRange(location: 0, length: resultText.length)
-        if let unresolvedMatch = placeholderRegex.firstMatch(in: result, options: [], range: unresolvedRange),
-           unresolvedMatch.numberOfRanges >= 2 {
-            let key = resultText.substring(with: unresolvedMatch.range(at: 1))
-            if variables[key] == nil {
-                throw ComposeError.unresolvedVariable(name: key, composePath: composePath)
-            }
-        }
-
         return result
     }
 }

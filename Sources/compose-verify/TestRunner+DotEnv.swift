@@ -25,16 +25,17 @@ extension TestRunner {
         let parsed = DotEnv.parse(
             """
             # comment line
-
+            bad-key=value
+            NOEQUALS
             IMAGE=alpine:latest
             DUPLICATE=first
             DUPLICATE=second
-
             """
         )
         expect(parsed["IMAGE"] == "alpine:latest", "dotenv parses KEY=VALUE")
         expect(parsed["DUPLICATE"] == "second", "dotenv duplicate keys last wins")
-        expect(parsed["MISSING"] == nil, "dotenv skips invalid lines")
+        expect(parsed["bad-key"] == nil, "dotenv skips invalid keys")
+        expect(parsed["NOEQUALS"] == nil, "dotenv skips lines without equals")
 
         let substituted = try DotEnv.substitute(
             "image: ${IMAGE} ports: ${IMAGE}",
@@ -42,6 +43,13 @@ extension TestRunner {
             composePath: "/tmp/compose.yml"
         )
         expect(substituted == "image: alpine:latest ports: alpine:latest", "dotenv multiple placeholders")
+
+        let indirect = try DotEnv.substitute(
+            "image: ${A}",
+            variables: ["A": "${B}", "B": "hello"],
+            composePath: "/tmp/compose.yml"
+        )
+        expect(indirect == "image: ${B}", "indirect env value substitutes one level without false-positive error")
     }
 
     mutating func runDotEnvUnresolvedTests() throws {
