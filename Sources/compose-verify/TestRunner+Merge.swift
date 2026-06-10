@@ -32,6 +32,7 @@ extension TestRunner {
 
         let partialOverrideURL = mergeDirectory.appendingPathComponent("override-partial.yml")
         let partialMerged = try ComposeParser.parse(fileURLs: [baseURL, partialOverrideURL])
+        expect(partialMerged.name == "base-project", "merge keeps base name when override omits it")
         let partialWeb = partialMerged.services["web"]
         expect(partialWeb?.image == "docker.io/library/alpine:3.18", "merge partial override keeps base image")
         expect(
@@ -77,5 +78,18 @@ extension TestRunner {
             threeFileMerged.services["web"]?.ports == ["18080:80", "18081:81", "18082:82"],
             "merge three-file chain appends ports"
         )
+
+        let shutdownMerged = try ComposeParser.parseForShutdown(fileURLs: [baseURL, overrideURL])
+        expect(shutdownMerged.services["web"]?.dependsOn == ["db", "cache"], "shutdown multi-file merge depends_on")
+        let shutdownLayers = try ServicePlanner.shutdownContainerLayers(
+            for: shutdownMerged,
+            containers: [
+                DiscoveredContainer(name: "demo_web", serviceName: "web"),
+                DiscoveredContainer(name: "demo_db", serviceName: "db"),
+                DiscoveredContainer(name: "demo_cache", serviceName: "cache"),
+            ]
+        )
+        expect(shutdownLayers.count == 2, "shutdown multi-file layer count")
+        expect(shutdownLayers[0].map(\.serviceName) == ["web"], "shutdown multi-file dependents first")
     }
 }
