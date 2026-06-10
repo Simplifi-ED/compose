@@ -32,7 +32,9 @@ let package = Package(
             dependencies: [
                 "ComposeCore",
                 .product(name: "ContainerCommands", package: "container"),
+                .product(name: "ContainerResource", package: "container"),
                 .product(name: "Containerization", package: "containerization"),
+                .product(name: "ContainerizationExtras", package: "containerization"),
             ],
             path: "Sources/compose-verify"
         ),

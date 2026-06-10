@@ -14,15 +14,42 @@ public struct DiscoveredContainer: Sendable, Equatable {
     }
 }
 
+public struct ProjectContainer: Sendable {
+    public let name: String
+    public let serviceName: String?
+    public let status: RuntimeStatus
+    public let publishedPorts: [PublishPort]
+
+    public init(
+        name: String,
+        serviceName: String?,
+        status: RuntimeStatus,
+        publishedPorts: [PublishPort]
+    ) {
+        self.name = name
+        self.serviceName = serviceName
+        self.status = status
+        self.publishedPorts = publishedPorts
+    }
+}
+
 public enum ContainerDiscovery {
     public static func containers(forProject projectName: String) async throws -> [DiscoveredContainer] {
+        try await projectContainers(forProject: projectName).map {
+            DiscoveredContainer(name: $0.name, serviceName: $0.serviceName)
+        }
+    }
+
+    public static func projectContainers(forProject projectName: String) async throws -> [ProjectContainer] {
         let client = ContainerClient()
         let snapshots = try await client.list(filters: listFilters(forProject: projectName))
         return snapshots
             .map { snapshot in
-                DiscoveredContainer(
+                ProjectContainer(
                     name: snapshot.id,
-                    serviceName: snapshot.configuration.labels[ComposeLabels.service]
+                    serviceName: snapshot.configuration.labels[ComposeLabels.service],
+                    status: snapshot.status,
+                    publishedPorts: snapshot.configuration.publishedPorts
                 )
             }
             .sorted { $0.name < $1.name }
