@@ -49,4 +49,37 @@ public struct ProjectOptions: ParsableArguments {
             firstFileURL: fileURL
         )
     }
+
+    /// Resolved project name and optional compose file for label-based commands (`down`, `ps`).
+    ///
+    /// When `skipComposeFileOnExplicitProject` is true and `-p` is set, compose files are not
+    /// discovered or parsed so broken YAML in the working directory cannot block the command.
+    package struct LabelCommandContext: Sendable {
+        package let projectName: String
+        package let composeFile: ComposeFile?
+        package let fileURLs: [URL]?
+    }
+
+    package func resolvedLabelCommandContext(
+        skipComposeFileOnExplicitProject: Bool = false
+    ) throws -> LabelCommandContext {
+        if skipComposeFileOnExplicitProject, hasExplicitProjectName {
+            let projectName = try resolvedProjectName()
+            return LabelCommandContext(projectName: projectName, composeFile: nil, fileURLs: nil)
+        }
+
+        let fileURLs = try resolvedFileURLsIfPresent()
+        let composeFile: ComposeFile?
+        if let fileURLs {
+            composeFile = try ComposeParser.parseForShutdown(fileURLs: fileURLs)
+        } else {
+            composeFile = nil
+        }
+        let projectName = try resolvedProjectName(composeFile: composeFile, fileURL: fileURLs?.first)
+        return LabelCommandContext(
+            projectName: projectName,
+            composeFile: composeFile,
+            fileURLs: fileURLs
+        )
+    }
 }

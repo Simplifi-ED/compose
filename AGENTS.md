@@ -108,21 +108,19 @@ The output of the discovery command **must** show the `compose` plugin. If it do
 - Prefer structured-concurrency parallelism (`withTaskGroup`) for multi-service orchestration.
 - Develop on Command Line Tools only (no full Xcode.app); use `mint install realm/SwiftLint` instead of `brew install swiftlint`.
 - Deliver merge-ready PRs with polish included—not deferred follow-up cleanup.
+- Run Thermos parallel review (`thermo-nuclear-review` + code-quality subagents) before declaring feature work complete.
 
 ## Learned Workspace Facts
 
-- `container` CLI 1.0.0 is installed at `/usr/local` on this host (`/usr/local/bin/container`).
-- User plugin install path is `{INSTALL_ROOT}/libexec/container-plugins/compose` where `INSTALL_ROOT = dirname(dirname(which container))` — not `/opt/homebrew/opt/container/...`.
-- Plugin install under `/usr/local` requires `sudo`; use `scripts/install-plugin.sh` (prints manual sudo commands when the directory is not writable).
-- Run `container system start` before plugin discovery; without the API server, `PLUGINS:` is unavailable.
-- Package targets: `ComposeCore` library, `compose` CLI executable, and `compose-verify` verification executable.
-- On Command Line Tools builds, use `swift run -c release compose-verify` instead of `swift test` (Swift Testing/XCTest unavailable).
-- `compose down` uses reverse-topological ordering when a compose file is present; parallel fallback for explicit `-p` only (not `COMPOSE_PROJECT_NAME` or compose `name:`).
-- Default compose discovery: `compose.yaml` → … → `docker-compose.yml` + paired `*.override.*`; `COMPOSE_FILE` when no `-f`.
-- Project name precedence: `-p` → `COMPOSE_PROJECT_NAME` → merged `name:` → first-file parent dir; normalized before labels.
-- Multi-file merge: unique-key for ports/volumes; env list by var name; `depends_on` append-only.
+- `container` CLI 1.0.0 at `/usr/local`; plugin at `{INSTALL_ROOT}/libexec/container-plugins/compose` (not Homebrew paths); `/usr/local` install needs `sudo` via `scripts/install-plugin.sh`. Run `container system start` before plugin discovery.
+- Package targets: `ComposeCore`, `compose`, `compose-verify`; on CLT use `swift run -c release compose-verify` (not `swift test`) and `scripts/lint.sh` with `SWIFTLINT_DISABLE_SOURCEKIT=1`.
+- `compose down` reverse-topological with compose file present; parallel fallback for explicit `-p` only (not `COMPOSE_PROJECT_NAME` or compose `name:`). `compose ps` supports `-p` without `-f`.
+- Default compose discovery: `compose.yaml` → … → `docker-compose.yml` + paired `*.override.*`; `COMPOSE_FILE` when no `-f`. Project name: `-p` → `COMPOSE_PROJECT_NAME` → merged `name:` → first-file parent dir.
+- Multi-file merge: unique-key ports/volumes; env list by var name; `depends_on` append-only. Relative bind-mount paths resolve against the compose file directory, not shell CWD.
+- `.env` beside compose file hydrates `${VAR}` placeholders before YAML parse; missing `.env` is a no-op; unresolved placeholders error.
+- `compose ps` prints NAME/SERVICE/STATE/PORTS from runtime snapshots; optional service filter; empty project prints headers only (exit 0).
+- Terminal output helpers live in `ComposeCore/Terminal/` (`TableFormat`, `TerminalMode`, `ANSIPrefix`) for observability commands.
+- State tracking uses `com.docker.compose.*` labels on `ContainerRun`; discovery and `compose ps` read `snapshot.configuration.labels`.
 - Host Linux kernel must be configured (`container system kernel set`) before `container run` or `compose up` succeed.
-- `-f` and `-p` are options on `up`/`down`, not on `compose` (e.g. `container compose up -f <file> -p <project>`).
-- Run SwiftLint via `scripts/lint.sh` with `SWIFTLINT_DISABLE_SOURCEKIT=1` on CLT-only hosts.
-- State tracking uses compose/project/service labels on `ContainerRun`; discovery reads `snapshot.configuration.labels`.
-- Relative bind-mount paths resolve against the compose file directory, not the shell CWD.
+- `-f` and `-p` are options on `up`/`down`/`ps`, not on `compose` (e.g. `container compose up -f <file> -p <project>`).
+- Explicit missing `-f` paths throw; only absent default discovery yields nil so `-p`-only `down`/`ps` can proceed.
