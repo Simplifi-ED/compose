@@ -40,6 +40,7 @@ package enum SignalForwarding {
     package static func runUntilCancelled(
         policy: InterruptPolicy,
         terminalCleanup: @Sendable () async -> Void = {},
+        stopProject: @Sendable (ProjectShutdownContext) async throws -> Void = { try await ProjectShutdown.stop(context: $0) },
         body: @Sendable @escaping () async throws -> Void
     ) async throws -> ExitOutcome {
         let signalHandler = AsyncSignalHandler.create(notify: [SIGINT, SIGTERM])
@@ -90,7 +91,8 @@ package enum SignalForwarding {
             return try await interruptedOutcome(
                 policy: policy,
                 signal: signal,
-                terminalCleanup: terminalCleanup
+                terminalCleanup: terminalCleanup,
+                stopProject: stopProject
             )
         }
     }
@@ -109,7 +111,17 @@ package enum SignalForwarding {
         case .orchestration:
             return .interrupted(signal)
         case .stopProject(let context):
-            try await stopProject(context)
+            do {
+                try await stopProject(context)
+            } catch {
+                fputs(
+                    """
+                    Warning: couldn't stop all project containers after interrupt: \
+                    \(error.localizedDescription).\n
+                    """,
+                    stderr
+                )
+            }
             return .interrupted(signal)
         }
     }

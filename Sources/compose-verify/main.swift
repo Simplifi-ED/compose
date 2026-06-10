@@ -200,6 +200,7 @@ do {
     runner.runProgressTests()
     runner.runPsTests()
     runner.runLogsTests()
+    try runner.runAttachTests()
     runner.runSignalsTests()
 } catch {
     fputs("FAIL: unexpected error: \(error)\n", stderr)
