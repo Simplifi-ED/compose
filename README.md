@@ -12,8 +12,8 @@ Maintained by [Omnivya](https://www.omnivya.fr) ([Simplifi-ED](https://github.co
 
 ## Features (v1)
 
-- Compose files (`-f`, default `docker-compose.yml`; repeat `-f` to merge multiple files)
-- Project name (`-p`, default: parent directory of the first compose file)
+- Compose files (`-f`, auto-discovery of `compose.yaml` / `docker-compose.yml` + override; `COMPOSE_FILE`; repeat `-f` to merge)
+- Project name (`-p`, `COMPOSE_PROJECT_NAME`, compose `name:`, default: parent directory of the first compose file)
 - Per service: `image`, `command`, `ports`, `volumes` (bind mounts), `environment`, `container_name`, `depends_on` (list form)
 - `container compose up` (detached) and `container compose down` (stop and remove)
 - Dependency-aware startup: services start in `depends_on` order (start order only, not health/readiness); independent services run in parallel
@@ -29,9 +29,20 @@ Not supported yet: long-form `depends_on` with health conditions, networks, name
 
 Pass `-f` more than once to layer compose files. Files merge left to right; later files override earlier ones.
 
+When `-f` is omitted, the plugin discovers compose files in the current directory:
+
+1. First match among `compose.yaml`, `compose.yml`, `docker-compose.yaml`, `docker-compose.yml`
+2. Paired override file (`compose.override.yaml` / `compose.override.yml`, etc.) when present
+3. `COMPOSE_FILE` (colon-separated paths) when set and no `-f` flags
+4. Fallback to `docker-compose.yml`
+
+Explicit `-f` paths ignore `COMPOSE_FILE` and do not auto-pair override files.
+
 ```bash
 container compose up -f base.yml -f override.yml
 container compose down -f base.yml -f override.yml
+COMPOSE_FILE=base.yml:override.yml container compose up
+COMPOSE_PROJECT_NAME=myapp container compose up
 ```
 
 | Field | Merge rule |
@@ -40,14 +51,18 @@ container compose down -f base.yml -f override.yml
 | Service absent in later file | Unchanged |
 | Service only in later file | Added |
 | `image`, `container_name`, `command` | Last specified value wins |
-| `ports`, `volumes`, `depends_on` | Appended |
+| `ports` | Unique-key merge by `{host, container, protocol}` (short syntax) |
+| `volumes` (bind mounts) | Unique-key merge by container mount path |
+| `depends_on` | Appended |
 | `environment` (map) | Keys merged; later values override |
-| `environment` (list) | Appended |
+| `environment` (list) | Merge by variable name; later values override |
 | `environment` (map vs list) | Later file's form replaces the earlier one |
+
+**Breaking change (Docker parity):** duplicate port keys or bind-mount container paths no longer accumulate — the later file replaces the earlier entry. Non-colliding entries (e.g. `18080:80` + `18081:81`) are kept.
 
 Use the same `-f` flags on `down` as on `up`, or pass `-p` to tear down by project name without reading compose files.
 
-Relative bind-mount paths resolve against the **first** compose file's directory. Keep overlay files beside the base file, or use absolute host paths. Each compose file loads its own `.env` from its directory during parsing. List fields append; overrides cannot remove entries from an earlier file.
+Relative bind-mount paths resolve against the **first** compose file's directory (Docker-identical). Keep overlay files beside the base file, or use absolute host paths. Each compose file loads its own `.env` from its directory during parsing. Override files cannot remove entries from an earlier file without matching the same merge key.
 
 ### Container labels
 
@@ -55,10 +70,10 @@ Each container started by `compose up` gets two metadata labels:
 
 | Label | Value |
 |-------|-------|
-| `com.docker.compose.project` | Project name (`-p`, or the compose file's parent directory) |
+| `com.docker.compose.project` | Project name (`-p`, `COMPOSE_PROJECT_NAME`, compose `name:`, or first compose file's parent directory) |
 | `com.docker.compose.service` | Service name from the compose file |
 
-`compose down` finds containers by `com.docker.compose.project`. Use the same `-p` value you used with `up`. When `-p` is set, shutdown runs in parallel and does not read the compose file (even if `docker-compose.yml` is present). Services removed from the compose file are still stopped if they carry the project label.
+`compose down` finds containers by `com.docker.compose.project`. Use the same project name you used with `up` (`-p`, `COMPOSE_PROJECT_NAME`, or compose `name:`). When `-p` is set explicitly, shutdown runs in parallel and does not read the compose file (even if `docker-compose.yml` is present). `COMPOSE_PROJECT_NAME` and compose `name:` still use ordered shutdown when compose files are present.
 
 If the compose file has a broken dependency graph (circular or unknown `depends_on` references), ordered shutdown fails. Tear down in parallel with `compose down -p <project>`, or fix the graph first.
 

@@ -18,6 +18,8 @@ public enum ComposeError: LocalizedError, Sendable {
     case circularDependency(services: [String])
     case unresolvedVariable(name: String, composePath: String)
     case rollbackFailed(started: [String], failures: [(container: String, error: Error)])
+    case invalidProjectName(String)
+    case invalidComposeFilePath(String)
 
     public var errorDescription: String? {
         switch self {
@@ -61,6 +63,10 @@ public enum ComposeError: LocalizedError, Sendable {
             let startedList = started.joined(separator: ", ")
             let details = failures.map { "'\($0.container)': \($0.error.localizedDescription)" }.joined(separator: "; ")
             return "Startup failed and rollback couldn't remove all containers (started: \(startedList)): \(details)"
+        case .invalidProjectName(let name):
+            return "Invalid project name '\(name)'. Use lowercase letters, numbers, dashes, and underscores."
+        case .invalidComposeFilePath(let path):
+            return "Invalid compose file path '\(path)'. Expected a regular file."
         }
     }
 }

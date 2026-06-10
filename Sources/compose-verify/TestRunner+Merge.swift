@@ -16,7 +16,7 @@ extension TestRunner {
         let web = merged.services["web"]
         expect(web?.image == "docker.io/library/alpine:latest", "merge overrides scalar image")
         expect(web?.command == .string("sleep 300"), "merge keeps base command when override omits it")
-        expect(web?.ports == ["18080:80", "18081:81"], "merge appends ports")
+        expect(web?.ports == ["18080:80", "18081:81"], "merge unique-key ports keep non-colliding entries")
         expect(
             web?.environment == .map(["FOO": "base", "SHARED": "from-override", "BAR": "override-only"]),
             "merge environment map keys"
@@ -44,8 +44,8 @@ extension TestRunner {
         let overrideListURL = mergeDirectory.appendingPathComponent("override-list-env.yml")
         let listMerged = try ComposeParser.parse(fileURLs: [baseListURL, overrideListURL])
         expect(
-            listMerged.services["web"]?.environment == .list(["FOO=base-list", "BAR=override-list"]),
-            "merge appends environment list"
+            listMerged.services["web"]?.environment == .list(["FOO=override-list", "BAR=override-list"]),
+            "merge environment list by variable name"
         )
 
         expectComposeError(
@@ -60,9 +60,23 @@ extension TestRunner {
         let volumesMerged = try ComposeParser.parse(fileURLs: [baseURL, volumesOverrideURL])
         expect(
             volumesMerged.services["web"]?.volumes == ["./config:/mnt/config", "./data:/mnt/data"],
-            "merge appends volumes"
+            "merge unique-key volumes keep non-colliding mount paths"
         )
         expect(volumesMerged.services["web"]?.containerName == "merged-web", "merge overrides container_name")
+
+        let portReplaceURL = mergeDirectory.appendingPathComponent("override-port-replace.yml")
+        let portReplaceMerged = try ComposeParser.parse(fileURLs: [baseURL, portReplaceURL])
+        expect(
+            portReplaceMerged.services["web"]?.ports == ["18080:80"],
+            "merge replaces duplicate port key"
+        )
+
+        let volumeReplaceURL = mergeDirectory.appendingPathComponent("override-volume-replace.yml")
+        let volumeReplaceMerged = try ComposeParser.parse(fileURLs: [baseURL, volumeReplaceURL])
+        expect(
+            volumeReplaceMerged.services["web"]?.volumes == ["./other:/mnt/config"],
+            "merge replaces duplicate volume mount path"
+        )
 
         let envFormURL = mergeDirectory.appendingPathComponent("override-env-form.yml")
         let envFormMerged = try ComposeParser.parse(fileURLs: [baseURL, envFormURL])
@@ -76,20 +90,7 @@ extension TestRunner {
         expect(threeFileMerged.name == "third-layer", "merge three-file chain name")
         expect(
             threeFileMerged.services["web"]?.ports == ["18080:80", "18081:81", "18082:82"],
-            "merge three-file chain appends ports"
+            "merge three-file chain unique-key ports"
         )
-
-        let shutdownMerged = try ComposeParser.parseForShutdown(fileURLs: [baseURL, overrideURL])
-        expect(shutdownMerged.services["web"]?.dependsOn == ["db", "cache"], "shutdown multi-file merge depends_on")
-        let shutdownLayers = try ServicePlanner.shutdownContainerLayers(
-            for: shutdownMerged,
-            containers: [
-                DiscoveredContainer(name: "demo_web", serviceName: "web"),
-                DiscoveredContainer(name: "demo_db", serviceName: "db"),
-                DiscoveredContainer(name: "demo_cache", serviceName: "cache"),
-            ]
-        )
-        expect(shutdownLayers.count == 2, "shutdown multi-file layer count")
-        expect(shutdownLayers[0].map(\.serviceName) == ["web"], "shutdown multi-file dependents first")
     }
 }

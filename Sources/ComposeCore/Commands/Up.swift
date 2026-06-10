@@ -13,8 +13,11 @@ public struct Up: AsyncParsableCommand {
 
     public func run() async throws {
         let fileURLs = try projectOptions.resolvedFileURLs()
-        let projectName = try projectOptions.resolvedProjectName(fileURL: fileURLs[0])
         let composeFile = try ComposeParser.parse(fileURLs: fileURLs)
+        let projectName = try projectOptions.resolvedProjectName(
+            composeFile: composeFile,
+            fileURL: fileURLs[0]
+        )
         let composeDirectory = fileURLs[0].deletingLastPathComponent()
         let layers = try ServicePlanner.startupLayers(
             for: composeFile,

@@ -11,6 +11,8 @@ You are building a **Minimal Real Compose Plugin**—NOT a generic orchestration
 ### **In Scope (To Code):**
 
 * Parsing a standard, single-file `docker-compose.yml` [1].
+* Multi-file compose: `-f` merge, auto-discovery (`compose.yaml` + override), and `COMPOSE_FILE` [1].
+* Project naming: `-p`, `COMPOSE_PROJECT_NAME`, compose `name:`, first-file parent directory [1].
 * Instantiating and mapping configuration directly into Apple's programmatic `ContainerCommands` API [1].
 * Basic container lifecycles: Starting (via `ContainerRun`) and Stopping (via `ContainerStop`) [1].
 * Attributes to map: `image`, `command`, `environment`, standard host-to-container `ports`, short-syntax bind-mount `volumes` (`host:container`), and short-form `depends_on` (list of service names) [1].
@@ -115,7 +117,10 @@ The output of the discovery command **must** show the `compose` plugin. If it do
 - Run `container system start` before plugin discovery; without the API server, `PLUGINS:` is unavailable.
 - Package targets: `ComposeCore` library, `compose` CLI executable, and `compose-verify` verification executable.
 - On Command Line Tools builds, use `swift run -c release compose-verify` instead of `swift test` (Swift Testing/XCTest unavailable).
-- `compose down` uses reverse-topological ordering when a compose file is present; parallel fallback for explicit `-p` only.
+- `compose down` uses reverse-topological ordering when a compose file is present; parallel fallback for explicit `-p` only (not `COMPOSE_PROJECT_NAME` or compose `name:`).
+- Default compose discovery: `compose.yaml` → … → `docker-compose.yml` + paired `*.override.*`; `COMPOSE_FILE` when no `-f`.
+- Project name precedence: `-p` → `COMPOSE_PROJECT_NAME` → merged `name:` → first-file parent dir; normalized before labels.
+- Multi-file merge: unique-key for ports/volumes; env list by var name; `depends_on` append-only.
 - Host Linux kernel must be configured (`container system kernel set`) before `container run` or `compose up` succeed.
 - `-f` and `-p` are options on `up`/`down`, not on `compose` (e.g. `container compose up -f <file> -p <project>`).
 - Run SwiftLint via `scripts/lint.sh` with `SWIFTLINT_DISABLE_SOURCEKIT=1` on CLT-only hosts.

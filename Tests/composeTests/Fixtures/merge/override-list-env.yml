@@ -1,4 +1,5 @@
 services:
   web:
     environment:
+      - FOO=override-list
       - BAR=override-list
