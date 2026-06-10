@@ -15,7 +15,7 @@ Maintained by [Omnivya](https://www.omnivya.fr) ([Simplifi-ED](https://github.co
 - Single compose file (`-f`, default `docker-compose.yml`)
 - Project name (`-p`, default: parent directory of compose file)
 - Per service: `image`, `command`, `ports`, `environment`, `container_name`
-- `container compose up` (detached) and `container compose down` (stop)
+- `container compose up` (detached) and `container compose down` (stop and remove)
 - Parallel service orchestration via Swift structured concurrency
 
 Not supported yet: `depends_on`, networks, volumes, `build`, profiles, multi-file merge.
@@ -68,7 +68,7 @@ swift run -c release compose-verify
 
 ## Architecture
 
-- `ComposeCore` — YAML parsing, service planning, `ContainerRun` / `ContainerStop` execution
+- `ComposeCore` — YAML parsing, service planning, `ContainerRun` for up, `ContainerTeardown` (stop + delete) for down
 - `compose` — CLI plugin binary registered by `container`
 - `compose-verify` — parser/planner checks (Command Line Tools friendly)
 
