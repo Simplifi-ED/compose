@@ -18,19 +18,24 @@ public struct ProjectStatusRow: Sendable, Equatable {
 }
 
 public enum ProjectStatus {
+    public static func filteredContainers(
+        from containers: [ProjectContainer],
+        filter: Set<String>?
+    ) -> [ProjectContainer] {
+        if let filter, !filter.isEmpty {
+            return containers.filter { container in
+                guard let serviceName = container.serviceName else { return false }
+                return filter.contains(serviceName)
+            }
+        }
+        return containers
+    }
+
     public static func rows(
         from containers: [ProjectContainer],
         filter: Set<String>?
     ) -> [ProjectStatusRow] {
-        let filtered: [ProjectContainer]
-        if let filter, !filter.isEmpty {
-            filtered = containers.filter { container in
-                guard let serviceName = container.serviceName else { return false }
-                return filter.contains(serviceName)
-            }
-        } else {
-            filtered = containers
-        }
+        let filtered = filteredContainers(from: containers, filter: filter)
 
         return filtered.map { container in
             ProjectStatusRow(
