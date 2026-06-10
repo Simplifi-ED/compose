@@ -1,3 +1,4 @@
+import ArgumentParser
 import Foundation
 
 /// Compose service label shown in progress output; falls back to the container name.
@@ -30,13 +31,42 @@ package func makeProgressOrchestration(
 /// Runs orchestration work with progress cleanup on success or failure.
 package func runWithProgress(
     lines: ProgressLines,
+    skipFinishOnCancellation: Bool = false,
     _ body: () async throws -> Void
 ) async throws {
     do {
         try await body()
     } catch {
-        await lines.finish()
+        if !(skipFinishOnCancellation && error is CancellationError) {
+            await lines.finish()
+        }
         throw error
     }
     await lines.finish()
+}
+
+/// Exit code thrown when orchestration is interrupted (compose-verify).
+package func orchestrationInterruptedExitCode(for signal: InterruptSignal) -> Int32 {
+    signal.exitCode
+}
+
+/// Wraps `up`/`down` work with signal handling, progress cleanup, and exit 130 on interrupt.
+package func runOrchestrationCommand(
+    lines: ProgressLines,
+    interruptedMessage: String,
+    body: @Sendable @escaping () async throws -> Void
+) async throws {
+    let outcome = try await SignalForwarding.runUntilCancelled(
+        policy: .orchestration,
+        terminalCleanup: { await lines.finish() },
+        body: {
+            try await runWithProgress(lines: lines, skipFinishOnCancellation: true) {
+                try await body()
+            }
+        }
+    )
+    if case .interrupted(let signal) = outcome {
+        fputs("\(interruptedMessage)\n", stderr)
+        throw ExitCode(signal.exitCode)
+    }
 }

@@ -82,6 +82,17 @@ public enum ServicePlanner {
         return layers
     }
 
+    /// Ordered shutdown waves when a compose file is present; parallel fallback otherwise.
+    package static func shutdownLayers(
+        for composeFile: ComposeFile?,
+        containers: [DiscoveredContainer]
+    ) throws -> [[DiscoveredContainer]] {
+        guard let composeFile else {
+            return [containers]
+        }
+        return try shutdownContainerLayers(for: composeFile, containers: containers)
+    }
+
     static func unmappedContainers(
         in containers: [DiscoveredContainer],
         composeFile: ComposeFile

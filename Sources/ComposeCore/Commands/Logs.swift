@@ -45,6 +45,19 @@ public struct Logs: AsyncParsableCommand {
 
         let mode = TerminalMode.resolve()
         let options = LogStreamOptions(tail: tail, follow: follow, boot: boot, mode: mode)
-        try await LogMultiplexer.run(sources: sources, options: options)
+
+        if follow {
+            let outcome = try await SignalForwarding.runUntilCancelled(
+                policy: .cancelOnly,
+                body: {
+                    try await LogMultiplexer.run(sources: sources, options: options)
+                }
+            )
+            if outcome == .cancelledQuietly {
+                fputs("Log follow ended.\n", stderr)
+            }
+        } else {
+            try await LogMultiplexer.run(sources: sources, options: options)
+        }
     }
 }

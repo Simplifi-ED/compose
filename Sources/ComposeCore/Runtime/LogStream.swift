@@ -209,6 +209,7 @@ package actor LogMultiplexer {
         let multiplexer = LogMultiplexer(serviceLabels: labels, options: options, write: write)
 
         try await withThrowingTaskGroup(of: Void.self) { group in
+            defer { group.cancelAll() }
             for source in sources {
                 group.addTask {
                     let handle = try await logHandle(for: source, options: options)
@@ -227,7 +228,11 @@ package actor LogMultiplexer {
                     }
                 }
             }
-            try await group.waitForAll()
+            do {
+                try await group.waitForAll()
+            } catch is CancellationError {
+                return
+            }
         }
     }
 
@@ -273,6 +278,9 @@ package actor LogMultiplexer {
         _ = try handle.seekToEnd()
 
         for await chunk in LogFollowReader.chunks(from: handle) {
+            if Task.isCancelled {
+                break
+            }
             await multiplexer.ingest(service: source.serviceLabel, chunk: chunk)
         }
         await multiplexer.finishPending(service: source.serviceLabel)

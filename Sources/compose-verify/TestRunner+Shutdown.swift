@@ -94,6 +94,17 @@ extension TestRunner {
     }
 
     mutating func runRollbackTests() {
+        let partialRemoval = blockingAwait {
+            await ServiceRunner.downReportsPartialRemovalOnInterrupt()
+        }
+        expect(partialRemoval == ["demo_fast"], "down reports removals completed before interrupt")
+
+        let interruptRollback = blockingAwait {
+            await ServiceRunner.upSkipsRollbackOnCancellation()
+        }
+        expect(interruptRollback.started == ["demo_fast"], "interrupt preserves started wave-1 containers")
+        expect(interruptRollback.rollback.isEmpty, "interrupt skips rollback teardown")
+
         let rollbackResult = blockingAwait {
             let recorder = TearDownRecorder()
             let failures = await ServiceRunner.rollbackStartedContainers([["demo_db", "demo_web"]]) { name in

@@ -32,7 +32,10 @@ public struct Down: AsyncParsableCommand {
             phase: .stopping,
             label: { displayNames[$0] ?? $0 }
         )
-        try await runWithProgress(lines: orchestration.lines) {
+        try await runOrchestrationCommand(
+            lines: orchestration.lines,
+            interruptedMessage: "Shutdown interrupted. Some containers may still be running."
+        ) {
             if useOrderedShutdown, let composeFile = context.composeFile {
                 let layers = try ServicePlanner.shutdownContainerLayers(
                     for: composeFile,
@@ -52,9 +55,17 @@ public struct Down: AsyncParsableCommand {
                         stderr
                     )
                 }
-                try await ServiceRunner.down(layers: layers, onRemoved: { print($0) }, progress: orchestration.handlers)
+                try await ServiceRunner.down(
+                    layers: layers,
+                    onRemoved: { print($0) },
+                    progress: orchestration.handlers
+                )
             } else {
-                try await ServiceRunner.down(containers: containers, onRemoved: { print($0) }, progress: orchestration.handlers)
+                try await ServiceRunner.down(
+                    containers: containers,
+                    onRemoved: { print($0) },
+                    progress: orchestration.handlers
+                )
             }
         }
     }
