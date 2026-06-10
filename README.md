@@ -12,8 +12,8 @@ Maintained by [Omnivya](https://www.omnivya.fr) ([Simplifi-ED](https://github.co
 
 ## Features (v1)
 
-- Single compose file (`-f`, default `docker-compose.yml`)
-- Project name (`-p`, default: parent directory of compose file)
+- Compose files (`-f`, default `docker-compose.yml`; repeat `-f` to merge multiple files)
+- Project name (`-p`, default: parent directory of the first compose file)
 - Per service: `image`, `command`, `ports`, `volumes` (bind mounts), `environment`, `container_name`, `depends_on` (list form)
 - `container compose up` (detached) and `container compose down` (stop and remove)
 - Dependency-aware startup: services start in `depends_on` order (start order only, not health/readiness); independent services run in parallel
@@ -23,7 +23,31 @@ Maintained by [Omnivya](https://www.omnivya.fr) ([Simplifi-ED](https://github.co
 - Containers without a `com.docker.compose.service` label (or not listed in the compose file) stop last and may not follow `depends_on` order
 - Container labels for project tracking (`com.docker.compose.project`, `com.docker.compose.service`)
 
-Not supported yet: long-form `depends_on` with health conditions, networks, named volumes, volume drivers, read-only mounts (`:ro`), `build`, profiles, multi-file merge.
+Not supported yet: long-form `depends_on` with health conditions, networks, named volumes, volume drivers, read-only mounts (`:ro`), `build`, profiles, YAML `extends` / `include`.
+
+### Multi-file merge
+
+Pass `-f` more than once to layer compose files. Files merge left to right; later files override earlier ones.
+
+```bash
+container compose up -f base.yml -f override.yml
+container compose down -f base.yml -f override.yml
+```
+
+| Field | Merge rule |
+|-------|------------|
+| Top-level `name` | Last non-nil value wins |
+| Service absent in later file | Unchanged |
+| Service only in later file | Added |
+| `image`, `container_name`, `command` | Last specified value wins |
+| `ports`, `volumes`, `depends_on` | Appended |
+| `environment` (map) | Keys merged; later values override |
+| `environment` (list) | Appended |
+| `environment` (map vs list) | Later file's form replaces the earlier one |
+
+Use the same `-f` flags on `down` as on `up`, or pass `-p` to tear down by project name without reading compose files.
+
+Relative bind-mount paths resolve against the **first** compose file's directory. Keep overlay files beside the base file, or use absolute host paths. Each compose file loads its own `.env` from its directory during parsing. List fields append; overrides cannot remove entries from an earlier file.
 
 ### Container labels
 

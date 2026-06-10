@@ -1,0 +1,20 @@
+name: base-project
+services:
+  web:
+    image: docker.io/library/alpine:3.18
+    command: sleep 300
+    ports:
+      - "18080:80"
+    volumes:
+      - "./config:/mnt/config"
+    environment:
+      FOO: base
+      SHARED: from-base
+    depends_on:
+      - db
+  worker:
+    image: docker.io/library/alpine:3.18
+    command: sleep 600
+  db:
+    image: docker.io/library/alpine:3.18
+    command: sleep 900

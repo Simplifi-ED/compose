@@ -23,4 +23,29 @@ package enum ComposeFileResolution {
         }
         return url
     }
+
+    package static func resolvedIfPresent(files: [String]) throws -> [URL]? {
+        guard !files.isEmpty else { return nil }
+
+        let usingDefaultOnly = files.count == 1 && files[0] == defaultFileName
+        var resolved: [URL] = []
+        resolved.reserveCapacity(files.count)
+
+        for file in files {
+            guard let url = try resolvedIfPresent(file: file) else {
+                if usingDefaultOnly { return nil }
+                throw ComposeError.fileNotFound(standardizedURL(for: file).path)
+            }
+            resolved.append(url)
+        }
+
+        return resolved
+    }
+
+    package static func resolved(files: [String]) throws -> [URL] {
+        guard let urls = try resolvedIfPresent(files: files) else {
+            throw ComposeError.fileNotFound(standardizedURL(for: defaultFileName).path)
+        }
+        return urls
+    }
 }

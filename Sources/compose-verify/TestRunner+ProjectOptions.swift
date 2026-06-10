@@ -12,13 +12,35 @@ extension TestRunner {
         FileManager.default.changeCurrentDirectoryPath(tempDir.path)
         defer { FileManager.default.changeCurrentDirectoryPath(previousCWD) }
 
-        let defaultFileURL = try ComposeFileResolution.resolvedIfPresent(file: ComposeFileResolution.defaultFileName)
-        expect(defaultFileURL == nil, "default compose file optional when absent")
+        let defaultFileURLs = try ComposeFileResolution.resolvedIfPresent(
+            files: [ComposeFileResolution.defaultFileName]
+        )
+        expect(defaultFileURLs == nil, "default compose file optional when absent")
 
         expectComposeError(
             "explicit missing compose file",
             matching: { if case .fileNotFound = $0 { true } else { false } },
-            body: { _ = try ComposeFileResolution.resolvedIfPresent(file: "missing-compose.yml") }
+            body: {
+                _ = try ComposeFileResolution.resolvedIfPresent(files: ["missing-compose.yml"])
+            }
+        )
+
+        let mergeBase = Self.fixtureURL("merge/base.yml")
+        let mergeOverride = Self.fixtureURL("merge/override.yml")
+        let resolved = try ComposeFileResolution.resolved(files: [
+            mergeBase.path,
+            mergeOverride.path
+        ])
+        expect(resolved.count == 2, "multi-file resolution count")
+        expect(resolved[0].lastPathComponent == "base.yml", "multi-file resolution order")
+        expect(resolved[1].lastPathComponent == "override.yml", "multi-file resolution second file")
+
+        expectComposeError(
+            "missing file mid-chain",
+            matching: { if case .fileNotFound = $0 { true } else { false } },
+            body: {
+                _ = try ComposeFileResolution.resolved(files: [mergeBase.path, "missing-compose.yml"])
+            }
         )
     }
 }

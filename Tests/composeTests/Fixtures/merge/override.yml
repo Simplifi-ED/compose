@@ -1,0 +1,17 @@
+name: override-project
+services:
+  web:
+    image: docker.io/library/alpine:latest
+    ports:
+      - "18081:81"
+    environment:
+      SHARED: from-override
+      BAR: override-only
+    depends_on:
+      - cache
+  debug:
+    image: docker.io/library/alpine:latest
+    command: sleep 120
+  cache:
+    image: docker.io/library/alpine:latest
+    command: sleep 450

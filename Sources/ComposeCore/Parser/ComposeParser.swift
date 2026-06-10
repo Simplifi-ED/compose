@@ -3,14 +3,22 @@ import Yams
 
 public enum ComposeParser {
     public static func parse(fileURL: URL) throws -> ComposeFile {
-        let composeFile = try decode(fileURL: fileURL)
+        try parse(fileURLs: [fileURL])
+    }
+
+    public static func parse(fileURLs: [URL]) throws -> ComposeFile {
+        let composeFile = try decodeMerged(fileURLs: fileURLs)
         try validate(composeFile)
         return composeFile
     }
 
     /// Decode and validate dependency graph only — for `down` when the file may be edited after `up`.
     public static func parseForShutdown(fileURL: URL) throws -> ComposeFile {
-        let composeFile = try decode(fileURL: fileURL)
+        try parseForShutdown(fileURLs: [fileURL])
+    }
+
+    public static func parseForShutdown(fileURLs: [URL]) throws -> ComposeFile {
+        let composeFile = try decodeMerged(fileURLs: fileURLs)
         try validateShutdownGraph(composeFile)
         return composeFile
     }
@@ -25,6 +33,15 @@ public enum ComposeParser {
             return extractComposeError(from: underlying)
         }
         return nil
+    }
+
+    static func decodeMerged(fileURLs: [URL]) throws -> ComposeFile {
+        guard !fileURLs.isEmpty else {
+            throw ComposeError.noServices
+        }
+
+        let decoded = try fileURLs.map { try decode(fileURL: $0) }
+        return ComposeFileMerge.merge(decoded)
     }
 
     static func decode(fileURL: URL) throws -> ComposeFile {
