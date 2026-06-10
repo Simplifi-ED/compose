@@ -12,13 +12,32 @@ public struct Down: AsyncParsableCommand {
     var projectOptions: ProjectOptions
 
     public func run() async throws {
-        let projectName = try projectOptions.resolvedProjectName()
+        let fileURL = try projectOptions.resolvedFileURLIfPresent()
+        let projectName = try projectOptions.resolvedProjectName(fileURL: fileURL)
         let containers = try await ContainerDiscovery.containers(forProject: projectName)
 
-        try await ServiceRunner.down(containers: containers)
+        let useOrderedShutdown = fileURL != nil && !projectOptions.hasExplicitProjectName
 
-        for container in containers {
-            print(container.name)
+        if useOrderedShutdown, let fileURL {
+            let composeFile = try ComposeParser.parseForShutdown(fileURL: fileURL)
+            let layers = try ServicePlanner.shutdownContainerLayers(
+                for: composeFile,
+                containers: containers
+            )
+            let unmapped = ServicePlanner.unmappedContainers(in: containers, composeFile: composeFile)
+            if !unmapped.isEmpty {
+                let names = unmapped.map(\.name).joined(separator: ", ")
+                fputs(
+                    """
+                    Warning: \(unmapped.count) container(s) without a compose service mapping (\(names)) \
+                    stop last; depends_on order may not apply to them.\n
+                    """,
+                    stderr
+                )
+            }
+            try await ServiceRunner.down(layers: layers) { print($0) }
+        } else {
+            try await ServiceRunner.down(containers: containers) { print($0) }
         }
     }
 }

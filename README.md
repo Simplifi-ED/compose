@@ -14,12 +14,16 @@ Maintained by [Omnivya](https://www.omnivya.fr) ([Simplifi-ED](https://github.co
 
 - Single compose file (`-f`, default `docker-compose.yml`)
 - Project name (`-p`, default: parent directory of compose file)
-- Per service: `image`, `command`, `ports`, `volumes` (bind mounts), `environment`, `container_name`
+- Per service: `image`, `command`, `ports`, `volumes` (bind mounts), `environment`, `container_name`, `depends_on` (list form)
 - `container compose up` (detached) and `container compose down` (stop and remove)
-- Parallel service orchestration via Swift structured concurrency
+- Dependency-aware startup: services start in `depends_on` order (start order only, not health/readiness); independent services run in parallel
+- Failed `up` rolls back containers started in earlier waves
+- `down` stops dependents before dependencies when the compose file is present; `-p`-only `down` stops containers in parallel
+- `down` validates only the dependency graph (not `image` or other startup fields), so teardown still works if the file was edited after `up`
+- Containers without a `com.docker.compose.service` label (or not listed in the compose file) stop last and may not follow `depends_on` order
 - Container labels for project tracking (`com.docker.compose.project`, `com.docker.compose.service`)
 
-Not supported yet: `depends_on`, networks, named volumes, volume drivers, read-only mounts (`:ro`), `build`, profiles, multi-file merge.
+Not supported yet: long-form `depends_on` with health conditions, networks, named volumes, volume drivers, read-only mounts (`:ro`), `build`, profiles, multi-file merge.
 
 ### Container labels
 
@@ -30,7 +34,9 @@ Each container started by `compose up` gets two metadata labels:
 | `com.docker.compose.project` | Project name (`-p`, or the compose file's parent directory) |
 | `com.docker.compose.service` | Service name from the compose file |
 
-`compose down` finds containers by `com.docker.compose.project`. Use the same `-p` value you used with `up`. With `-p`, the compose file does not need to exist. Services removed from the compose file are still stopped if they carry the project label.
+`compose down` finds containers by `com.docker.compose.project`. Use the same `-p` value you used with `up`. When `-p` is set, shutdown runs in parallel and does not read the compose file (even if `docker-compose.yml` is present). Services removed from the compose file are still stopped if they carry the project label.
+
+If the compose file has a broken dependency graph (circular or unknown `depends_on` references), ordered shutdown fails. Tear down in parallel with `compose down -p <project>`, or fix the graph first.
 
 `compose down` prints one line per removed container name (discovered at runtime, not from the compose file). If no labeled containers match the project, it prints nothing and exits successfully.
 

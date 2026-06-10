@@ -17,6 +17,7 @@ public struct ComposeService: Sendable, Equatable {
     public let volumes: [String]
     public let environment: ComposeEnvironment?
     public let containerName: String?
+    public let dependsOn: [String]
 
     public init(
         image: String?,
@@ -24,7 +25,8 @@ public struct ComposeService: Sendable, Equatable {
         ports: [String],
         volumes: [String] = [],
         environment: ComposeEnvironment?,
-        containerName: String?
+        containerName: String?,
+        dependsOn: [String] = []
     ) {
         self.image = image
         self.command = command
@@ -32,6 +34,7 @@ public struct ComposeService: Sendable, Equatable {
         self.volumes = volumes
         self.environment = environment
         self.containerName = containerName
+        self.dependsOn = dependsOn
     }
 }
 
@@ -43,6 +46,7 @@ extension ComposeService: Decodable {
         case volumes
         case environment
         case containerName = "container_name"
+        case dependsOn = "depends_on"
     }
 
     public init(from decoder: Decoder) throws {
@@ -53,6 +57,17 @@ extension ComposeService: Decodable {
         volumes = try Self.decodeVolumes(from: container)
         environment = try Self.decodeEnvironment(from: container)
         containerName = try container.decodeIfPresent(String.self, forKey: .containerName)
+        dependsOn = try Self.decodeDependsOn(from: container)
+    }
+
+    private static func decodeDependsOn(
+        from container: KeyedDecodingContainer<CodingKeys>
+    ) throws -> [String] {
+        guard container.contains(.dependsOn) else { return [] }
+        if let value = try? container.decode([String].self, forKey: .dependsOn) {
+            return value
+        }
+        throw ComposeError.invalidField("depends_on", reason: "expected a list of service names")
     }
 
     private static func decodeVolumes(

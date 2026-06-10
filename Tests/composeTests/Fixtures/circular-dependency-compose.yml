@@ -1,0 +1,11 @@
+services:
+  api:
+    image: docker.io/library/alpine:latest
+    command: sleep 300
+    depends_on:
+      - web
+  web:
+    image: docker.io/library/alpine:latest
+    command: sleep 300
+    depends_on:
+      - api

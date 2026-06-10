@@ -13,13 +13,16 @@ You are building a **Minimal Real Compose Plugin**—NOT a generic orchestration
 * Parsing a standard, single-file `docker-compose.yml` [1].
 * Instantiating and mapping configuration directly into Apple's programmatic `ContainerCommands` API [1].
 * Basic container lifecycles: Starting (via `ContainerRun`) and Stopping (via `ContainerStop`) [1].
-* Attributes to map: `image`, `command`, `environment`, standard host-to-container `ports`, and short-syntax bind-mount `volumes` (`host:container`) [1].
+* Attributes to map: `image`, `command`, `environment`, standard host-to-container `ports`, short-syntax bind-mount `volumes` (`host:container`), and short-form `depends_on` (list of service names) [1].
+* Dependency-aware startup ordering: topological sort with parallel waves via structured concurrency [1].
+* Partial-`up` rollback: tear down containers from successful waves when a later wave fails [1].
+* Reverse-topological `down` when a compose file is available; parallel `down` fallback for `-p`-only [1].
 
 ### **Out of Scope (DO NOT CODE):**
 
 * Custom bridging networks, overlay networks, or advanced routing [1].
 * Named volume declarations, volume drivers, read-only mount suffixes (`:ro`), and root-level `volumes:` blocks [1].
-* Complex orchestration constraints like `depends_on`, health checks, or restart policies [1].
+* Long-form `depends_on` with `condition:` (for example `service_healthy`), health-check gating, or restart policies [1].
 * Image-building lifecycles (no parsing of `build:` blocks or running Dockerfiles) [1].
 
 ---
@@ -101,6 +104,8 @@ The output of the discovery command **must** show the `compose` plugin. If it do
 - v1 scope is minimal real compose (parse `docker-compose.yml`, start/stop services), not full Docker Compose parity.
 - Load project skills under `.agents/skills/` (especially `swift-concurrency`, `swift-testing-pro`, `writing-for-interfaces`) when implementing features.
 - Prefer structured-concurrency parallelism (`withTaskGroup`) for multi-service orchestration.
+- Develop on Command Line Tools only (no full Xcode.app); use `mint install realm/SwiftLint` instead of `brew install swiftlint`.
+- Deliver merge-ready PRs with polish included—not deferred follow-up cleanup.
 
 ## Learned Workspace Facts
 
@@ -108,8 +113,11 @@ The output of the discovery command **must** show the `compose` plugin. If it do
 - User plugin install path is `{INSTALL_ROOT}/libexec/container-plugins/compose` where `INSTALL_ROOT = dirname(dirname(which container))` — not `/opt/homebrew/opt/container/...`.
 - Plugin install under `/usr/local` requires `sudo`; use `scripts/install-plugin.sh` (prints manual sudo commands when the directory is not writable).
 - Run `container system start` before plugin discovery; without the API server, `PLUGINS:` is unavailable.
-- Plugin layout: `compose/bin/compose` plus `config.toml` (plugin directory name must match the binary name).
 - Package targets: `ComposeCore` library, `compose` CLI executable, and `compose-verify` verification executable.
 - On Command Line Tools builds, use `swift run -c release compose-verify` instead of `swift test` (Swift Testing/XCTest unavailable).
-- v1 `compose down` stops and removes project containers (no volume/network prune).
+- `compose down` uses reverse-topological ordering when a compose file is present; parallel fallback for explicit `-p` only.
 - Host Linux kernel must be configured (`container system kernel set`) before `container run` or `compose up` succeed.
+- `-f` and `-p` are options on `up`/`down`, not on `compose` (e.g. `container compose up -f <file> -p <project>`).
+- Run SwiftLint via `scripts/lint.sh` with `SWIFTLINT_DISABLE_SOURCEKIT=1` on CLT-only hosts.
+- State tracking uses compose/project/service labels on `ContainerRun`; discovery reads `snapshot.configuration.labels`.
+- Relative bind-mount paths resolve against the compose file directory, not the shell CWD.

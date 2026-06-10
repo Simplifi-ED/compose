@@ -1,0 +1,7 @@
+services:
+  web:
+    image: docker.io/library/alpine:latest
+    command: sleep 300
+    depends_on:
+      db:
+        condition: service_healthy

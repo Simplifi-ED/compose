@@ -6,7 +6,12 @@ import Foundation
 struct TestRunner {
     var failures = 0
 
-    mutating func expect(_ condition: @autoclosure () -> Bool, _ message: String, file: String = #file, line: Int = #line) {
+    mutating func expect(
+        _ condition: @autoclosure () -> Bool,
+        _ message: String,
+        file: String = #file,
+        line: Int = #line
+    ) {
         if !condition() {
             fputs("FAIL \(file):\(line): \(message)\n", stderr)
             failures += 1
@@ -30,7 +35,7 @@ struct TestRunner {
     mutating func expectComposeError(
         _ message: String,
         matching predicate: (ComposeError) -> Bool,
-        _ body: () throws -> Void
+        body: () throws -> Void
     ) {
         do {
             try body()
@@ -84,135 +89,97 @@ struct TestRunner {
         expect(volumesFixture.services["web"]?.volumes == ["./data:/mnt/data"], "volumes fixture decode")
     }
 
-    mutating func runPlannerTests() throws {
-        let fixturesDirectory = Self.fixtureURL("minimal-compose.yml").deletingLastPathComponent()
-
-        let service = ComposeService(
-            image: "docker.io/library/alpine:latest",
-            command: .string("sleep 300"),
-            ports: ["18080:80"],
-            environment: .map(["FOO": "bar"]),
-            containerName: nil
-        )
-        let plan = try ServicePlanner.plan(
-            serviceName: "web",
-            service: service,
-            projectName: "demo",
-            composeDirectory: fixturesDirectory
-        )
-        expect(plan.name == "demo_web", "planner container name")
-        expect(plan.runArguments.contains("-d"), "planner detach")
-        expect(plan.runArguments.contains("127.0.0.1:18080:80"), "planner publish")
-        expect(plan.runArguments.contains("-l"), "planner label flag")
-        expect(
-            plan.runArguments.contains("\(ComposeLabels.project)=demo"),
-            "planner project label"
-        )
-        expect(
-            plan.runArguments.contains("\(ComposeLabels.service)=web"),
-            "planner service label"
-        )
-
-        let named = ComposeService(
-            image: "docker.io/library/alpine:latest",
-            command: nil,
-            ports: [],
-            environment: nil,
-            containerName: "custom-worker"
-        )
-        let namedPlan = try ServicePlanner.plan(
-            serviceName: "worker",
-            service: named,
-            projectName: "demo",
-            composeDirectory: fixturesDirectory
-        )
-        expect(namedPlan.name == "custom-worker", "planner container name override")
-
-        let publishFlag = try ServicePlanner.publishFlag(for: "8080:80/tcp")
-        expect(publishFlag == "127.0.0.1:8080:80/tcp", "planner protocol suffix")
-        expectThrows(ComposeError.self, "invalid port") {
-            _ = try ServicePlanner.publishFlag(for: "not-a-port")
-        }
-
-        let absoluteVolume = try ServicePlanner.volumeFlag(for: "/tmp:/mnt/tmp", relativeTo: fixturesDirectory)
-        expect(absoluteVolume == "/tmp:/mnt/tmp", "volume flag absolute host path")
-
-        let relativeVolume = try ServicePlanner.volumeFlag(for: "./data:/mnt/data", relativeTo: fixturesDirectory)
-        let expectedDataPath = fixturesDirectory.appendingPathComponent("data").standardizedFileURL.path
-        expect(relativeVolume == "\(expectedDataPath):/mnt/data", "volume flag relative host path")
-
-        let fileVolume = try ServicePlanner.volumeFlag(
-            for: "./data/sample.txt:/mnt/sample.txt",
-            relativeTo: fixturesDirectory
-        )
-        let expectedFilePath = fixturesDirectory.appendingPathComponent("data/sample.txt").standardizedFileURL.path
-        expect(fileVolume == "\(expectedFilePath):/mnt/sample.txt", "volume flag file bind mount")
-
-        let volumeService = ComposeService(
-            image: "docker.io/library/alpine:latest",
-            command: .string("sleep 300"),
-            ports: [],
-            volumes: ["./data:/mnt/data"],
-            environment: nil,
-            containerName: nil
-        )
-        let volumePlan = try ServicePlanner.plan(
-            serviceName: "web",
-            service: volumeService,
-            projectName: "demo",
-            composeDirectory: fixturesDirectory
-        )
-        expect(volumePlan.runArguments.contains("-v"), "planner volume flag")
-        expect(volumePlan.runArguments.contains("\(expectedDataPath):/mnt/data"), "planner resolved volume")
-
-        _ = try Application.ContainerRun.parse(volumePlan.runArguments)
-
-        expectComposeError("invalid volume syntax", matching: { if case .unsupportedVolume = $0 { true } else { false } }) {
-            _ = try ServicePlanner.volumeFlag(for: "foo", relativeTo: fixturesDirectory)
-        }
-        expectComposeError("named volume", matching: { if case .unsupportedNamedVolume = $0 { true } else { false } }) {
-            _ = try ServicePlanner.volumeFlag(for: "mydata:/app", relativeTo: fixturesDirectory)
-        }
-        expectComposeError("volume option suffix", matching: { if case .unsupportedVolumeOption = $0 { true } else { false } }) {
-            _ = try ServicePlanner.volumeFlag(for: "./data:/app:ro", relativeTo: fixturesDirectory)
-        }
-        expectComposeError("missing host path", matching: { if case .volumeHostPathNotFound = $0 { true } else { false } }) {
-            _ = try ServicePlanner.volumeFlag(for: "./missing-dir:/mnt", relativeTo: fixturesDirectory)
-        }
-    }
-
     mutating func runLabelTests() {
         let flags = ComposeLabels.runFlags(projectName: "demo", serviceName: "web")
-        expect(flags == ["-l", "com.docker.compose.project=demo", "-l", "com.docker.compose.service=web"], "run label flags")
+        let expected = [
+            "-l", "com.docker.compose.project=demo",
+            "-l", "com.docker.compose.service=web"
+        ]
+        expect(flags == expected, "run label flags")
     }
 
-    mutating func runTeardownErrorTests() {
-        let notFound = ContainerizationError(.notFound, message: "container with ID demo_web not found")
-        expect(ContainerTeardown.isIgnorableError(notFound), "notFound is ignorable")
+    mutating func runDependencyTests() throws {
+        try runDependencyDecodeTests()
+        try runDependencyLayerTests()
+        try runDependencyErrorTests()
+    }
 
-        let wrappedNotFound = ContainerizationError(
-            .internalError,
-            message: "failed to stop container",
-            cause: notFound
+    mutating func runDependencyDecodeTests() throws {
+        let dependsFixture = try ComposeParser.parse(fileURL: Self.fixtureURL("depends-compose.yml"))
+        expect(dependsFixture.services["web"]?.dependsOn == ["db", "cache"], "depends_on decode")
+        expect(dependsFixture.services["api"]?.dependsOn == ["db"], "depends_on single dep decode")
+        expect(dependsFixture.services["db"]?.dependsOn == [], "depends_on default empty")
+    }
+
+    mutating func runDependencyLayerTests() throws {
+        let fixturesDirectory = Self.fixtureURL("depends-compose.yml").deletingLastPathComponent()
+        let dependsFixture = try ComposeParser.parse(fileURL: Self.fixtureURL("depends-compose.yml"))
+
+        let layers = try ServicePlanner.startupLayers(
+            for: dependsFixture,
+            projectName: "demo",
+            composeDirectory: fixturesDirectory
         )
-        expect(ContainerTeardown.isIgnorableError(wrappedNotFound), "wrapped notFound is ignorable")
+        expect(layers.count == 2, "depends layers wave count")
+        expect(
+            Set(layers[0].map(\.serviceName)) == ["cache", "db"],
+            "depends layer 0 independent services"
+        )
+        expect(
+            Set(layers[1].map(\.serviceName)) == ["api", "web"],
+            "depends layer 1 dependents"
+        )
 
-        let invalidState = ContainerizationError(.invalidState, message: "container is running")
-        expect(!ContainerTeardown.isIgnorableError(invalidState), "invalidState is not ignorable")
+        let flattened = layers.flatMap { $0 }
+        let dbIndex = flattened.firstIndex { $0.serviceName == "db" }
+        let webIndex = flattened.firstIndex { $0.serviceName == "web" }
+        expect(dbIndex != nil && webIndex != nil, "depends flattened contains db and web")
+        if let dbIndex, let webIndex {
+            expect(dbIndex < webIndex, "depends db before web")
+        }
 
-        let mixedAggregate = AggregateError([
-            notFound,
-            invalidState,
-        ])
-        expect(!ContainerTeardown.isIgnorableError(mixedAggregate), "mixed aggregate is not ignorable")
+        let duplicateDependsFixture = try ComposeParser.parse(fileURL: Self.fixtureURL("duplicate-depends-compose.yml"))
+        let duplicateLayers = try ServicePlanner.startupLayers(
+            for: duplicateDependsFixture,
+            projectName: "demo",
+            composeDirectory: fixturesDirectory
+        )
+        expect(duplicateLayers.count == 2, "duplicate depends_on layers wave count")
+        expect(duplicateLayers[1].map(\.serviceName) == ["web"], "duplicate depends_on single dependent wave")
+    }
 
-        let allNotFoundAggregate = AggregateError([
-            notFound,
-            ContainerizationError(.notFound, message: "other missing"),
-        ])
-        expect(ContainerTeardown.isIgnorableError(allNotFoundAggregate), "all-notFound aggregate is ignorable")
+    mutating func runDependencyErrorTests() throws {
+        expectComposeError(
+            "unknown dependency",
+            matching: { if case .unknownDependency = $0 { true } else { false } },
+            body: {
+                _ = try ComposeParser.parse(fileURL: Self.fixtureURL("unknown-dependency-compose.yml"))
+            }
+        )
 
-        expect(!ContainerTeardown.isIgnorableError(AggregateError([])), "empty aggregate is not ignorable")
+        expectComposeError(
+            "circular dependency",
+            matching: { if case .circularDependency = $0 { true } else { false } },
+            body: {
+                _ = try ComposeParser.parse(fileURL: Self.fixtureURL("circular-dependency-compose.yml"))
+            }
+        )
+
+        expectComposeError(
+            "self dependency",
+            matching: { if case .circularDependency = $0 { true } else { false } },
+            body: {
+                _ = try ComposeParser.parse(fileURL: Self.fixtureURL("self-dependency-compose.yml"))
+            }
+        )
+
+        expectComposeError(
+            "longform depends_on",
+            matching: { if case .invalidField("depends_on", _) = $0 { true } else { false } },
+            body: {
+                _ = try ComposeParser.parse(fileURL: Self.fixtureURL("longform-depends-compose.yml"))
+            }
+        )
     }
 }
 
@@ -221,7 +188,11 @@ var runner = TestRunner()
 do {
     try runner.runParserTests()
     try runner.runPlannerTests()
+    try runner.runDependencyTests()
+    try runner.runProjectOptionsTests()
+    try runner.runShutdownLayerTests()
     runner.runLabelTests()
+    runner.runRollbackTests()
     runner.runTeardownErrorTests()
 } catch {
     fputs("FAIL: unexpected error: \(error)\n", stderr)
