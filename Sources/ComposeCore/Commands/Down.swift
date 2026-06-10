@@ -12,7 +12,7 @@ public struct Down: AsyncParsableCommand {
     var projectOptions: ProjectOptions
 
     public func run() async throws {
-        let fileURL = projectOptions.resolvedFileURLIfPresent()
+        let fileURL = try projectOptions.resolvedFileURLIfPresent()
         let projectName = try projectOptions.resolvedProjectName(fileURL: fileURL)
         let containers = try await ContainerDiscovery.containers(forProject: projectName)
 

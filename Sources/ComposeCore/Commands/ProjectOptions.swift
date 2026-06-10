@@ -3,8 +3,9 @@ import Foundation
 
 public struct ProjectOptions: ParsableArguments {
     public init() {}
+
     @Option(name: .shortAndLong, help: "Path to the compose file.")
-    var file: String = "docker-compose.yml"
+    var file: String = ComposeFileResolution.defaultFileName
 
     @Option(name: .shortAndLong, help: "Project name used for container naming.")
     var projectName: String?
@@ -15,21 +16,13 @@ public struct ProjectOptions: ParsableArguments {
     }
 
     func resolvedFileURL() throws -> URL {
-        guard let url = resolvedFileURLIfPresent() else {
-            let cwd = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
-            let url = URL(fileURLWithPath: file, relativeTo: cwd).standardizedFileURL
-            throw ComposeError.fileNotFound(url.path)
-        }
-        return url
+        try ComposeFileResolution.resolved(file: file)
     }
 
-    func resolvedFileURLIfPresent() -> URL? {
-        let url = URL(fileURLWithPath: file, relativeTo: URL(fileURLWithPath: FileManager.default.currentDirectoryPath))
-            .standardizedFileURL
-        guard FileManager.default.fileExists(atPath: url.path) else {
-            return nil
-        }
-        return url
+    /// Returns the compose file when it exists. When the default filename is absent, returns nil so
+    /// `down -p` can tear down by project name alone. Any other missing path throws.
+    func resolvedFileURLIfPresent() throws -> URL? {
+        try ComposeFileResolution.resolvedIfPresent(file: file)
     }
 
     func resolvedProjectName(fileURL: URL? = nil) throws -> String {

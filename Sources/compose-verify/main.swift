@@ -189,6 +189,7 @@ do {
     try runner.runParserTests()
     try runner.runPlannerTests()
     try runner.runDependencyTests()
+    try runner.runProjectOptionsTests()
     try runner.runShutdownLayerTests()
     runner.runLabelTests()
     runner.runRollbackTests()

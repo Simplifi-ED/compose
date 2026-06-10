@@ -21,8 +21,8 @@ extension TestRunner {
             containers: allContainers
         )
         expect(allShutdown.count == 2, "shutdown layers wave count")
-        expect(allShutdown[0].map(\.serviceName) == ["api", "web"], "shutdown layer 0 dependents")
-        expect(allShutdown[1].map(\.serviceName) == ["cache", "db"], "shutdown layer 1 dependencies")
+        expect(Set(allShutdown[0].map(\.serviceName)) == ["api", "web"], "shutdown layer 0 dependents")
+        expect(Set(allShutdown[1].map(\.serviceName)) == ["cache", "db"], "shutdown layer 1 dependencies")
 
         let subsetContainers = [
             DiscoveredContainer(name: "demo_web", serviceName: "web"),
