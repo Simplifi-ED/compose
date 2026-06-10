@@ -197,6 +197,7 @@ do {
     runner.runRollbackTests()
     runner.runTeardownErrorTests()
     runner.runTerminalTests()
+    runner.runProgressTests()
     runner.runPsTests()
 } catch {
     fputs("FAIL: unexpected error: \(error)\n", stderr)

@@ -1,17 +1,40 @@
 import ContainerCommands
 import Foundation
 
+/// Optional orchestration progress callbacks for `up`/`down` waves.
+/// Purely observational: wave ordering and rollback behavior are unaffected.
+public struct WaveProgressHandlers: Sendable {
+    /// Called before a wave runs with the 1-based wave number, total waves, and service labels.
+    public var onWaveStart: (@Sendable (_ wave: Int, _ totalWaves: Int, _ services: [String]) async -> Void)?
+    /// Called as each service in a wave finishes, with its label and whether it succeeded.
+    public var onServiceComplete: (@Sendable (_ service: String, _ succeeded: Bool) async -> Void)?
+    /// Called after a wave completes without failures, with the 1-based wave number.
+    public var onWaveComplete: (@Sendable (_ wave: Int) async -> Void)?
+
+    public init(
+        onWaveStart: (@Sendable (Int, Int, [String]) async -> Void)? = nil,
+        onServiceComplete: (@Sendable (String, Bool) async -> Void)? = nil,
+        onWaveComplete: (@Sendable (Int) async -> Void)? = nil
+    ) {
+        self.onWaveStart = onWaveStart
+        self.onServiceComplete = onServiceComplete
+        self.onWaveComplete = onWaveComplete
+    }
+}
+
 public enum ServiceRunner {
     public static func up(plans: [ServicePlan]) async throws {
         try await up(layers: [plans])
     }
 
-    public static func up(layers: [[ServicePlan]]) async throws {
+    public static func up(layers: [[ServicePlan]], progress: WaveProgressHandlers? = nil) async throws {
         var startedWaves: [[String]] = []
         do {
-            for layer in layers {
+            for (index, layer) in layers.enumerated() {
+                await progress?.onWaveStart?(index + 1, layers.count, layer.map(\.serviceName))
                 let result = await parallelRunCollecting(
-                    layer.map { (label: $0.serviceName, successValue: $0.name, value: $0) }
+                    layer.map { (label: $0.serviceName, successValue: $0.name, value: $0) },
+                    onCompletion: progress?.onServiceComplete
                 ) { plan in
                     let command = try Application.ContainerRun.parse(plan.runArguments)
                     try await command.run()
@@ -22,6 +45,7 @@ public enum ServiceRunner {
                 if !result.failures.isEmpty {
                     throw ComposeError.multipleServiceFailures(result.failures)
                 }
+                await progress?.onWaveComplete?(index + 1)
             }
         } catch {
             // Roll back in reverse startup order; parallel within each wave.
@@ -42,18 +66,22 @@ public enum ServiceRunner {
 
     public static func down(
         containers: [DiscoveredContainer],
-        onRemoved: (@Sendable (String) -> Void)? = nil
+        onRemoved: (@Sendable (String) -> Void)? = nil,
+        progress: WaveProgressHandlers? = nil
     ) async throws {
-        try await down(layers: [containers], onRemoved: onRemoved)
+        try await down(layers: [containers], onRemoved: onRemoved, progress: progress)
     }
 
     public static func down(
         layers: [[DiscoveredContainer]],
-        onRemoved: (@Sendable (String) -> Void)? = nil
+        onRemoved: (@Sendable (String) -> Void)? = nil,
+        progress: WaveProgressHandlers? = nil
     ) async throws {
         for (index, layer) in layers.enumerated() {
+            await progress?.onWaveStart?(index + 1, layers.count, layer.map(\.name))
             let result = await parallelRun(
-                layer.map { (label: $0.name, value: $0) }
+                layer.map { (label: $0.name, value: $0) },
+                onCompletion: progress?.onServiceComplete
             ) { container in
                 try await ContainerTeardown.teardown(id: container.name)
             }
@@ -70,6 +98,8 @@ public enum ServiceRunner {
                 }
                 throw ComposeError.multipleServiceFailures(result.failures)
             }
+            // Clear progress (spinner) before container names go to stdout.
+            await progress?.onWaveComplete?(index + 1)
             if let onRemoved {
                 for container in layer {
                     onRemoved(container.name)
@@ -104,6 +134,7 @@ public enum ServiceRunner {
 
     private static func parallelRun<T: Sendable>(
         _ items: [(label: String, value: T)],
+        onCompletion: (@Sendable (String, Bool) async -> Void)? = nil,
         work: @escaping @Sendable (T) async throws -> Void
     ) async -> ParallelRunResult {
         guard !items.isEmpty else {
@@ -128,6 +159,7 @@ public enum ServiceRunner {
                 if let error = result.1 {
                     failures.append((service: result.0, error: error))
                 }
+                await onCompletion?(result.0, result.1 == nil)
             }
         }
 
@@ -136,6 +168,7 @@ public enum ServiceRunner {
 
     private static func parallelRunCollecting<T: Sendable>(
         _ items: [(label: String, successValue: String, value: T)],
+        onCompletion: (@Sendable (String, Bool) async -> Void)? = nil,
         work: @escaping @Sendable (T) async throws -> Void
     ) async -> ParallelRunResult {
         guard !items.isEmpty else {
@@ -163,6 +196,7 @@ public enum ServiceRunner {
                 } else {
                     succeeded.append(result.1)
                 }
+                await onCompletion?(result.0, result.2 == nil)
             }
         }
 

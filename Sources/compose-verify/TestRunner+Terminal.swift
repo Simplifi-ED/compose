@@ -120,12 +120,4 @@ extension TestRunner {
             "interactive header matches plain header once ANSI is stripped"
         )
     }
-
-    private func stripANSI(_ string: String) -> String {
-        string.replacingOccurrences(
-            of: "\u{001B}\\[[0-9;]*m",
-            with: "",
-            options: .regularExpression
-        )
-    }
 }
