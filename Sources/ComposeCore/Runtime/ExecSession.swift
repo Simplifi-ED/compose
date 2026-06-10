@@ -4,28 +4,10 @@ import ContainerResource
 import Foundation
 import Logging
 
-/// Foreground exec session: PTY/stdin via upstream `ProcessIO`, interrupt via `SignalForwarding`.
+/// Foreground exec session: in-container process via `createProcess`, interrupt via `SignalForwarding`.
 package enum ExecSession {
-    package struct IOFlags: Sendable, Equatable {
-        package let interactive: Bool
-        package let processTerminal: Bool
-        package let useInteractivePTY: Bool
-
-        package static func resolve(
-            explicitInteractive: Bool,
-            explicitTTY: Bool,
-            stdinIsTTY: Bool
-        ) -> IOFlags {
-            let interactive = explicitInteractive || stdinIsTTY
-            let processTerminal = explicitTTY || stdinIsTTY
-            let useInteractivePTY = processTerminal && interactive && stdinIsTTY
-            return IOFlags(
-                interactive: interactive,
-                processTerminal: processTerminal,
-                useInteractivePTY: useInteractivePTY
-            )
-        }
-    }
+    package typealias IOFlags = InteractiveSession.IOFlags
+    package typealias IOHolder = InteractiveSession.IOHolder
 
     package struct Configuration: Sendable {
         package let containerName: String
@@ -62,16 +44,6 @@ package enum ExecSession {
         @Sendable (String, String, ProcessConfiguration, [FileHandle?]) async throws -> any ClientProcess
     ) async throws -> Int32
 
-    package final class IOHolder: @unchecked Sendable {
-        package var processIO: ProcessIO?
-
-        package init() {}
-    }
-
-    private final class ExitCodeHolder: @unchecked Sendable {
-        var value: Int32 = 0
-    }
-
     package static func run(
         configuration: Configuration,
         shutdownContext: ProjectShutdownContext,
@@ -97,16 +69,14 @@ package enum ExecSession {
         }
     ) async throws {
         let holder = IOHolder()
-        let exitHolder = ExitCodeHolder()
-
-        let outcome = try await SignalForwarding.runUntilCancelled(
+        try await InteractiveSession.runUntilExit(
             policy: .stopProject(shutdownContext),
             terminalCleanup: {
                 try? holder.processIO?.close()
             },
             stopProject: stopProject,
             body: {
-                exitHolder.value = try await execBody(
+                try await execBody(
                     configuration,
                     holder,
                     getContainer,
@@ -114,15 +84,6 @@ package enum ExecSession {
                 )
             }
         )
-
-        switch outcome {
-        case .completed:
-            throw ExitCode(exitHolder.value)
-        case .interrupted(let signal):
-            throw ExitCode(signal.exitCode)
-        case .cancelledQuietly:
-            throw ExitCode(0)
-        }
     }
 
     package static func runExecBody(
@@ -144,10 +105,9 @@ package enum ExecSession {
         processConfig.arguments = configuration.arguments
         processConfig.terminal = configuration.processTerminal
 
-        let processIO = try ProcessIO.create(
-            tty: configuration.useInteractivePTY,
+        let processIO = try InteractiveSession.createProcessIO(
             interactive: configuration.interactive,
-            detach: false
+            useInteractivePTY: configuration.useInteractivePTY
         )
         holder.processIO = processIO
         defer {
@@ -161,12 +121,13 @@ package enum ExecSession {
             processIO.stdio
         )
 
-        if configuration.useInteractivePTY {
-            let log = Logger(label: "compose.exec")
-            return try await processIO.handleProcess(process: process, log: log)
-        }
-
-        return try await runNonTTYProcess(process: process, processIO: processIO)
+        let log = Logger(label: "compose.exec")
+        return try await InteractiveSession.waitForProcess(
+            process: process,
+            processIO: processIO,
+            useInteractivePTY: configuration.useInteractivePTY,
+            log: log
+        )
     }
 
     package static func verifyExecTarget(
@@ -193,14 +154,5 @@ package enum ExecSession {
                 state: ProjectStatus.formatState(snapshot.status)
             )
         }
-    }
-
-    /// Non-TTY path: stream I/O without `ProcessIO` SIGINT/SIGTERM forwarding (compose owns interrupts).
-    private static func runNonTTYProcess(process: any ClientProcess, processIO: ProcessIO) async throws -> Int32 {
-        try await process.start()
-        try processIO.closeAfterStart()
-        async let exitCode = process.wait()
-        try await processIO.wait()
-        return try await exitCode
     }
 }
