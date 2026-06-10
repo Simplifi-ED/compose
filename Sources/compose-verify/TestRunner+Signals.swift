@@ -80,6 +80,20 @@ extension TestRunner {
         }
         expect(stopProject == .interrupted(signal), "stopProject maps to interrupted(signal)")
 
+        let stopRun = blockingAwait {
+            try? await SignalForwarding.interruptedOutcome(
+                policy: .stopRunContainer(
+                    RunShutdownContext(
+                        containerID: "demo_web_run_test",
+                        options: GracefulStopOptions()
+                    )
+                ),
+                signal: signal,
+                stopRunContainer: { _ in }
+            )
+        }
+        expect(stopRun == .interrupted(signal), "stopRunContainer maps to interrupted(signal)")
+
         let cleanupCount = blockingAwait { () -> Int in
             final class Counter: @unchecked Sendable {
                 var value = 0

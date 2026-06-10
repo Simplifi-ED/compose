@@ -6,9 +6,78 @@ extension TestRunner {
     mutating func runPlannerTests() throws {
         let fixturesDirectory = Self.fixtureURL("minimal-compose.yml").deletingLastPathComponent()
         try runPlannerContainerTests(fixturesDirectory: fixturesDirectory)
+        try runPlannerRunPlanTests(fixturesDirectory: fixturesDirectory)
+        try runPlannerRunPlanDefaultTests(fixturesDirectory: fixturesDirectory)
         try runPlannerPublishTests(fixturesDirectory: fixturesDirectory)
         try runPlannerVolumeTests(fixturesDirectory: fixturesDirectory)
         try runPlannerVolumeErrorTests(fixturesDirectory: fixturesDirectory)
+    }
+
+    mutating func runPlannerRunPlanTests(fixturesDirectory: URL) throws {
+        let service = ComposeService(
+            image: "docker.io/library/alpine:latest",
+            command: .string("sleep 300"),
+            ports: ["18080:80"],
+            environment: .map(["FOO": "bar"]),
+            containerName: nil
+        )
+        let ioFlags = InteractiveSession.IOFlags.resolve(
+            explicitInteractive: true,
+            explicitTTY: true,
+            stdinIsTTY: false
+        )
+        let plan = try ServicePlanner.runPlan(
+            serviceName: "web",
+            service: service,
+            projectName: "demo",
+            composeDirectory: fixturesDirectory,
+            options: RunPlanOptions(
+                removeContainer: true,
+                commandOverride: ["echo", "hi"],
+                interactive: ioFlags.interactive,
+                processTerminal: ioFlags.processTerminal,
+                nameSuffix: "abcd1234"
+            )
+        )
+        expect(plan.name == "demo_web_run_abcd1234", "run plan unique container name")
+        expect(!plan.runArguments.contains("-d"), "run plan foreground")
+        expect(plan.runArguments.contains("--rm"), "run plan --rm")
+        expect(plan.runArguments.contains("-i"), "run plan interactive")
+        expect(plan.runArguments.contains("-t"), "run plan tty")
+        expect(plan.runArguments.contains("echo"), "run plan command override")
+        expect(plan.runArguments.contains("hi"), "run plan command override args")
+        expect(
+            plan.runArguments.contains("\(ComposeLabels.project)=demo"),
+            "run plan project label"
+        )
+        _ = try Application.ContainerRun.parse(plan.runArguments)
+    }
+
+    mutating func runPlannerRunPlanDefaultTests(fixturesDirectory: URL) throws {
+        let service = ComposeService(
+            image: "docker.io/library/alpine:latest",
+            command: .string("sleep 300"),
+            ports: [],
+            environment: nil,
+            containerName: nil
+        )
+        let plan = try ServicePlanner.runPlan(
+            serviceName: "web",
+            service: service,
+            projectName: "demo",
+            composeDirectory: fixturesDirectory,
+            options: RunPlanOptions(
+                removeContainer: false,
+                commandOverride: nil,
+                interactive: false,
+                processTerminal: false,
+                nameSuffix: "00000000"
+            )
+        )
+        expect(!plan.runArguments.contains("--rm"), "run plan default keeps container")
+        expect(!plan.runArguments.contains("-i"), "run plan default non-interactive")
+        expect(!plan.runArguments.contains("-t"), "run plan default no tty")
+        _ = try Application.ContainerRun.parse(plan.runArguments)
     }
 
     mutating func runPlannerContainerTests(fixturesDirectory: URL) throws {

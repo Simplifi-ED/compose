@@ -5,6 +5,7 @@ import Foundation
 // Long-running commands using `.stopProject(context)` → `ProjectShutdown.stop`:
 // - `up --attach`, `exec`
 // - #20 top: `.cancelOnly` + `StatsTableRenderer.finish()` terminal cleanup
+// - `run`: `.stopRunContainer` stops only the one-off container
 
 /// POSIX shell convention: exit status = 128 + signal number.
 package struct InterruptSignal: Sendable, Equatable {
@@ -24,8 +25,10 @@ package enum InterruptPolicy: Sendable {
     case cancelOnly
     /// Stop scheduling new orchestration waves; accept partial state (`up` / `down`).
     case orchestration
-    /// SIGTERM project containers, then force-stop (`attach up`, `exec`, `top`).
+    /// SIGTERM project containers, then force-stop (`up --attach`, `exec`).
     case stopProject(ProjectShutdownContext)
+    /// SIGTERM and remove only the one-off run container (`compose run`).
+    case stopRunContainer(RunShutdownContext)
 }
 
 package enum SignalForwarding {
@@ -40,7 +43,12 @@ package enum SignalForwarding {
     package static func runUntilCancelled(
         policy: InterruptPolicy,
         terminalCleanup: @Sendable () async -> Void = {},
-        stopProject: @Sendable (ProjectShutdownContext) async throws -> Void = { try await ProjectShutdown.stop(context: $0) },
+        stopProject: @Sendable (ProjectShutdownContext) async throws -> Void = {
+            try await ProjectShutdown.stop(context: $0)
+        },
+        stopRunContainer: @Sendable (RunShutdownContext) async throws -> Void = {
+            try await RunShutdownContext.stopAndRemove(context: $0)
+        },
         body: @Sendable @escaping () async throws -> Void
     ) async throws -> ExitOutcome {
         let signalHandler = AsyncSignalHandler.create(notify: [SIGINT, SIGTERM])
@@ -92,7 +100,8 @@ package enum SignalForwarding {
                 policy: policy,
                 signal: signal,
                 terminalCleanup: terminalCleanup,
-                stopProject: stopProject
+                stopProject: stopProject,
+                stopRunContainer: stopRunContainer
             )
         }
     }
@@ -102,7 +111,12 @@ package enum SignalForwarding {
         policy: InterruptPolicy,
         signal: InterruptSignal,
         terminalCleanup: @Sendable () async -> Void = {},
-        stopProject: @Sendable (ProjectShutdownContext) async throws -> Void = { try await ProjectShutdown.stop(context: $0) }
+        stopProject: @Sendable (ProjectShutdownContext) async throws -> Void = {
+            try await ProjectShutdown.stop(context: $0)
+        },
+        stopRunContainer: @Sendable (RunShutdownContext) async throws -> Void = {
+            try await RunShutdownContext.stopAndRemove(context: $0)
+        }
     ) async throws -> ExitOutcome {
         await terminalCleanup()
         switch policy {
@@ -117,6 +131,19 @@ package enum SignalForwarding {
                 fputs(
                     """
                     Warning: couldn't stop all project containers after interrupt: \
+                    \(error.localizedDescription).\n
+                    """,
+                    stderr
+                )
+            }
+            return .interrupted(signal)
+        case .stopRunContainer(let context):
+            do {
+                try await stopRunContainer(context)
+            } catch {
+                fputs(
+                    """
+                    Warning: couldn't stop run container after interrupt: \
                     \(error.localizedDescription).\n
                     """,
                     stderr

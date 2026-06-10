@@ -132,28 +132,28 @@ extension TestRunner {
     }
 
     private mutating func runExecIOFlagsTests() {
-        let explicit = ExecSession.IOFlags.resolve(
+        let explicit = InteractiveSession.IOFlags.resolve(
             explicitInteractive: true,
             explicitTTY: false,
             stdinIsTTY: false
         )
         expect(explicit.interactive && !explicit.processTerminal && !explicit.useInteractivePTY, "explicit -i without -t")
 
-        let auto = ExecSession.IOFlags.resolve(
+        let auto = InteractiveSession.IOFlags.resolve(
             explicitInteractive: false,
             explicitTTY: false,
             stdinIsTTY: true
         )
         expect(auto.interactive && auto.processTerminal && auto.useInteractivePTY, "auto -it when stdin is a TTY")
 
-        let piped = ExecSession.IOFlags.resolve(
+        let piped = InteractiveSession.IOFlags.resolve(
             explicitInteractive: false,
             explicitTTY: false,
             stdinIsTTY: false
         )
         expect(!piped.interactive && !piped.processTerminal && !piped.useInteractivePTY, "piped stdin stays non-interactive")
 
-        let pipedExplicitTTY = ExecSession.IOFlags.resolve(
+        let pipedExplicitTTY = InteractiveSession.IOFlags.resolve(
             explicitInteractive: true,
             explicitTTY: true,
             stdinIsTTY: false
@@ -163,7 +163,7 @@ extension TestRunner {
             "-t -i on piped stdin avoids host PTY without stdin TTY"
         )
 
-        let ttyOnlyOnPipe = ExecSession.IOFlags.resolve(
+        let ttyOnlyOnPipe = InteractiveSession.IOFlags.resolve(
             explicitInteractive: false,
             explicitTTY: true,
             stdinIsTTY: false

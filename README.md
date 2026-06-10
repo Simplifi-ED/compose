@@ -22,7 +22,7 @@ Maintained by [Omnivya](https://www.omnivya.fr) ([Simplifi-ED](https://github.co
 - `down` validates only the dependency graph (not `image` or other startup fields), so teardown still works if the file was edited after `up`
 - Containers without a `com.docker.compose.service` label (or not listed in the compose file) stop last and may not follow `depends_on` order
 - Container labels for project tracking (`com.docker.compose.project`, `com.docker.compose.service`)
-- `container compose ps` (list project containers) and `container compose top` (live CPU/memory stats stream)
+- `container compose ps` (list project containers), `container compose top` (live CPU/memory stats stream), and `container compose run` (one-off foreground container from a service definition)
 
 Not supported yet: long-form `depends_on` with health conditions, networks, named volumes, volume drivers, read-only mounts (`:ro`), `build`, profiles, YAML `extends` / `include`.
 
@@ -36,6 +36,7 @@ Ctrl+C (SIGINT) or SIGTERM during long-running commands is handled gracefully:
 | `up` (mid-wave) | Stops scheduling new waves; already-started containers keep running (no rollback) |
 | `up --attach` | SIGTERM project containers, wait `-t` seconds (default 10), then SIGKILL |
 | `exec` | SIGTERM project containers, wait `--timeout` seconds (default 10), then SIGKILL |
+| `run` | SIGTERM and remove only the run container, wait `--timeout` seconds (default 10), then SIGKILL; other project containers keep running |
 | `down` (mid-wave) | Stops after the current wave; some containers may remain |
 | `top` | Stops streaming stats; containers keep running |
 
@@ -80,6 +81,30 @@ container compose exec -f docker-compose.yml -p demo db psql -U postgres
 - Use `--timeout` to set the SIGTERM grace period before SIGKILL when you interrupt (default 10 seconds). On `exec`, `-t` allocates a pseudo-TTY (not the shutdown timeout).
 - **Exit codes:** the exec process exit code on normal completion; 130 for SIGINT or 143 for SIGTERM when interrupted (project containers are stopped).
 - Not supported at the compose layer yet: `-e`, `-w`, `-u`, detach, or service scale/index selection.
+- Use `container compose run` to start a new container from the service definition when nothing is running yet.
+
+### Run
+
+`container compose run SERVICE [COMMAND] [ARGS...]` creates a new foreground container from a service definition.
+
+```bash
+container compose run web sh
+container compose run --rm db psql -U postgres -c 'SELECT 1'
+container compose run -f docker-compose.yml -p demo worker python manage.py migrate
+```
+
+- Reads the compose file for the service `image`, `command`, `environment`, `ports`, and bind-mount `volumes` (same mapping as `up`).
+- Does not start `depends_on` services in v1.
+- Names one-off containers `{project}_{service}_run_*` (or `{container_name}_run_*`) so they do not replace containers started by `up`.
+- Containers started by `up` keep running; `run` does not attach to or stop them.
+- One-off containers use the same `com.docker.compose.*` labels and appear in `ps`, `logs`, and `top`; `down` removes them with the project.
+- Omit `COMMAND` to use the service `command` from the compose file (or the image default).
+- Pass `--rm` to remove the container after it exits (opt-in; default keeps it until `down` or manual removal).
+- When stdin is a TTY, `-i` and `-t` are enabled automatically (same rules as `exec`).
+- Use `--timeout` for the SIGTERM grace period before SIGKILL when you interrupt (default 10 seconds). On `run`, `-t` allocates a pseudo-TTY (not the shutdown timeout).
+- **Exit codes:** the container init process exit code on normal completion; 130 for SIGINT or 143 for SIGTERM when interrupted.
+- If the same service ports are already published by `up`, `run` fails at bind time (no preflight).
+- Interactive `-it` runs restore the host terminal on Ctrl+C (compose captures stdin state before `ContainerRun` enters raw mode).
 
 ### Multi-file merge
 
@@ -185,7 +210,7 @@ swift run -c release compose-verify
 
 ## Architecture
 
-- `ComposeCore` — YAML parsing, service planning, `ContainerRun` for up, `ContainerTeardown` (stop + delete) for down, observability commands (`ps`, `logs`, `top`)
+- `ComposeCore` — YAML parsing, service planning, `ContainerRun` for `up` and `run`, `ContainerTeardown` (stop + delete) for `down`, observability commands (`ps`, `logs`, `top`), interactive sessions (`exec`, `run`)
 - `compose` — CLI plugin binary registered by `container`
 - `compose-verify` — parser/planner checks (Command Line Tools friendly)
 

@@ -4,6 +4,34 @@ public struct ServicePlan: Sendable, Equatable {
     public let serviceName: String
     public let name: String
     public let runArguments: [String]
+
+    public init(serviceName: String, name: String, runArguments: [String]) {
+        self.serviceName = serviceName
+        self.name = name
+        self.runArguments = runArguments
+    }
+}
+
+package struct RunPlanOptions: Sendable, Equatable {
+    package let removeContainer: Bool
+    package let commandOverride: [String]?
+    package let interactive: Bool
+    package let processTerminal: Bool
+    package let nameSuffix: String
+
+    package init(
+        removeContainer: Bool,
+        commandOverride: [String]?,
+        interactive: Bool,
+        processTerminal: Bool,
+        nameSuffix: String
+    ) {
+        self.removeContainer = removeContainer
+        self.commandOverride = commandOverride
+        self.interactive = interactive
+        self.processTerminal = processTerminal
+        self.nameSuffix = nameSuffix
+    }
 }
 
 public enum ServicePlanner {
@@ -116,6 +144,56 @@ public enum ServicePlanner {
         return "\(projectName)_\(serviceName)"
     }
 
+    package static func runPlan(
+        serviceName: String,
+        service: ComposeService,
+        projectName: String,
+        composeDirectory: URL,
+        options: RunPlanOptions
+    ) throws -> ServicePlan {
+        guard let image = service.image, !image.isEmpty else {
+            throw ComposeError.missingImage(service: serviceName)
+        }
+
+        let baseName = containerName(
+            serviceName: serviceName,
+            service: service,
+            projectName: projectName
+        )
+        let name = "\(baseName)_run_\(options.nameSuffix)"
+
+        var arguments: [String] = ["--name", name]
+        if options.removeContainer {
+            arguments.append("--rm")
+        }
+        if options.interactive {
+            arguments.append("-i")
+        }
+        if options.processTerminal {
+            arguments.append("-t")
+        }
+        let command = if let override = options.commandOverride, !override.isEmpty {
+            override
+        } else {
+            commandArguments(service.command)
+        }
+        try appendServiceRunConfiguration(
+            to: &arguments,
+            serviceName: serviceName,
+            service: service,
+            projectName: projectName,
+            composeDirectory: composeDirectory,
+            image: image,
+            command: command
+        )
+
+        return ServicePlan(
+            serviceName: serviceName,
+            name: name,
+            runArguments: arguments
+        )
+    }
+
     public static func plan(
         serviceName: String,
         service: ComposeService,
@@ -133,6 +211,32 @@ public enum ServicePlanner {
         )
 
         var arguments = ["-d", "--name", name]
+        try appendServiceRunConfiguration(
+            to: &arguments,
+            serviceName: serviceName,
+            service: service,
+            projectName: projectName,
+            composeDirectory: composeDirectory,
+            image: image,
+            command: commandArguments(service.command)
+        )
+
+        return ServicePlan(
+            serviceName: serviceName,
+            name: name,
+            runArguments: arguments
+        )
+    }
+
+    private static func appendServiceRunConfiguration(
+        to arguments: inout [String],
+        serviceName: String,
+        service: ComposeService,
+        projectName: String,
+        composeDirectory: URL,
+        image: String,
+        command: [String]
+    ) throws {
         arguments.append(contentsOf: ComposeLabels.runFlags(projectName: projectName, serviceName: serviceName))
         arguments.append(contentsOf: environmentFlags(service.environment))
         for port in service.ports {
@@ -142,13 +246,7 @@ public enum ServicePlanner {
             arguments.append(contentsOf: ["-v", try volumeFlag(for: volume, relativeTo: composeDirectory)])
         }
         arguments.append(image)
-        arguments.append(contentsOf: commandArguments(service.command))
-
-        return ServicePlan(
-            serviceName: serviceName,
-            name: name,
-            runArguments: arguments
-        )
+        arguments.append(contentsOf: command)
     }
 
     static func environmentFlags(_ environment: ComposeEnvironment?) -> [String] {
