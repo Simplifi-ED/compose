@@ -1,0 +1,5 @@
+services:
+  web:
+    volumes:
+      - "./data:/mnt/data"
+    container_name: merged-web

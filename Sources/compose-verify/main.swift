@@ -190,6 +190,7 @@ do {
     try runner.runDotEnvTests()
     try runner.runPlannerTests()
     try runner.runDependencyTests()
+    try runner.runMergeTests()
     try runner.runProjectOptionsTests()
     try runner.runShutdownLayerTests()
     runner.runLabelTests()

@@ -3,6 +3,11 @@ import Foundation
 public struct ComposeFile: Sendable, Equatable {
     public let name: String?
     public let services: [String: ComposeService]
+
+    public init(name: String?, services: [String: ComposeService]) {
+        self.name = name
+        self.services = services
+    }
 }
 
 extension ComposeFile: Decodable {

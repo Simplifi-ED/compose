@@ -1,0 +1,4 @@
+services:
+  web:
+    environment:
+      - REPLACED=list-form

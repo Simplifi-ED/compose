@@ -11,6 +11,7 @@ public enum ComposeEnvironment: Sendable, Equatable {
 }
 
 public struct ComposeService: Sendable, Equatable {
+    // MERGE: update ComposeFileMerge when adding stored properties.
     public let image: String?
     public let command: ComposeCommandValue?
     public let ports: [String]

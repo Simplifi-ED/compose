@@ -1,0 +1,4 @@
+services:
+  web:
+    environment:
+      - BAR=override-list
