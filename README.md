@@ -1,4 +1,4 @@
-# compose
+# container compose plugin
 
 Native [`container compose`](https://github.com/apple/container) plugin for macOS — define and run multi-container apps from `docker-compose.yml` using Apple's `ContainerCommands` API.
 

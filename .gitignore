@@ -9,3 +9,5 @@ DerivedData/
 .netrc
 .rumdl_cache/
 .cursor/
+.agents/
+skills-lock.json
