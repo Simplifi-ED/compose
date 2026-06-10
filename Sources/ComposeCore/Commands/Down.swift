@@ -5,7 +5,7 @@ public struct Down: AsyncParsableCommand {
     public init() {}
 
     public static let configuration = CommandConfiguration(
-        abstract: "Stop containers defined in the compose file."
+        abstract: "Stop and remove containers defined in the compose file."
     )
 
     @OptionGroup
@@ -16,12 +16,11 @@ public struct Down: AsyncParsableCommand {
         let projectName = projectOptions.resolvedProjectName(fileURL: fileURL)
         let composeFile = try ComposeParser.parse(fileURL: fileURL)
         let plans = try ServicePlanner.plans(for: composeFile, projectName: projectName)
-        let containerIDs = plans.map(\.containerID)
 
-        try await ServiceRunner.down(containerIDs: containerIDs)
+        try await ServiceRunner.down(plans: plans)
 
-        for containerID in containerIDs {
-            print(containerID)
+        for plan in plans {
+            print(plan.containerID)
         }
     }
 }

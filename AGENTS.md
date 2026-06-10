@@ -111,5 +111,5 @@ The output of the discovery command **must** show the `compose` plugin. If it do
 - Plugin layout: `compose/bin/compose` plus `config.toml` (plugin directory name must match the binary name).
 - Package targets: `ComposeCore` library, `compose` CLI executable, and `compose-verify` verification executable.
 - On Command Line Tools builds, use `swift run -c release compose-verify` instead of `swift test` (Swift Testing/XCTest unavailable).
-- v1 `compose down` stops containers only; it does not remove them (`container rm` is separate).
+- v1 `compose down` stops and removes project containers (no volume/network prune).
 - Host Linux kernel must be configured (`container system kernel set`) before `container run` or `compose up` succeed.

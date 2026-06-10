@@ -3,49 +3,34 @@ import Foundation
 
 public enum ServiceRunner {
     public static func up(plans: [ServicePlan]) async throws {
-        guard !plans.isEmpty else { return }
-
-        var failures: [(service: String, error: Error)] = []
-
-        await withTaskGroup(of: (String, Error?).self) { group in
-            for plan in plans {
-                group.addTask {
-                    do {
-                        var command = try Application.ContainerRun.parse(plan.runArguments)
-                        try await command.run()
-                        return (plan.serviceName, nil)
-                    } catch {
-                        return (plan.serviceName, error)
-                    }
-                }
-            }
-
-            for await result in group {
-                if let error = result.1 {
-                    failures.append((service: result.0, error: error))
-                }
-            }
-        }
-
-        if !failures.isEmpty {
-            throw ComposeError.multipleServiceFailures(failures)
+        try await runInParallel(plans.map { (label: $0.serviceName, value: $0) }) { plan in
+            let command = try Application.ContainerRun.parse(plan.runArguments)
+            try await command.run()
         }
     }
 
-    public static func down(containerIDs: [String]) async throws {
-        guard !containerIDs.isEmpty else { return }
+    public static func down(plans: [ServicePlan]) async throws {
+        try await runInParallel(plans.map { (label: $0.serviceName, value: $0.containerID) }) { containerID in
+            try await ContainerTeardown.teardown(id: containerID)
+        }
+    }
+
+    private static func runInParallel<T: Sendable>(
+        _ items: [(label: String, value: T)],
+        work: @escaping @Sendable (T) async throws -> Void
+    ) async throws {
+        guard !items.isEmpty else { return }
 
         var failures: [(service: String, error: Error)] = []
 
         await withTaskGroup(of: (String, Error?).self) { group in
-            for containerID in containerIDs {
+            for item in items {
                 group.addTask {
                     do {
-                        var command = try Application.ContainerStop.parse([containerID])
-                        try await command.run()
-                        return (containerID, nil)
+                        try await work(item.value)
+                        return (item.label, nil)
                     } catch {
-                        return (containerID, error)
+                        return (item.label, error)
                     }
                 }
             }

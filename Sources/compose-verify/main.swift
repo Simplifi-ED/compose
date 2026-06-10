@@ -1,4 +1,6 @@
 import ComposeCore
+import ContainerCommands
+import ContainerizationError
 import Foundation
 
 struct TestRunner {
@@ -87,6 +89,35 @@ struct TestRunner {
             _ = try ServicePlanner.publishFlag(for: "not-a-port")
         }
     }
+
+    mutating func runTeardownErrorTests() {
+        let notFound = ContainerizationError(.notFound, message: "container with ID demo_web not found")
+        expect(ContainerTeardown.isIgnorableError(notFound), "notFound is ignorable")
+
+        let wrappedNotFound = ContainerizationError(
+            .internalError,
+            message: "failed to stop container",
+            cause: notFound
+        )
+        expect(ContainerTeardown.isIgnorableError(wrappedNotFound), "wrapped notFound is ignorable")
+
+        let invalidState = ContainerizationError(.invalidState, message: "container is running")
+        expect(!ContainerTeardown.isIgnorableError(invalidState), "invalidState is not ignorable")
+
+        let mixedAggregate = AggregateError([
+            notFound,
+            invalidState,
+        ])
+        expect(!ContainerTeardown.isIgnorableError(mixedAggregate), "mixed aggregate is not ignorable")
+
+        let allNotFoundAggregate = AggregateError([
+            notFound,
+            ContainerizationError(.notFound, message: "other missing"),
+        ])
+        expect(ContainerTeardown.isIgnorableError(allNotFoundAggregate), "all-notFound aggregate is ignorable")
+
+        expect(!ContainerTeardown.isIgnorableError(AggregateError([])), "empty aggregate is not ignorable")
+    }
 }
 
 var runner = TestRunner()
@@ -94,6 +125,7 @@ var runner = TestRunner()
 do {
     try runner.runParserTests()
     try runner.runPlannerTests()
+    runner.runTeardownErrorTests()
 } catch {
     fputs("FAIL: unexpected error: \(error)\n", stderr)
     runner.failures += 1

@@ -6,6 +6,7 @@ let package = Package(
     platforms: [.macOS(.v15)],
     dependencies: [
         .package(url: "https://github.com/apple/container.git", from: "1.0.0"),
+        .package(url: "https://github.com/apple/containerization.git", exact: "0.33.3"),
         .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.3.0"),
         .package(url: "https://github.com/jpsim/Yams.git", from: "6.2.1"),
     ],
@@ -14,7 +15,9 @@ let package = Package(
             name: "ComposeCore",
             dependencies: [
                 .product(name: "ArgumentParser", package: "swift-argument-parser"),
+                .product(name: "ContainerAPIClient", package: "container"),
                 .product(name: "ContainerCommands", package: "container"),
+                .product(name: "Containerization", package: "containerization"),
                 .product(name: "Yams", package: "Yams"),
             ],
             path: "Sources/ComposeCore"
@@ -26,7 +29,11 @@ let package = Package(
         ),
         .executableTarget(
             name: "compose-verify",
-            dependencies: ["ComposeCore"],
+            dependencies: [
+                "ComposeCore",
+                .product(name: "ContainerCommands", package: "container"),
+                .product(name: "Containerization", package: "containerization"),
+            ],
             path: "Sources/compose-verify"
         ),
     ],
