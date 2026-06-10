@@ -196,6 +196,7 @@ do {
     runner.runLabelTests()
     runner.runRollbackTests()
     runner.runTeardownErrorTests()
+    runner.runTerminalTests()
 } catch {
     fputs("FAIL: unexpected error: \(error)\n", stderr)
     runner.failures += 1
