@@ -13,18 +13,29 @@ public struct Down: AsyncParsableCommand {
 
     public func run() async throws {
         let fileURLs = try projectOptions.resolvedFileURLsIfPresent()
-        let projectName = try projectOptions.resolvedProjectName(fileURL: fileURLs?.first)
+        let composeFile: ComposeFile?
+        if let fileURLs {
+            composeFile = try ComposeParser.parseForShutdown(fileURLs: fileURLs)
+        } else {
+            composeFile = nil
+        }
+        let projectName = try projectOptions.resolvedProjectName(
+            composeFile: composeFile,
+            fileURL: fileURLs?.first
+        )
         let containers = try await ContainerDiscovery.containers(forProject: projectName)
 
         let useOrderedShutdown = fileURLs != nil && !projectOptions.hasExplicitProjectName
 
-        if useOrderedShutdown, let fileURLs {
-            let composeFile = try ComposeParser.parseForShutdown(fileURLs: fileURLs)
+        if useOrderedShutdown, let composeFile {
             let layers = try ServicePlanner.shutdownContainerLayers(
                 for: composeFile,
                 containers: containers
             )
-            let unmapped = ServicePlanner.unmappedContainers(in: containers, composeFile: composeFile)
+            let unmapped = ServicePlanner.unmappedContainers(
+                in: containers,
+                composeFile: composeFile
+            )
             if !unmapped.isEmpty {
                 let names = unmapped.map(\.name).joined(separator: ", ")
                 fputs(

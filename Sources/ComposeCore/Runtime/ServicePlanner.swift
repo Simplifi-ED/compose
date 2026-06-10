@@ -161,33 +161,14 @@ public enum ServicePlanner {
     }
 
     public static func publishFlag(for port: String) throws -> String {
-        let trimmed = port.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else {
+        guard let spec = ComposeBindingKeys.parsePortSpec(port) else {
             throw ComposeError.unsupportedPort(port)
         }
 
-        let protocolSuffix: String
-        let hostContainerPart: String
-        if let slashIndex = trimmed.firstIndex(of: "/") {
-            hostContainerPart = String(trimmed[..<slashIndex])
-            protocolSuffix = String(trimmed[slashIndex...])
-        } else {
-            hostContainerPart = trimmed
-            protocolSuffix = ""
+        if spec.protocolSuffix.isEmpty {
+            return "127.0.0.1:\(spec.hostPort):\(spec.containerPort)"
         }
-
-        let parts = hostContainerPart.split(separator: ":", omittingEmptySubsequences: false)
-        guard parts.count == 2,
-              Int(parts[0]) != nil,
-              Int(parts[1]) != nil
-        else {
-            throw ComposeError.unsupportedPort(port)
-        }
-
-        if protocolSuffix.isEmpty {
-            return "127.0.0.1:\(hostContainerPart)"
-        }
-        return "127.0.0.1:\(hostContainerPart)\(protocolSuffix)"
+        return "127.0.0.1:\(spec.hostPort):\(spec.containerPort)\(spec.protocolSuffix)"
     }
 
     public static func volumeFlag(for volume: String, relativeTo composeDirectory: URL) throws -> String {

@@ -1,0 +1,4 @@
+services:
+  web:
+    ports:
+      - "18080:80"

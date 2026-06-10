@@ -26,8 +26,16 @@ enum ComposeFileMerge {
         ComposeService(
             image: override.image ?? base.image,
             command: override.command ?? base.command,
-            ports: base.ports + override.ports,
-            volumes: base.volumes + override.volumes,
+            ports: ComposeBindingKeys.mergeUniqueEntries(
+                base: base.ports,
+                override: override.ports,
+                key: ComposeBindingKeys.portMergeKey
+            ),
+            volumes: ComposeBindingKeys.mergeUniqueEntries(
+                base: base.volumes,
+                override: override.volumes,
+                key: ComposeBindingKeys.volumeMergeKey
+            ),
             environment: merge(base: base.environment, override: override.environment),
             containerName: override.containerName ?? base.containerName,
             dependsOn: base.dependsOn + override.dependsOn
@@ -48,7 +56,13 @@ enum ComposeFileMerge {
         case (.map(let baseMap), .map(let overrideMap)):
             return .map(baseMap.merging(overrideMap) { _, override in override })
         case (.list(let baseList), .list(let overrideList)):
-            return .list(baseList + overrideList)
+            return .list(
+                ComposeBindingKeys.mergeUniqueEntries(
+                    base: baseList,
+                    override: overrideList,
+                    key: { ComposeBindingKeys.environmentListEntryKey(for: $0) }
+                )
+            )
         // Map vs list: later file's entire environment form wins.
         case (_, let override?):
             return override
