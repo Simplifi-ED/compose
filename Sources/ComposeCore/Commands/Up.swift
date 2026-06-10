@@ -32,7 +32,10 @@ public struct Up: AsyncParsableCommand {
             display: progressOptions.resolvedDisplay(),
             phase: .starting
         )
-        try await runWithProgress(lines: orchestration.lines) {
+        try await runOrchestrationCommand(
+            lines: orchestration.lines,
+            interruptedMessage: "Startup interrupted. Started containers are still running."
+        ) {
             try await ServiceRunner.up(layers: layers, progress: orchestration.handlers)
         }
 

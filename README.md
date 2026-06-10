@@ -25,6 +25,19 @@ Maintained by [Omnivya](https://www.omnivya.fr) ([Simplifi-ED](https://github.co
 
 Not supported yet: long-form `depends_on` with health conditions, networks, named volumes, volume drivers, read-only mounts (`:ro`), `build`, profiles, YAML `extends` / `include`.
 
+### Interrupt handling
+
+Ctrl+C (SIGINT) or SIGTERM during long-running commands is handled gracefully:
+
+| Command | Behavior |
+|---------|----------|
+| `logs -f` | Stops following logs; containers keep running |
+| `up` (mid-wave) | Stops scheduling new waves; already-started containers keep running (no rollback) |
+| `down` (mid-wave) | Stops after the current wave; some containers may remain |
+| Future `attach up`, `top`, `exec` | SIGTERM project containers, wait `-t` seconds (default 10), then SIGKILL |
+
+Interrupt stops scheduling new waves immediately and cancels in-flight container work; partially created containers are force-removed. Exit status follows the shell convention: 130 for SIGINT, 143 for SIGTERM.
+
 ### Multi-file merge
 
 Pass `-f` more than once to layer compose files. Files merge left to right; later files override earlier ones.
