@@ -15,7 +15,10 @@ extension TestRunner {
 
         expect(web?.image == "docker.io/library/alpine:latest", "env fixture image substitution")
         expect(web?.ports == ["19090:80"], "env fixture port substitution")
-        expect(web?.environment == .map(["FOO": "from-dotenv"]), "env fixture environment substitution")
+        expect(
+            web?.environment == .map(["FOO": "from-dotenv", "FLAG": "true"]),
+            "env fixture quoted environment substitution preserves string values"
+        )
 
         let minimal = try ComposeParser.parse(fileURL: Self.fixtureURL("minimal-compose.yml"))
         expect(minimal.services["web"]?.image == "docker.io/library/alpine:latest", "missing .env is no-op")
@@ -37,6 +40,9 @@ extension TestRunner {
         expect(parsed["bad-key"] == nil, "dotenv skips invalid keys")
         expect(parsed["NOEQUALS"] == nil, "dotenv skips lines without equals")
 
+        let spacedKey = DotEnv.parse("FOO =bar\n")
+        expect(spacedKey["FOO"] == "bar", "dotenv trims whitespace around key")
+
         let substituted = try DotEnv.substitute(
             "image: ${IMAGE} ports: ${IMAGE}",
             variables: ["IMAGE": "alpine:latest"],
@@ -50,6 +56,16 @@ extension TestRunner {
             composePath: "/tmp/compose.yml"
         )
         expect(indirect == "image: ${B}", "indirect env value substitutes one level without false-positive error")
+
+        let commentSkipped = try DotEnv.substitute(
+            "# legacy image: ${OLD_IMAGE}\nimage: alpine:latest",
+            variables: [:],
+            composePath: "/tmp/compose.yml"
+        )
+        expect(
+            commentSkipped == "# legacy image: ${OLD_IMAGE}\nimage: alpine:latest",
+            "dotenv skips substitution in comment lines"
+        )
     }
 
     mutating func runDotEnvUnresolvedTests() throws {

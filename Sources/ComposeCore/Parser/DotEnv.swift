@@ -53,6 +53,32 @@ package enum DotEnv {
         variables: [String: String],
         composePath: String
     ) throws -> String {
+        let lines = text.split(omittingEmptySubsequences: false, whereSeparator: \.isNewline)
+        var output: [String] = []
+        output.reserveCapacity(lines.count)
+
+        for line in lines {
+            let lineText = String(line)
+            let trimmed = lineText.trimmingCharacters(in: .whitespaces)
+            if trimmed.hasPrefix("#") {
+                output.append(lineText)
+            } else {
+                output.append(try substituteLine(lineText, variables: variables, composePath: composePath))
+            }
+        }
+
+        var result = output.joined(separator: "\n")
+        if text.hasSuffix("\n"), !result.isEmpty {
+            result += "\n"
+        }
+        return result
+    }
+
+    private static func substituteLine(
+        _ text: String,
+        variables: [String: String],
+        composePath: String
+    ) throws -> String {
         let nsText = text as NSString
         let fullRange = NSRange(location: 0, length: nsText.length)
         let matches = placeholderRegex.matches(in: text, options: [], range: fullRange)
