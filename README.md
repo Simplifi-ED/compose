@@ -34,9 +34,9 @@ Each container started by `compose up` gets two metadata labels:
 | `com.docker.compose.project` | Project name (`-p`, or the compose file's parent directory) |
 | `com.docker.compose.service` | Service name from the compose file |
 
-`compose down` finds containers by `com.docker.compose.project`. Use the same `-p` value you used with `up`. With `-p`, the compose file does not need to exist. Services removed from the compose file are still stopped if they carry the project label.
+`compose down` finds containers by `com.docker.compose.project`. Use the same `-p` value you used with `up`. When `-p` is set, shutdown runs in parallel and does not read the compose file (even if `docker-compose.yml` is present). Services removed from the compose file are still stopped if they carry the project label.
 
-If the compose file has a broken dependency graph (circular or unknown `depends_on` references), `down` cannot compute shutdown order. Tear down in parallel with `compose down -p <project>` and no `-f`, or fix the graph first.
+If the compose file has a broken dependency graph (circular or unknown `depends_on` references), ordered shutdown fails. Tear down in parallel with `compose down -p <project>`, or fix the graph first.
 
 `compose down` prints one line per removed container name (discovered at runtime, not from the compose file). If no labeled containers match the project, it prints nothing and exits successfully.
 

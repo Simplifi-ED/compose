@@ -9,6 +9,11 @@ public struct ProjectOptions: ParsableArguments {
     @Option(name: .shortAndLong, help: "Project name used for container naming.")
     var projectName: String?
 
+    var hasExplicitProjectName: Bool {
+        guard let projectName else { return false }
+        return !projectName.isEmpty
+    }
+
     func resolvedFileURL() throws -> URL {
         guard let url = resolvedFileURLIfPresent() else {
             let cwd = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)

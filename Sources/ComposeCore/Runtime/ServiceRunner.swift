@@ -10,8 +10,8 @@ public enum ServiceRunner {
         var startedWaves: [[String]] = []
         do {
             for layer in layers {
-                let result = await parallelRun(
-                    layer.map { ParallelWorkItem(label: $0.serviceName, successValue: $0.name, value: $0) }
+                let result = await parallelRunCollecting(
+                    layer.map { (label: $0.serviceName, successValue: $0.name, value: $0) }
                 ) { plan in
                     let command = try Application.ContainerRun.parse(plan.runArguments)
                     try await command.run()
@@ -40,31 +40,40 @@ public enum ServiceRunner {
         }
     }
 
-    public static func down(containers: [DiscoveredContainer]) async throws {
-        try await down(layers: [containers])
+    public static func down(
+        containers: [DiscoveredContainer],
+        onRemoved: (@Sendable (String) -> Void)? = nil
+    ) async throws {
+        try await down(layers: [containers], onRemoved: onRemoved)
     }
 
-    public static func down(layers: [[DiscoveredContainer]]) async throws {
+    public static func down(
+        layers: [[DiscoveredContainer]],
+        onRemoved: (@Sendable (String) -> Void)? = nil
+    ) async throws {
         for (index, layer) in layers.enumerated() {
             let result = await parallelRun(
-                layer.map { ParallelWorkItem(label: $0.name, successValue: nil, value: $0) }
+                layer.map { (label: $0.name, value: $0) }
             ) { container in
                 try await ContainerTeardown.teardown(id: container.name)
             }
             if !result.failures.isEmpty {
-                let completed = index
-                let remaining = layers.count - completed - 1
+                let remaining = layers.count - index - 1
                 if remaining > 0 {
-                    let wave = completed + 1
                     fputs(
                         """
-                        Warning: compose down failed in wave \(wave) of \(layers.count); \
+                        Warning: compose down failed in wave \(index + 1) of \(layers.count); \
                         \(remaining) later wave(s) were not run.\n
                         """,
                         stderr
                     )
                 }
                 throw ComposeError.multipleServiceFailures(result.failures)
+            }
+            if let onRemoved {
+                for container in layer {
+                    onRemoved(container.name)
+                }
             }
         }
     }
@@ -79,7 +88,7 @@ public enum ServiceRunner {
         for wave in waves {
             guard !wave.isEmpty else { continue }
             let result = await parallelRun(
-                wave.map { ParallelWorkItem(label: $0, successValue: nil, value: $0) }
+                wave.map { (label: $0, value: $0) }
             ) { name in
                 try await teardown(name)
             }
@@ -88,19 +97,45 @@ public enum ServiceRunner {
         return failures
     }
 
-    private struct ParallelWorkItem<T: Sendable>: Sendable {
-        let label: String
-        let successValue: String?
-        let value: T
-    }
-
     private struct ParallelRunResult: Sendable {
         let succeeded: [String]
         let failures: [(service: String, error: Error)]
     }
 
     private static func parallelRun<T: Sendable>(
-        _ items: [ParallelWorkItem<T>],
+        _ items: [(label: String, value: T)],
+        work: @escaping @Sendable (T) async throws -> Void
+    ) async -> ParallelRunResult {
+        guard !items.isEmpty else {
+            return ParallelRunResult(succeeded: [], failures: [])
+        }
+
+        var failures: [(service: String, error: Error)] = []
+
+        await withTaskGroup(of: (String, Error?).self) { group in
+            for item in items {
+                group.addTask {
+                    do {
+                        try await work(item.value)
+                        return (item.label, nil)
+                    } catch {
+                        return (item.label, error)
+                    }
+                }
+            }
+
+            for await result in group {
+                if let error = result.1 {
+                    failures.append((service: result.0, error: error))
+                }
+            }
+        }
+
+        return ParallelRunResult(succeeded: [], failures: failures)
+    }
+
+    private static func parallelRunCollecting<T: Sendable>(
+        _ items: [(label: String, successValue: String, value: T)],
         work: @escaping @Sendable (T) async throws -> Void
     ) async -> ParallelRunResult {
         guard !items.isEmpty else {
@@ -110,7 +145,7 @@ public enum ServiceRunner {
         var succeeded: [String] = []
         var failures: [(service: String, error: Error)] = []
 
-        await withTaskGroup(of: (String, String?, Error?).self) { group in
+        await withTaskGroup(of: (String, String, Error?).self) { group in
             for item in items {
                 group.addTask {
                     do {
@@ -125,8 +160,8 @@ public enum ServiceRunner {
             for await result in group {
                 if let error = result.2 {
                     failures.append((service: result.0, error: error))
-                } else if let successValue = result.1 {
-                    succeeded.append(successValue)
+                } else {
+                    succeeded.append(result.1)
                 }
             }
         }

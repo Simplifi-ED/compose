@@ -20,9 +20,9 @@ extension TestRunner {
             for: dependsFixture,
             containers: allContainers
         )
-        expect(allShutdown.layers.count == 2, "shutdown layers wave count")
-        expect(allShutdown.layers[0].map(\.serviceName) == ["api", "web"], "shutdown layer 0 dependents")
-        expect(allShutdown.layers[1].map(\.serviceName) == ["cache", "db"], "shutdown layer 1 dependencies")
+        expect(allShutdown.count == 2, "shutdown layers wave count")
+        expect(allShutdown[0].map(\.serviceName) == ["api", "web"], "shutdown layer 0 dependents")
+        expect(allShutdown[1].map(\.serviceName) == ["cache", "db"], "shutdown layer 1 dependencies")
 
         let subsetContainers = [
             DiscoveredContainer(name: "demo_web", serviceName: "web"),
@@ -32,9 +32,9 @@ extension TestRunner {
             for: dependsFixture,
             containers: subsetContainers
         )
-        expect(subsetShutdown.layers.count == 2, "shutdown subset wave count")
-        expect(subsetShutdown.layers[0].map(\.serviceName) == ["web"], "shutdown subset layer 0")
-        expect(subsetShutdown.layers[1].map(\.serviceName) == ["db"], "shutdown subset layer 1")
+        expect(subsetShutdown.count == 2, "shutdown subset wave count")
+        expect(subsetShutdown[0].map(\.serviceName) == ["web"], "shutdown subset layer 0")
+        expect(subsetShutdown[1].map(\.serviceName) == ["db"], "shutdown subset layer 1")
 
         let containers = [
             DiscoveredContainer(name: "demo_web", serviceName: "web"),
@@ -45,11 +45,10 @@ extension TestRunner {
             for: dependsFixture,
             containers: containers
         )
-        expect(containerShutdown.layers.count == 3, "shutdown container layers include orphan wave")
-        expect(containerShutdown.layers[0].map(\.name) == ["demo_web"], "shutdown container layer 0")
-        expect(containerShutdown.layers[1].map(\.name) == ["demo_db"], "shutdown container layer 1")
-        expect(containerShutdown.layers[2].map(\.name) == ["legacy"], "shutdown orphan final wave")
-        expect(containerShutdown.orphans.map(\.name) == ["legacy"], "shutdown orphan list")
+        expect(containerShutdown.count == 3, "shutdown container layers include orphan wave")
+        expect(containerShutdown[0].map(\.name) == ["demo_web"], "shutdown container layer 0")
+        expect(containerShutdown[1].map(\.name) == ["demo_db"], "shutdown container layer 1")
+        expect(containerShutdown[2].map(\.name) == ["legacy"], "shutdown orphan final wave")
     }
 
     mutating func runShutdownParseTests() throws {

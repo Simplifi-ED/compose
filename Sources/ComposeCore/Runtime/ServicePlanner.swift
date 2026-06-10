@@ -58,7 +58,7 @@ public enum ServicePlanner {
     public static func shutdownContainerLayers(
         for composeFile: ComposeFile,
         containers: [DiscoveredContainer]
-    ) throws -> ShutdownContainerPlan {
+    ) throws -> [[DiscoveredContainer]] {
         let byService = Dictionary(grouping: containers.compactMap { container -> (String, DiscoveredContainer)? in
             guard let serviceName = container.serviceName else { return nil }
             return (serviceName, container)
@@ -70,23 +70,28 @@ public enum ServicePlanner {
             discoveredServiceNames: discoveredServiceNames
         )
 
-        let layers = serviceLayers.map { layer in
+        var layers = serviceLayers.map { layer in
             layer.flatMap { byService[$0, default: []] }
         }
 
+        let orphans = unmappedContainers(in: containers, composeFile: composeFile)
+        if !orphans.isEmpty {
+            layers.append(orphans)
+        }
+
+        return layers
+    }
+
+    static func unmappedContainers(
+        in containers: [DiscoveredContainer],
+        composeFile: ComposeFile
+    ) -> [DiscoveredContainer] {
         let knownServices = Set(composeFile.services.keys)
-        let orphans = containers.filter { container in
+        return containers.filter { container in
             guard let serviceName = container.serviceName else { return true }
             return !knownServices.contains(serviceName)
         }
         .sorted { $0.name < $1.name }
-
-        var allLayers = layers
-        if !orphans.isEmpty {
-            allLayers.append(orphans)
-        }
-
-        return ShutdownContainerPlan(layers: allLayers, orphans: orphans)
     }
 
     public static func containerName(

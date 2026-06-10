@@ -16,29 +16,28 @@ public struct Down: AsyncParsableCommand {
         let projectName = try projectOptions.resolvedProjectName(fileURL: fileURL)
         let containers = try await ContainerDiscovery.containers(forProject: projectName)
 
-        if let fileURL {
+        let useOrderedShutdown = fileURL != nil && !projectOptions.hasExplicitProjectName
+
+        if useOrderedShutdown, let fileURL {
             let composeFile = try ComposeParser.parseForShutdown(fileURL: fileURL)
-            let shutdown = try ServicePlanner.shutdownContainerLayers(
+            let layers = try ServicePlanner.shutdownContainerLayers(
                 for: composeFile,
                 containers: containers
             )
-            if !shutdown.orphans.isEmpty {
-                let names = shutdown.orphans.map(\.name).joined(separator: ", ")
+            let unmapped = ServicePlanner.unmappedContainers(in: containers, composeFile: composeFile)
+            if !unmapped.isEmpty {
+                let names = unmapped.map(\.name).joined(separator: ", ")
                 fputs(
                     """
-                    Warning: \(shutdown.orphans.count) container(s) without a compose service mapping (\(names)) \
+                    Warning: \(unmapped.count) container(s) without a compose service mapping (\(names)) \
                     stop last; depends_on order may not apply to them.\n
                     """,
                     stderr
                 )
             }
-            try await ServiceRunner.down(layers: shutdown.layers)
+            try await ServiceRunner.down(layers: layers) { print($0) }
         } else {
-            try await ServiceRunner.down(containers: containers)
-        }
-
-        for container in containers {
-            print(container.name)
+            try await ServiceRunner.down(containers: containers) { print($0) }
         }
     }
 }
