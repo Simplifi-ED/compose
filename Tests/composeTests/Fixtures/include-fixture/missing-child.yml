@@ -1,0 +1,5 @@
+include: ./does-not-exist.yml
+
+services:
+  web:
+    image: docker.io/library/alpine:latest

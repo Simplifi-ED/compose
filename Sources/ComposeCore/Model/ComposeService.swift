@@ -22,6 +22,8 @@ public struct ComposeService: Sendable, Equatable {
     public let profiles: [String]
     public let deploy: ComposeDeploy?
     public let healthcheck: ComposeHealthcheck?
+    /// Base directory for relative bind-mount paths; nil uses the CLI compose file directory.
+    public let projectDirectory: URL?
 
     public init(
         image: String?,
@@ -33,7 +35,8 @@ public struct ComposeService: Sendable, Equatable {
         dependsOn: [ComposeDependency] = [],
         profiles: [String] = [],
         deploy: ComposeDeploy? = nil,
-        healthcheck: ComposeHealthcheck? = nil
+        healthcheck: ComposeHealthcheck? = nil,
+        projectDirectory: URL? = nil
     ) {
         self.image = image
         self.command = command
@@ -45,6 +48,28 @@ public struct ComposeService: Sendable, Equatable {
         self.profiles = profiles
         self.deploy = deploy
         self.healthcheck = healthcheck
+        self.projectDirectory = projectDirectory
+    }
+
+    /// Resolved bind-mount / relative-path root; uses `defaultDirectory` when unset (CLI compose file dir).
+    public func projectDirectory(orDefault defaultDirectory: URL) -> URL {
+        projectDirectory ?? defaultDirectory
+    }
+
+    func withProjectDirectory(_ directory: URL) -> ComposeService {
+        ComposeService(
+            image: image,
+            command: command,
+            ports: ports,
+            volumes: volumes,
+            environment: environment,
+            containerName: containerName,
+            dependsOn: dependsOn,
+            profiles: profiles,
+            deploy: deploy,
+            healthcheck: healthcheck,
+            projectDirectory: directory
+        )
     }
 }
 
@@ -74,6 +99,7 @@ extension ComposeService: Decodable {
         profiles = try Self.decodeProfiles(from: container)
         deploy = try Self.decodeDeploy(from: container)
         healthcheck = try Self.decodeHealthcheck(from: container)
+        projectDirectory = nil
     }
 
     private static func decodeDeploy(

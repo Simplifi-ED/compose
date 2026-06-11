@@ -1,0 +1,3 @@
+services:
+  child:
+    image: ${CHILD_IMAGE}

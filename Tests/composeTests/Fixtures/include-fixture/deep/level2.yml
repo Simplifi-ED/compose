@@ -1,0 +1,6 @@
+include:
+  - ../common/base.yml
+
+services:
+  worker:
+    image: docker.io/library/alpine:latest

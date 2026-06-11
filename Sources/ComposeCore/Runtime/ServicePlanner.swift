@@ -174,7 +174,7 @@ public enum ServicePlanner {
                 serviceName: serviceName,
                 service: service,
                 projectName: projectName,
-                composeDirectory: composeDirectory,
+                composeDirectory: service.projectDirectory(orDefault: composeDirectory),
                 image: image,
                 command: command
             )
@@ -211,7 +211,7 @@ public enum ServicePlanner {
                 serviceName: serviceName,
                 service: service,
                 projectName: projectName,
-                composeDirectory: composeDirectory,
+                composeDirectory: service.projectDirectory(orDefault: composeDirectory),
                 image: image,
                 command: ServiceRunMapping.commandArguments(service.command),
                 containerNumber: replicaIndex

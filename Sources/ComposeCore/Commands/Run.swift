@@ -59,7 +59,7 @@ public struct Run: AsyncParsableCommand {
             serviceName: service,
             service: composeService,
             projectName: projectName,
-            composeDirectory: composeDirectory,
+            composeDirectory: composeService.projectDirectory(orDefault: composeDirectory),
             options: RunPlanOptions(
                 removeContainer: remove,
                 commandOverride: command.isEmpty ? nil : command,

@@ -1,0 +1,8 @@
+include:
+  - path:
+      - base.yml
+      - override.yml
+
+services:
+  app:
+    image: docker.io/library/alpine:latest

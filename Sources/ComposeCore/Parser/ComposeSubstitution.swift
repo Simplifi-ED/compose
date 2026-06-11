@@ -8,7 +8,19 @@ package enum ComposeSubstitution {
         beside composeFileURL: URL,
         processEnvironment: [String: String] = ProcessInfo.processInfo.environment
     ) throws -> [String: String] {
-        var variables = try DotEnv.loadVariables(beside: composeFileURL)
+        let envURL = composeFileURL.deletingLastPathComponent().appendingPathComponent(".env")
+        let envFiles = FileManager.default.fileExists(atPath: envURL.path) ? [envURL] : []
+        return try resolveVariables(envFiles: envFiles, processEnvironment: processEnvironment)
+    }
+
+    package static func resolveVariables(
+        envFiles: [URL],
+        processEnvironment: [String: String] = ProcessInfo.processInfo.environment
+    ) throws -> [String: String] {
+        var variables: [String: String] = [:]
+        if !envFiles.isEmpty {
+            variables = try DotEnv.loadVariables(from: envFiles)
+        }
         for (key, value) in processEnvironment {
             variables[key] = value
         }

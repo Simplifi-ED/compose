@@ -1,0 +1,6 @@
+include:
+  - loop-a.yml
+
+services:
+  b:
+    image: docker.io/library/alpine:latest

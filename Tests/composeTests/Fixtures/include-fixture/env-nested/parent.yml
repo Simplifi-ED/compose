@@ -1,0 +1,7 @@
+include:
+  - path: child.yml
+    env_file: child.env
+
+services:
+  parent:
+    image: ${PARENT_IMAGE}

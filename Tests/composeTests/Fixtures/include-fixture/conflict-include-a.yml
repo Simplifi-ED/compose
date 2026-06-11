@@ -1,0 +1,3 @@
+services:
+  shared:
+    image: docker.io/library/alpine:3.18

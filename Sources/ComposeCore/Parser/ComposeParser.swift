@@ -1,5 +1,4 @@
 import Foundation
-import Yams
 
 public enum ComposeParser {
     public static func parse(
@@ -63,32 +62,19 @@ public enum ComposeParser {
         fileURL: URL,
         processEnvironment: [String: String]
     ) throws -> ComposeFile {
-        let path = fileURL.path
-        guard FileManager.default.fileExists(atPath: path) else {
-            throw ComposeError.fileNotFound(path)
-        }
-
-        let contents: String
-        do {
-            contents = try String(contentsOf: fileURL, encoding: .utf8)
-        } catch {
-            throw ComposeError.readFailed(path, underlying: error)
-        }
-
-        let variables = try ComposeSubstitution.resolveVariables(
-            beside: fileURL,
+        let hostDirectory = fileURL.deletingLastPathComponent().standardizedFileURL
+        let document = try ComposeIncludeResolver.decodeDocument(
+            fileURL: fileURL,
+            includeEntry: nil,
+            hostDirectory: hostDirectory,
             processEnvironment: processEnvironment
         )
-        let hydrated = try ComposeSubstitution.substitute(contents, variables: variables, composePath: path)
-
-        do {
-            return try YAMLDecoder().decode(ComposeFile.self, from: hydrated)
-        } catch {
-            if let composeError = Self.extractComposeError(from: error) {
-                throw composeError
-            }
-            throw ComposeError.parseFailed(path, underlying: error)
-        }
+        return try ComposeIncludeResolver.expand(
+            document: document,
+            hostFileURL: fileURL,
+            localProjectDirectory: hostDirectory,
+            processEnvironment: processEnvironment
+        )
     }
 
     static func validate(_ composeFile: ComposeFile) throws {

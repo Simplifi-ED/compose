@@ -8,6 +8,15 @@ public struct ComposeFile: Sendable, Equatable {
         self.name = name
         self.services = services
     }
+
+    /// Distinct project directories for the given services (include `defaultDirectory` as fallback root).
+    package func projectRoots(for serviceNames: Set<String>, defaultDirectory: URL) -> [URL] {
+        var roots: Set<URL> = [defaultDirectory.standardizedFileURL]
+        for (serviceName, service) in services where serviceNames.contains(serviceName) {
+            roots.insert(service.projectDirectory(orDefault: defaultDirectory).standardizedFileURL)
+        }
+        return Array(roots)
+    }
 }
 
 extension ComposeFile: Decodable {
