@@ -63,6 +63,10 @@ package enum DownShutdown {
 
     static func purgeVolumes(context: VolumePurgeContext) {
         let composeDirectory = context.fileURLs[0].deletingLastPathComponent()
+        let composeDirectories = context.composeFile.projectRoots(
+            for: context.teardownServiceNames.union(context.runningServiceNames),
+            defaultDirectory: composeDirectory
+        )
         let paths = BindMountPurge.collectPurgeablePaths(
             composeFile: context.composeFile,
             composeDirectory: composeDirectory,
@@ -76,7 +80,7 @@ package enum DownShutdown {
         let protected = BindMountPurge.protectedComposePaths(fileURLs: context.fileURLs)
         let result = BindMountPurge.purge(
             paths: paths,
-            composeDirectory: composeDirectory,
+            composeDirectories: composeDirectories,
             protectedPaths: protected,
             pathsInUseByRunningServices: Set(runningPaths)
         )

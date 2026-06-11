@@ -1,0 +1,10 @@
+include:
+  - common/base.yml
+  - fragments/web.yml
+
+services:
+  app:
+    image: docker.io/library/alpine:latest
+    depends_on:
+      - web
+      - db

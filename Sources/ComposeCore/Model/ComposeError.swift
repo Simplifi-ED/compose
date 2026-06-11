@@ -18,6 +18,9 @@ public enum ComposeError: LocalizedError, Sendable {
     case profileExcludedDependency(service: String, dependency: String, requiredProfiles: [String])
     case profileFilterRequiresComposeFile
     case circularDependency(services: [String])
+    case circularInclude(chain: [String])
+    case includeConflict(service: String, includePath: String, definedIn: String)
+    case invalidInclude(reason: String)
     case unresolvedVariable(name: String, composePath: String)
     case rollbackFailed(started: [String], failures: [(container: String, error: Error)])
     case invalidProjectName(String)
@@ -77,6 +80,14 @@ public enum ComposeError: LocalizedError, Sendable {
         case .circularDependency(let services):
             let path = services.joined(separator: " → ")
             return "Circular dependency: \(path). Remove or reorder depends_on entries."
+        case .circularInclude(let chain):
+            let path = chain.joined(separator: " → ")
+            return "Circular include: \(path). Remove one include entry to break the loop."
+        case .includeConflict(let service, let includePath, let definedIn):
+            return "Service '\(service)' is already defined in \(definedIn). "
+                + "\(includePath) also defines '\(service)'. Rename one service or remove the duplicate include."
+        case .invalidInclude(let reason):
+            return "Invalid include: \(reason)."
         case .unresolvedVariable(let name, let composePath):
             return "Unresolved variable '${name}' in \(composePath). "
                 + "Set \(name) in the shell environment or .env beside the compose file, "

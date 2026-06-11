@@ -1,0 +1,5 @@
+include: self-include.yml
+
+services:
+  solo:
+    image: docker.io/library/alpine:latest

@@ -1,0 +1,5 @@
+include: ./loop-relative-b.yml
+
+services:
+  a:
+    image: docker.io/library/alpine:latest

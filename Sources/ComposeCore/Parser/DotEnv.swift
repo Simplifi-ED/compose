@@ -8,15 +8,28 @@ package enum DotEnv {
         guard FileManager.default.fileExists(atPath: envURL.path) else {
             return [:]
         }
+        return try loadVariables(from: [envURL])
+    }
 
-        let contents: String
-        do {
-            contents = try String(contentsOf: envURL, encoding: .utf8)
-        } catch {
-            throw ComposeError.readFailed(envURL.path, underlying: error)
+    static func loadVariables(from urls: [URL]) throws -> [String: String] {
+        var variables: [String: String] = [:]
+        for envURL in urls {
+            guard FileManager.default.fileExists(atPath: envURL.path) else {
+                throw ComposeError.fileNotFound(envURL.path)
+            }
+
+            let contents: String
+            do {
+                contents = try String(contentsOf: envURL, encoding: .utf8)
+            } catch {
+                throw ComposeError.readFailed(envURL.path, underlying: error)
+            }
+
+            for (key, value) in parse(contents) {
+                variables[key] = value
+            }
         }
-
-        return parse(contents)
+        return variables
     }
 
     package static func parse(_ contents: String) -> [String: String] {

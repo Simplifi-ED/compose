@@ -25,8 +25,9 @@ public enum BindMountPurge {
     ) -> [String] {
         var paths: Set<String> = []
         for (serviceName, service) in composeFile.services where serviceNames.contains(serviceName) {
+            let serviceDirectory = service.projectDirectory(orDefault: composeDirectory)
             for volume in service.volumes {
-                guard let hostPath = try? purgeableHostPath(for: volume, relativeTo: composeDirectory) else {
+                guard let hostPath = try? purgeableHostPath(for: volume, relativeTo: serviceDirectory) else {
                     continue
                 }
                 paths.insert(hostPath)
@@ -42,7 +43,23 @@ public enum BindMountPurge {
         protectedPaths: Set<String> = [],
         pathsInUseByRunningServices: Set<String> = []
     ) -> PurgeResult {
-        let composeRoot = composeDirectory.standardizedFileURL.resolvingSymlinksInPath().path
+        purge(
+            paths: paths,
+            composeDirectories: [composeDirectory],
+            protectedPaths: protectedPaths,
+            pathsInUseByRunningServices: pathsInUseByRunningServices
+        )
+    }
+
+    public static func purge(
+        paths: [String],
+        composeDirectories: [URL],
+        protectedPaths: Set<String> = [],
+        pathsInUseByRunningServices: Set<String> = []
+    ) -> PurgeResult {
+        let composeRoots = Set(composeDirectories.map {
+            $0.standardizedFileURL.resolvingSymlinksInPath().path
+        })
         var removed: [String] = []
         var skipped: [(path: String, reason: PurgeSkipReason)] = []
 
@@ -58,11 +75,14 @@ public enum BindMountPurge {
                 skipped.append((path, .protectedComposeFile))
                 continue
             }
-            if standardizedPath == composeRoot {
+            if composeRoots.contains(standardizedPath) {
                 skipped.append((path, .composeRootDirectory))
                 continue
             }
-            guard BindMountPathResolver.isPathContained(standardized, within: composeDirectory) else {
+            let isContained = composeDirectories.contains {
+                BindMountPathResolver.isPathContained(standardized, within: $0)
+            }
+            guard isContained else {
                 skipped.append((path, .outsideComposeRoot))
                 continue
             }
@@ -98,7 +118,7 @@ public enum BindMountPurge {
     static func warnSkippedPath(path: String, reason: PurgeSkipReason) {
         switch reason {
         case .outsideComposeRoot:
-            fputs("Warning: skipped '\(path)': resolves outside the compose file directory.\n", stderr)
+            fputs("Warning: skipped '\(path)': resolves outside the project directory.\n", stderr)
         case .stillInUseByRunningContainer:
             fputs(
                 "Warning: skipped '\(path)': still mounted by a running project container.\n",

@@ -1,0 +1,8 @@
+include:
+  - level2.yml
+
+services:
+  gateway:
+    image: docker.io/library/alpine:latest
+    depends_on:
+      - db

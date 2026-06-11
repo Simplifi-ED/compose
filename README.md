@@ -12,7 +12,7 @@ Maintained by [Omnivya](https://www.omnivya.fr) ([Simplifi-ED](https://github.co
 
 ## Features (v1)
 
-- Compose files (`-f`, auto-discovery of `compose.yaml` / `docker-compose.yml` + override; `COMPOSE_FILE`; repeat `-f` to merge)
+- Compose files (`-f`, auto-discovery of `compose.yaml` / `docker-compose.yml` + override; `COMPOSE_FILE`; repeat `-f` to merge; YAML `include:` for modular sub-projects)
 - Project name (`-p`, `COMPOSE_PROJECT_NAME`, compose `name:`, default: parent directory of the first compose file)
 - Per service: `image`, `command`, `ports`, `volumes` (bind mounts), `environment`, `depends_on` (list or long-form with `service_started` / `service_healthy`), `healthcheck`, `profiles`, `deploy.replicas`
 - Service scaling: `deploy.replicas` in the compose file or `up --scale SERVICE=COUNT` (CLI wins); containers are named `{project}_{service}_{index}`
@@ -27,7 +27,7 @@ Maintained by [Omnivya](https://www.omnivya.fr) ([Simplifi-ED](https://github.co
 - Container labels for project tracking (`com.docker.compose.project`, `com.docker.compose.service`)
 - `container compose ps` (list project containers), `container compose top` (live CPU/memory stats stream), and `container compose run` (one-off foreground container from a service definition)
 
-Not supported yet: `depends_on` condition `service_completed_successfully`, networks, named volumes, volume drivers, read-only mounts (`:ro`), `build`, YAML `extends` / `include`, `${VAR:+replacement}` / `${VAR?error}` forms, unbraced `$VAR` interpolation, `COMPOSE_PROFILES` environment variable.
+Not supported yet: `depends_on` condition `service_completed_successfully`, networks, named volumes, volume drivers, read-only mounts (`:ro`), `build`, YAML `extends`, `${VAR:+replacement}` / `${VAR?error}` forms, unbraced `$VAR` interpolation, `COMPOSE_PROFILES` environment variable.
 
 ### Profiles
 
@@ -51,6 +51,25 @@ container compose run debugger sh             # auto-enables the service's profi
 `down --profile` is container-scoped only (no network or named-volume teardown in v1). Containers left running may still hold ports or bind mounts; resolve conflicts before re-running `up`.
 
 With `--remove-orphans`, `up` removes stale containers before startup. On `down --profile`, it also stops profile-skipped containers that would otherwise keep running.
+
+### Include
+
+Compose files can pull in sibling or shared sub-projects with a top-level `include:` block. Paths resolve relative to the **including file's directory** (not the shell CWD).
+
+```yaml
+include:
+  - ./infra/db.yml
+  - path: ../shared/cache.yml
+    project_directory: ../shared
+    env_file: ../shared/.env
+```
+
+- **Local services win naming:** services defined in the parent file are loaded first; each `include` entry adds services. A duplicate service name is an error (unlike `-f` merge, where later files override).
+- **Recursive includes:** included files may define their own `include:` entries. Circular chains are rejected with the file path chain in the error.
+- **Environment:** each included file uses its own `env_file` list (or `.env` in `project_directory` by default). Shell environment variables override those values. The parent file's `.env` does not apply to included files.
+- **Bind mounts:** relative volume paths in included services resolve against `project_directory` (default: the included compose file's directory).
+
+`compose config` (when available) will use the same expanded model.
 
 ### Workspace hygiene
 

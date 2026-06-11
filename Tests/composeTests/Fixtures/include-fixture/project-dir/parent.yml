@@ -1,0 +1,7 @@
+include:
+  - path: child/compose.yml
+    project_directory: child
+
+services:
+  app:
+    image: docker.io/library/alpine:latest

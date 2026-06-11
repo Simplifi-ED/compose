@@ -1,0 +1,7 @@
+include:
+  - conflict-include-a.yml
+  - conflict-include-b.yml
+
+services:
+  app:
+    image: docker.io/library/alpine:latest

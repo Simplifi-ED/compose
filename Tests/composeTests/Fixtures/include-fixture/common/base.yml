@@ -1,0 +1,5 @@
+services:
+  db:
+    image: docker.io/library/postgres:16
+  cache:
+    image: docker.io/library/redis:7

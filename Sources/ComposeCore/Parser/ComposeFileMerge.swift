@@ -41,7 +41,8 @@ enum ComposeFileMerge {
             dependsOn: mergeDependsOn(base: base.dependsOn, override: override.dependsOn),
             profiles: override.profiles.isEmpty ? base.profiles : override.profiles,
             deploy: merge(base: base.deploy, override: override.deploy),
-            healthcheck: override.healthcheck ?? base.healthcheck
+            healthcheck: override.healthcheck ?? base.healthcheck,
+            projectDirectory: override.projectDirectory ?? base.projectDirectory
         )
     }
 
