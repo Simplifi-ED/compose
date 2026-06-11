@@ -4,11 +4,14 @@ public struct ServicePlan: Sendable, Equatable {
     public let serviceName: String
     public let name: String
     public let runArguments: [String]
+    /// 1-based replica index within the service; one-off `run` plans stay at 1.
+    public let replicaIndex: Int
 
-    public init(serviceName: String, name: String, runArguments: [String]) {
+    public init(serviceName: String, name: String, runArguments: [String], replicaIndex: Int = 1) {
         self.serviceName = serviceName
         self.name = name
         self.runArguments = runArguments
+        self.replicaIndex = replicaIndex
     }
 }
 

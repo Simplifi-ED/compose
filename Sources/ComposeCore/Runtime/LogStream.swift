@@ -163,39 +163,39 @@ package actor LogMultiplexer {
     private var assemblers: [String: LogLineAssembler] = [:]
 
     package init(
-        serviceLabels: [String],
+        prefixLabels: [String],
         options: LogStreamOptions,
         write: @escaping @Sendable (String) -> Void
     ) {
         self.options = options
         self.write = write
-        self.prefixWidth = max(ANSIPrefix.defaultWidth, serviceLabels.map(\.count).max() ?? 0)
+        self.prefixWidth = max(ANSIPrefix.defaultWidth, prefixLabels.map(\.count).max() ?? 0)
     }
 
-    package func emit(service: String, line: String) {
+    package func emit(prefix: String, line: String) {
         write(LogFormat.formatLine(
-            service: service,
+            service: prefix,
             line: line,
             mode: options.mode,
             width: prefixWidth
         ))
     }
 
-    /// Ingest raw log chunks and emit complete prefixed lines.
-    package func ingest(service: String, chunk: String) {
-        var assembler = assemblers[service] ?? LogLineAssembler()
+    /// Ingest raw log chunks keyed by container name; `prefix` is the visible label.
+    package func ingest(container: String, prefix: String, chunk: String) {
+        var assembler = assemblers[container] ?? LogLineAssembler()
         for line in assembler.append(chunk) {
-            emit(service: service, line: line)
+            emit(prefix: prefix, line: line)
         }
-        assemblers[service] = assembler
+        assemblers[container] = assembler
     }
 
-    package func finishPending(service: String) {
-        guard var assembler = assemblers[service] else { return }
+    package func finishPending(container: String, prefix: String) {
+        guard var assembler = assemblers[container] else { return }
         for line in assembler.finish() {
-            emit(service: service, line: line)
+            emit(prefix: prefix, line: line)
         }
-        assemblers[service] = assembler
+        assemblers[container] = assembler
     }
 
     package static func run(
@@ -206,7 +206,7 @@ package actor LogMultiplexer {
         guard !sources.isEmpty else { return }
 
         let labels = sources.map(\.serviceLabel)
-        let multiplexer = LogMultiplexer(serviceLabels: labels, options: options, write: write)
+        let multiplexer = LogMultiplexer(prefixLabels: labels, options: options, write: write)
 
         try await withThrowingTaskGroup(of: Void.self) { group in
             defer { group.cancelAll() }
@@ -266,7 +266,7 @@ package actor LogMultiplexer {
     ) async throws {
         let snapshotLines = try LogTailReader.readLines(from: handle, tail: options.tail)
         for line in snapshotLines {
-            await multiplexer.emit(service: source.serviceLabel, line: line)
+            await multiplexer.emit(prefix: source.serviceLabel, line: line)
         }
     }
 
@@ -281,17 +281,21 @@ package actor LogMultiplexer {
             if Task.isCancelled {
                 break
             }
-            await multiplexer.ingest(service: source.serviceLabel, chunk: chunk)
+            await multiplexer.ingest(
+                container: source.containerName,
+                prefix: source.serviceLabel,
+                chunk: chunk
+            )
         }
-        await multiplexer.finishPending(service: source.serviceLabel)
+        await multiplexer.finishPending(container: source.containerName, prefix: source.serviceLabel)
     }
 }
 
 /// Builds log stream sources from startup plans started by `compose up`.
 package func makeLogSources(from plans: [ServicePlan]) -> [ServiceLogSource] {
-    plans.map { plan in
-        ServiceLogSource(containerName: plan.name, serviceLabel: plan.serviceName)
-    }
+    makeLogSources(
+        from: plans.map { (containerName: $0.name, serviceName: $0.serviceName) }
+    )
 }
 
 /// Builds log stream sources for the selected project containers.
@@ -308,13 +312,30 @@ package func makeLogSources(
     filter: Set<String>?
 ) -> [ServiceLogSource] {
     let filtered = ProjectStatus.filteredContainers(from: containers, filter: filter)
-    return filtered.map { container in
-        ServiceLogSource(
-            containerName: container.name,
-            serviceLabel: progressServiceLabel(
-                containerName: container.name,
-                serviceName: container.serviceName
-            )
+    return makeLogSources(
+        from: filtered.map { (containerName: $0.name, serviceName: $0.serviceName) }
+    )
+}
+
+/// Resolves display labels; replicas of the same service use container names in the prefix.
+package func makeLogSources(
+    from entries: [(containerName: String, serviceName: String?)]
+) -> [ServiceLogSource] {
+    let replicaCounts = Dictionary(
+        grouping: entries.compactMap(\.serviceName),
+        by: { $0 }
+    ).mapValues(\.count)
+    return entries.map { entry in
+        let defaultLabel = progressServiceLabel(
+            containerName: entry.containerName,
+            serviceName: entry.serviceName
         )
+        let label: String
+        if let serviceName = entry.serviceName, replicaCounts[serviceName, default: 0] > 1 {
+            label = entry.containerName
+        } else {
+            label = defaultLabel
+        }
+        return ServiceLogSource(containerName: entry.containerName, serviceLabel: label)
     }
 }

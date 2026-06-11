@@ -27,6 +27,11 @@ public enum ComposeError: LocalizedError, Sendable {
     case serviceNotRunning(service: String, state: String)
     case ambiguousService(service: String, containers: [String])
     case containerProjectMismatch(container: String, project: String)
+    case invalidScaleSpec(String)
+    case replicasBelowMinimum(service: String, count: Int)
+    case containerNameNotSupportedWithReplicas(service: String, containerName: String)
+    case staticPortBlocksScaling(service: String, port: String, replicas: Int)
+    case scaleServiceRequiresProfile(service: String, requiredProfiles: [String])
 
     public var errorDescription: String? {
         switch self {
@@ -43,7 +48,8 @@ public enum ComposeError: LocalizedError, Sendable {
         case .invalidField(let field, let reason):
             return "Invalid \(field): \(reason)."
         case .unsupportedPort(let port):
-            return "Unsupported port mapping '\(port)'. Use host:container or host:container/tcp."
+            return "Unsupported port mapping '\(port)'. Use host:container, host:container/tcp, "
+                + "or a container-only port like '80'."
         case .unsupportedVolume(let volume):
             return "Unsupported volume mapping '\(volume)'. Use host:container (for example ./data:/app/data)."
         case .unsupportedVolumeOption(let volume):
@@ -89,9 +95,24 @@ public enum ComposeError: LocalizedError, Sendable {
             return "Service '\(service)' isn't running (state: \(state)). Start it with compose up."
         case .ambiguousService(let service, let containers):
             let names = containers.joined(separator: ", ")
-            return "Service '\(service)' matches multiple containers (\(names)). Scale isn't supported yet."
+            return "Service '\(service)' is running multiple replicas (\(names)). "
+                + "Replica selection isn't supported yet; pick one with 'container exec CONTAINER COMMAND'."
         case .containerProjectMismatch(let container, let project):
             return "Container '\(container)' isn't part of project '\(project)'."
+        case .invalidScaleSpec(let value):
+            return "Invalid --scale value '\(value)'. Use SERVICE=COUNT with a count of 1 or more (for example web=3)."
+        case .replicasBelowMinimum(let service, let count):
+            return "Service '\(service)' sets replicas: \(count). Use a replica count of 1 or more."
+        case .containerNameNotSupportedWithReplicas(let service, let containerName):
+            return "Service '\(service)' sets container_name '\(containerName)', which conflicts with "
+                + "indexed container names. Remove container_name to start the service with compose up."
+        case .staticPortBlocksScaling(let service, let port, let replicas):
+            return "Service '\(service)' can't scale to \(replicas) replicas with port '\(port)'. "
+                + "Each replica would bind the same host port. "
+                + "Remove the host port (for example '80' instead of '8080:80') or set replicas to 1."
+        case .scaleServiceRequiresProfile(let service, let requiredProfiles):
+            let flags = requiredProfiles.map { "--profile \($0)" }.joined(separator: " or ")
+            return "Service '\(service)' only starts with \(flags). Pass \(flags) to scale it."
         }
     }
 }

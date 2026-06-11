@@ -2,12 +2,15 @@ import Foundation
 
 package enum ComposeBindingKeys {
     package struct PortSpec: Equatable, Sendable {
-        package let hostPort: String
+        /// Explicit host port; `nil` for container-only specs like `"80"` or `":80"`.
+        package let hostPort: String?
         package let containerPort: String
         package let protocolSuffix: String
 
+        package var hasStaticHostPort: Bool { hostPort != nil }
+
         package var mergeKey: String {
-            "\(hostPort):\(containerPort)\(protocolSuffix)"
+            "\(hostPort ?? ""):\(containerPort)\(protocolSuffix)"
         }
     }
 
@@ -26,18 +29,28 @@ package enum ComposeBindingKeys {
         }
 
         let parts = hostContainerPart.split(separator: ":", omittingEmptySubsequences: false)
-        guard parts.count == 2,
-              Int(parts[0]) != nil,
-              Int(parts[1]) != nil
-        else {
+        switch parts.count {
+        case 1 where Int(parts[0]) != nil:
+            return PortSpec(
+                hostPort: nil,
+                containerPort: String(parts[0]),
+                protocolSuffix: protocolSuffix
+            )
+        case 2 where parts[0].isEmpty && Int(parts[1]) != nil:
+            return PortSpec(
+                hostPort: nil,
+                containerPort: String(parts[1]),
+                protocolSuffix: protocolSuffix
+            )
+        case 2 where Int(parts[0]) != nil && Int(parts[1]) != nil:
+            return PortSpec(
+                hostPort: String(parts[0]),
+                containerPort: String(parts[1]),
+                protocolSuffix: protocolSuffix
+            )
+        default:
             return nil
         }
-
-        return PortSpec(
-            hostPort: String(parts[0]),
-            containerPort: String(parts[1]),
-            protocolSuffix: protocolSuffix
-        )
     }
 
     package static func portMergeKey(for port: String) -> String? {

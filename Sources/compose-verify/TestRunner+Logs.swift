@@ -121,20 +121,33 @@ extension TestRunner {
 
     private mutating func runLogMultiplexerTests() {
         runLogMultiplexerInterleaveTests()
+        runLogMultiplexerReplicaTests()
+        runLogSourceReplicaLabelTests()
         runLogMultiplexerWidthTests()
         runLogMultiplexerPipeModeTests()
+    }
+
+    private mutating func runLogSourceReplicaLabelTests() {
+        let sources = makeLogSources(from: [
+            (containerName: "demo_web_1", serviceName: "web"),
+            (containerName: "demo_web_2", serviceName: "web"),
+            (containerName: "demo_db_1", serviceName: "db")
+        ])
+        expect(sources[0].serviceLabel == "demo_web_1", "replica log prefix uses container name")
+        expect(sources[1].serviceLabel == "demo_web_2", "second replica log prefix uses container name")
+        expect(sources[2].serviceLabel == "db", "single replica keeps service label")
     }
 
     private mutating func runLogMultiplexerInterleaveTests() {
         let buffer = LineBuffer()
         blockingAwait {
             let options = LogStreamOptions(tail: nil, follow: false, boot: false, mode: .plain)
-            let mux = LogMultiplexer(serviceLabels: ["web", "db"], options: options) { buffer.append($0) }
-            await mux.ingest(service: "web", chunk: "hello\nwo")
-            await mux.ingest(service: "db", chunk: "SELECT\n")
-            await mux.ingest(service: "web", chunk: "rld\n")
-            await mux.finishPending(service: "web")
-            await mux.finishPending(service: "db")
+            let mux = LogMultiplexer(prefixLabels: ["web", "db"], options: options) { buffer.append($0) }
+            await mux.ingest(container: "demo_web", prefix: "web", chunk: "hello\nwo")
+            await mux.ingest(container: "demo_db", prefix: "db", chunk: "SELECT\n")
+            await mux.ingest(container: "demo_web", prefix: "web", chunk: "rld\n")
+            await mux.finishPending(container: "demo_web", prefix: "web")
+            await mux.finishPending(container: "demo_db", prefix: "db")
         }
 
         let output = buffer.lines.joined()
@@ -145,15 +158,37 @@ extension TestRunner {
         expect(lines.contains("web     | world"), "partial chunks reassemble to world")
     }
 
+    private mutating func runLogMultiplexerReplicaTests() {
+        let buffer = LineBuffer()
+        blockingAwait {
+            let options = LogStreamOptions(tail: nil, follow: false, boot: false, mode: .plain)
+            let mux = LogMultiplexer(
+                prefixLabels: ["demo_web_1", "demo_web_2"],
+                options: options
+            ) { buffer.append($0) }
+            await mux.ingest(container: "demo_web_1", prefix: "demo_web_1", chunk: "alpha\n")
+            await mux.ingest(container: "demo_web_2", prefix: "demo_web_2", chunk: "bet")
+            await mux.ingest(container: "demo_web_1", prefix: "demo_web_1", chunk: "a\n")
+            await mux.ingest(container: "demo_web_2", prefix: "demo_web_2", chunk: "a\n")
+            await mux.finishPending(container: "demo_web_1", prefix: "demo_web_1")
+            await mux.finishPending(container: "demo_web_2", prefix: "demo_web_2")
+        }
+
+        let lines = buffer.lines.joined().split(separator: "\n", omittingEmptySubsequences: true).map(String.init)
+        expect(lines.count == 2, "replica streams stay separate")
+        expect(lines.contains("demo_web_1 | alpha"), "first replica line intact")
+        expect(lines.contains("demo_web_2 | beta"), "second replica line intact")
+    }
+
     private mutating func runLogMultiplexerWidthTests() {
         let buffer = LineBuffer()
         blockingAwait {
             let options = LogStreamOptions(tail: nil, follow: false, boot: false, mode: .plain)
             let mux = LogMultiplexer(
-                serviceLabels: ["web", "verylongname"],
+                prefixLabels: ["web", "verylongname"],
                 options: options
             ) { buffer.append($0) }
-            await mux.emit(service: "verylongname", line: "ok")
+            await mux.emit(prefix: "verylongname", line: "ok")
         }
 
         let line = buffer.lines.joined().trimmingCharacters(in: .newlines)
@@ -164,8 +199,8 @@ extension TestRunner {
         let buffer = LineBuffer()
         blockingAwait {
             let options = LogStreamOptions(tail: nil, follow: false, boot: false, mode: .pipe)
-            let mux = LogMultiplexer(serviceLabels: ["web"], options: options) { buffer.append($0) }
-            await mux.emit(service: "web", line: "piped")
+            let mux = LogMultiplexer(prefixLabels: ["web"], options: options) { buffer.append($0) }
+            await mux.emit(prefix: "web", line: "piped")
         }
 
         let output = buffer.lines.joined()

@@ -1,0 +1,14 @@
+services:
+  web:
+    image: docker.io/library/alpine:latest
+    command: sleep 300
+    ports:
+      - "80"
+    deploy:
+      replicas: 2
+      resources:
+        limits:
+          cpus: "0.50"
+  db:
+    image: docker.io/library/alpine:latest
+    command: sleep 300

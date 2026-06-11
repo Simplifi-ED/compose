@@ -93,9 +93,10 @@ public enum ServiceRunner {
         do {
             for (index, layer) in layers.enumerated() {
                 try Task.checkCancellation()
-                await progress?.onWaveStart?(index + 1, layers.count, layer.map(\.serviceName))
+                // Progress keys on container names so replicas of one service stay distinct.
+                await progress?.onWaveStart?(index + 1, layers.count, layer.map(\.name))
                 let result = await parallelRun(
-                    layer.map { (label: $0.serviceName, collectOnSuccess: $0.name, value: $0) },
+                    layer.map { (label: $0.name, collectOnSuccess: $0.name, value: $0) },
                     onCompletion: progress?.onServiceComplete
                 ) { plan in
                     try await runContainer(plan)

@@ -90,10 +90,11 @@ struct TestRunner {
     }
 
     mutating func runLabelTests() {
-        let flags = ComposeLabels.runFlags(projectName: "demo", serviceName: "web")
+        let flags = ComposeLabels.runFlags(projectName: "demo", serviceName: "web", containerNumber: 2)
         let expected = [
             "-l", "com.docker.compose.project=demo",
-            "-l", "com.docker.compose.service=web"
+            "-l", "com.docker.compose.service=web",
+            "-l", "com.docker.compose.container-number=2"
         ]
         expect(flags == expected, "run label flags")
     }
@@ -192,6 +193,7 @@ do {
     try runner.runPlannerTests()
     try runner.runDependencyTests()
     try runner.runProfileTests()
+    try runner.runScaleTests()
     try runner.runMergeTests()
     try runner.runProjectOptionsTests()
     try runner.runShutdownLayerTests()
