@@ -4,41 +4,9 @@ import ContainerAPIClient
 import ContainerResource
 import Foundation
 
-public struct HealthWaitContext: Sendable {
-    public let services: [String: ComposeService]
-    public let projectName: String
-    public let scaleOverrides: [String: Int]
-
-    public init(
-        services: [String: ComposeService],
-        projectName: String,
-        scaleOverrides: [String: Int] = [:]
-    ) {
-        self.services = services
-        self.projectName = projectName
-        self.scaleOverrides = scaleOverrides
-    }
-}
-
-public struct HealthGate: Sendable, Equatable {
-    public let dependencyService: String
-    public let condition: DependsOnCondition
-    public let containerNames: [String]
-
-    public init(
-        dependencyService: String,
-        condition: DependsOnCondition,
-        containerNames: [String]
-    ) {
-        self.dependencyService = dependencyService
-        self.condition = condition
-        self.containerNames = containerNames
-    }
-}
-
 package enum HealthWait {
     package typealias StatusProvider = @Sendable (String) async throws -> RuntimeStatus?
-    package typealias ProcessRunner = @Sendable (String, ProcessConfiguration) async throws -> Int32
+    package typealias ProcessRunner = @Sendable (String, ProcessConfiguration, Duration) async throws -> Int32
 
     private static let defaultStartedTimeout: Duration = .seconds(60)
     private static let statusPollInterval: Duration = .milliseconds(250)
@@ -47,45 +15,7 @@ package enum HealthWait {
         nextLayer: [ServicePlan],
         context: HealthWaitContext
     ) throws -> [HealthGate] {
-        struct GateKey: Hashable {
-            let service: String
-            let condition: DependsOnCondition
-        }
-
-        var merged: [GateKey: Set<String>] = [:]
-
-        for plan in nextLayer {
-            guard let service = context.services[plan.serviceName] else { continue }
-            for dependency in service.dependsOn where dependency.requiresReadinessWait {
-                guard let dependencyService = context.services[dependency.service] else { continue }
-                let replicaCount = try ReplicaPlanning.resolvedReplicaCount(
-                    serviceName: dependency.service,
-                    service: dependencyService,
-                    scaleOverrides: context.scaleOverrides
-                )
-                let containerNames = (1...replicaCount).map { index in
-                    ReplicaPlanning.indexedContainerName(
-                        projectName: context.projectName,
-                        serviceName: dependency.service,
-                        index: index
-                    )
-                }
-                let key = GateKey(service: dependency.service, condition: dependency.condition)
-                merged[key, default: []].formUnion(containerNames)
-            }
-        }
-
-        return merged.map { key, containerNames in
-            HealthGate(
-                dependencyService: key.service,
-                condition: key.condition,
-                containerNames: containerNames.sorted()
-            )
-        }.sorted {
-            $0.dependencyService == $1.dependencyService
-                ? $0.condition.rawValue < $1.condition.rawValue
-                : $0.dependencyService < $1.dependencyService
-        }
+        try HealthGatePlanning.gatesForNextLayer(nextLayer: nextLayer, context: context)
     }
 
     package static func waitForDependencies(
@@ -96,15 +26,21 @@ package enum HealthWait {
     ) async throws {
         guard !gates.isEmpty else { return }
 
+        let gatesByService = Dictionary(grouping: gates, by: \.dependencyService)
         try await withThrowingTaskGroup(of: Void.self) { group in
-            for gate in gates {
+            for serviceGates in gatesByService.values {
                 group.addTask {
-                    try await waitForGate(
-                        gate,
-                        context: context,
-                        status: status,
-                        runProcess: runProcess
-                    )
+                    let ordered = serviceGates.sorted {
+                        $0.condition.readinessSortOrder < $1.condition.readinessSortOrder
+                    }
+                    for gate in ordered {
+                        try await waitForGate(
+                            gate,
+                            context: context,
+                            status: status,
+                            runProcess: runProcess
+                        )
+                    }
                 }
             }
             try await group.waitForAll()
@@ -123,7 +59,6 @@ package enum HealthWait {
                 try await waitForStarted(
                     containerName: containerName,
                     dependencyService: gate.dependencyService,
-                    context: context,
                     status: status
                 )
             case .serviceHealthy:
@@ -137,7 +72,6 @@ package enum HealthWait {
                     containerName: containerName,
                     dependencyService: gate.dependencyService,
                     healthcheck: healthcheck,
-                    context: context,
                     status: status,
                     runProcess: runProcess
                 )
@@ -150,11 +84,9 @@ package enum HealthWait {
     private static func waitForStarted(
         containerName: String,
         dependencyService: String,
-        context: HealthWaitContext,
         status: @escaping StatusProvider
     ) async throws {
-        let timeout = defaultStartedTimeout
-        let deadline = ContinuousClock.now + timeout
+        let deadline = ContinuousClock.now + defaultStartedTimeout
 
         while ContinuousClock.now < deadline {
             try Task.checkCancellation()
@@ -171,23 +103,19 @@ package enum HealthWait {
         containerName: String,
         dependencyService: String,
         healthcheck: ComposeHealthcheck,
-        context: HealthWaitContext,
         status: @escaping StatusProvider,
         runProcess: @escaping ProcessRunner
     ) async throws {
         try await waitForStarted(
             containerName: containerName,
             dependencyService: dependencyService,
-            context: context,
             status: status
         )
 
-        if healthcheck.startPeriod > .zero {
-            try await Task.sleep(for: healthcheck.startPeriod)
-        }
+        let graceEnds = ContinuousClock.now + healthcheck.startPeriod
+        var failures = 0
 
-        var attempts = 0
-        while attempts <= healthcheck.retries {
+        while failures <= healthcheck.retries {
             try Task.checkCancellation()
 
             if try await !isRunning(containerName: containerName, status: status) {
@@ -203,8 +131,13 @@ package enum HealthWait {
                 return
             }
 
-            attempts += 1
-            if attempts > healthcheck.retries {
+            if ContinuousClock.now < graceEnds {
+                try await Task.sleep(for: healthcheck.interval)
+                continue
+            }
+
+            failures += 1
+            if failures > healthcheck.retries {
                 throw ComposeError.healthCheckTimeout(dependency: dependencyService, container: containerName)
             }
             try await Task.sleep(for: healthcheck.interval)
@@ -230,12 +163,11 @@ package enum HealthWait {
     ) async throws -> Int32 {
         let config = HealthProbe.processConfiguration(for: healthcheck.test)
         do {
-            return try await HealthProbe.withTimeout(healthcheck.timeout) {
-                try await runProcess(containerName, config)
-            }
+            return try await runProcess(containerName, config, healthcheck.timeout)
         } catch is CancellationError {
             throw CancellationError()
+        } catch is HealthProbe.TimedOut {
+            return 1
         }
     }
-
 }
