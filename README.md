@@ -14,10 +14,10 @@ Maintained by [Omnivya](https://www.omnivya.fr) ([Simplifi-ED](https://github.co
 
 - Compose files (`-f`, auto-discovery of `compose.yaml` / `docker-compose.yml` + override; `COMPOSE_FILE`; repeat `-f` to merge)
 - Project name (`-p`, `COMPOSE_PROJECT_NAME`, compose `name:`, default: parent directory of the first compose file)
-- Per service: `image`, `command`, `ports`, `volumes` (bind mounts), `environment`, `depends_on` (list form), `profiles`, `deploy.replicas`
+- Per service: `image`, `command`, `ports`, `volumes` (bind mounts), `environment`, `depends_on` (list or long-form with `service_started` / `service_healthy`), `healthcheck`, `profiles`, `deploy.replicas`
 - Service scaling: `deploy.replicas` in the compose file or `up --scale SERVICE=COUNT` (CLI wins); containers are named `{project}_{service}_{index}`
 - `container compose up` (detached) and `container compose down` (stop and remove)
-- Dependency-aware startup: services start in `depends_on` order (start order only, not health/readiness); independent services run in parallel
+- Dependency-aware startup: topological waves with parallel starts; list-form `depends_on` is order-only; long-form `condition: service_healthy` waits for healthcheck probes (compose-side exec via `createProcess`; no native engine health status in container 1.0.0)
 - Failed `up` rolls back containers started in earlier waves
 - `down` stops dependents before dependencies when the compose file is present; `-p`-only `down` stops containers in parallel
 - `down` validates only the dependency graph (not `image` or other startup fields), so teardown still works if the file was edited after `up`
@@ -25,7 +25,7 @@ Maintained by [Omnivya](https://www.omnivya.fr) ([Simplifi-ED](https://github.co
 - Container labels for project tracking (`com.docker.compose.project`, `com.docker.compose.service`)
 - `container compose ps` (list project containers), `container compose top` (live CPU/memory stats stream), and `container compose run` (one-off foreground container from a service definition)
 
-Not supported yet: long-form `depends_on` with health conditions, networks, named volumes, volume drivers, read-only mounts (`:ro`), `build`, YAML `extends` / `include`, `${VAR:+replacement}` / `${VAR?error}` forms, unbraced `$VAR` interpolation, `COMPOSE_PROFILES` environment variable.
+Not supported yet: `depends_on` condition `service_completed_successfully`, networks, named volumes, volume drivers, read-only mounts (`:ro`), `build`, YAML `extends` / `include`, `${VAR:+replacement}` / `${VAR?error}` forms, unbraced `$VAR` interpolation, `COMPOSE_PROFILES` environment variable.
 
 ### Profiles
 
@@ -192,7 +192,8 @@ COMPOSE_PROJECT_NAME=myapp container compose up
 | `image`, `container_name`, `command` | Last specified value wins |
 | `ports` | Unique-key merge by `{host, container, protocol}` (short syntax) |
 | `volumes` (bind mounts) | Unique-key merge by container mount path |
-| `depends_on` | Appended |
+| `depends_on` | Keyed merge by service name (override wins per dependency) |
+| `healthcheck` | Last specified value wins |
 | `environment` (map) | Keys merged; later values override |
 | `environment` (list) | Merge by variable name; later values override |
 | `environment` (map vs list) | Later file's form replaces the earlier one |

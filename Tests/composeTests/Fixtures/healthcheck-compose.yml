@@ -4,6 +4,10 @@ services:
     command: sleep 300
     healthcheck:
       test: ["CMD", "true"]
+      interval: 1s
+      timeout: 1s
+      retries: 2
+      start_period: 0s
   web:
     image: docker.io/library/alpine:latest
     command: sleep 300

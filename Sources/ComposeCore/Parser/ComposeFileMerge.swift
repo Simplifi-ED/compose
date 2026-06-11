@@ -38,10 +38,33 @@ enum ComposeFileMerge {
             ),
             environment: merge(base: base.environment, override: override.environment),
             containerName: override.containerName ?? base.containerName,
-            dependsOn: base.dependsOn + override.dependsOn,
+            dependsOn: mergeDependsOn(base: base.dependsOn, override: override.dependsOn),
             profiles: override.profiles.isEmpty ? base.profiles : override.profiles,
-            deploy: merge(base: base.deploy, override: override.deploy)
+            deploy: merge(base: base.deploy, override: override.deploy),
+            healthcheck: override.healthcheck ?? base.healthcheck
         )
+    }
+
+    static func mergeDependsOn(
+        base: [ComposeDependency],
+        override: [ComposeDependency]
+    ) -> [ComposeDependency] {
+        var byService: [String: ComposeDependency] = [:]
+        var order: [String] = []
+
+        for dependency in base {
+            if byService[dependency.service] == nil {
+                order.append(dependency.service)
+            }
+            byService[dependency.service] = dependency
+        }
+        for dependency in override {
+            if byService[dependency.service] == nil {
+                order.append(dependency.service)
+            }
+            byService[dependency.service] = dependency
+        }
+        return order.map { byService[$0]! }
     }
 
     static func merge(

@@ -2,11 +2,9 @@ services:
   db:
     image: docker.io/library/alpine:latest
     command: sleep 300
-    healthcheck:
-      test: ["CMD", "true"]
   web:
     image: docker.io/library/alpine:latest
     command: sleep 300
     depends_on:
       db:
-        condition: service_healthy
+        condition: service_completed_successfully

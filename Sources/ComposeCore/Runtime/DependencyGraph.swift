@@ -12,7 +12,7 @@ enum DependencyGraph {
 
         for (serviceName, service) in services {
             var seenDependencies: Set<String> = []
-            let dependencies = service.dependsOn.filter { seenDependencies.insert($0).inserted }
+            let dependencies = service.dependsOn.map(\.service).filter { seenDependencies.insert($0).inserted }
             inDegree[serviceName] = dependencies.count
             for dependency in dependencies {
                 guard services.keys.contains(dependency) else {
@@ -69,7 +69,7 @@ enum DependencyGraph {
             stack.insert(serviceName)
             path.append(serviceName)
 
-            for dependency in services[serviceName]?.dependsOn ?? [] {
+            for dependency in services[serviceName]?.dependsOn.map(\.service) ?? [] {
                 if let cycle = dfs(dependency) {
                     return cycle
                 }

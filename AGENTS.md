@@ -15,7 +15,8 @@ You are building a **Minimal Real Compose Plugin**—NOT a generic orchestration
 - Project naming: `-p`, `COMPOSE_PROJECT_NAME`, compose `name:`, first-file parent directory [1].
 - Instantiating and mapping configuration directly into Apple's programmatic `ContainerCommands` API [1].
 - Basic container lifecycles: Starting (via `ContainerRun`) and Stopping (via `ContainerStop`) [1].
-- Attributes to map: `image`, `command`, `environment`, standard host-to-container `ports`, short-syntax bind-mount `volumes` (`host:container`), short-form `depends_on` (list of service names), `profiles`, and `deploy.replicas` [1].
+- Attributes to map: `image`, `command`, `environment`, standard host-to-container `ports`, short-syntax bind-mount `volumes` (`host:container`), short-form `depends_on` (list of service names), long-form `depends_on` with `condition: service_started` / `service_healthy`, `healthcheck` (`test`, `interval`, `timeout`, `retries`, `start_period`), `profiles`, and `deploy.replicas` [1].
+- Health-gated startup: between topological waves, wait for `service_started` (runtime `running`) or `service_healthy` (compose-side probe via `createProcess` — container 1.0.0 has no native per-container health on `ContainerSnapshot`) [1].
 - Service scaling: `deploy.replicas` and `up --scale SERVICE=COUNT` (CLI wins) with uniform `{project}_{service}_{index}` container naming [1].
 - Dependency-aware startup ordering: topological sort with parallel waves via structured concurrency [1].
 - Partial-`up` rollback: tear down containers from successful waves when a later wave fails [1].
@@ -25,7 +26,7 @@ You are building a **Minimal Real Compose Plugin**—NOT a generic orchestration
 
 - Custom bridging networks, overlay networks, or advanced routing [1].
 - Named volume declarations, volume drivers, read-only mount suffixes (`:ro`), and root-level `volumes:` blocks [1].
-- Long-form `depends_on` with `condition:` (for example `service_healthy`), health-check gating, or restart policies [1].
+- `depends_on` condition `service_completed_successfully`, restart policies, and HTTP health checks beyond exec/CMD probes [1].
 - Image-building lifecycles (no parsing of `build:` blocks or running Dockerfiles) [1].
 
 ---
@@ -111,20 +112,21 @@ The output of the discovery command **must** show the `compose` plugin. If it do
 - Deliver merge-ready PRs with polish included—not deferred follow-up cleanup.
 - Run Thermos parallel review (`thermo-nuclear-review` + code-quality subagents) before declaring feature work complete.
 - Run Thermos review on feature specs before filing GitHub issues.
+- CI/release automation (Makefile, GitHub Actions, Homebrew tap) targets this compose plugin repo only—not upstream `apple/container`.
 - Keep new source files ≤250 lines; split modules when exceeded.
 - Reuse upstream ContainerCommands APIs (`ContainerLogs`, `ContainerExec`, `AsyncSignalHandler`) instead of reimplementing.
 
 ## Learned Workspace Facts
 
-- `container` CLI 1.0.0 at `/usr/local`; plugin at `{INSTALL_ROOT}/libexec/container-plugins/compose` (not Homebrew paths); `/usr/local` install needs `sudo` via `scripts/install-plugin.sh`. Run `container system start` before plugin discovery.
+- `container` CLI 1.0.0 at `/usr/local` for local dev; plugin at `{INSTALL_ROOT}/libexec/container-plugins/compose` via `scripts/install-plugin.sh` (`sudo` for `/usr/local`). Homebrew `container` sets `CONTAINER_INSTALL_ROOT` to `opt_prefix`, so plugins belong under `opt/container/libexec/container-plugins/compose`—not `HOMEBREW_PREFIX/libexec/...` from `command -v`. Run `container system start` before plugin discovery.
 - Package targets: `ComposeCore`, `compose`, `compose-verify`; on CLT use `swift run -c release compose-verify` (not `swift test`) and `scripts/lint.sh` with `SWIFTLINT_DISABLE_SOURCEKIT=1`.
 - `compose down` reverse-topological with compose file present; parallel fallback for explicit `-p` only (not `COMPOSE_PROJECT_NAME` or compose `name:`).
 - Default compose discovery: `compose.yaml` → … → `docker-compose.yml` + paired `*.override.*`; `COMPOSE_FILE` when no `-f`. Project name: `-p` → `COMPOSE_PROJECT_NAME` → merged `name:` → first-file parent dir.
-- Multi-file merge: unique-key ports/volumes; env list by var name; `depends_on` append-only. Relative bind-mount paths resolve against the compose file directory, not shell CWD.
+- Multi-file merge: unique-key ports/volumes; env list by var name; `depends_on` keyed merge (override wins per service); `healthcheck` override wins. Relative bind-mount paths resolve against the compose file directory, not shell CWD.
 - Per-file substitution before YAML parse: shell environment overrides `.env` beside each compose file; supports `${VAR}`, `${VAR:-default}`, `${VAR-default}`, and `$$` escapes; unresolved `${VAR}` errors; YAML anchors/aliases resolved by Yams during decode.
 - CLI subcommands: `up`, `down`, `ps`, `logs`, `top`, `exec`, `run`; `up`/`down` accept `--progress auto|plain|none`; `up --attach` multiplexes logs after detached start; `-f`/`-p` on subcommands, not `compose` root.
 - Profiles: default `up` skips profiled services; `--profile` (repeatable, OR) on `up`, `ps`, `logs`, `top`, `down`; `down --profile "*"` stops all project containers; `run` auto-enables the target service's profiles; filter before dependency graph with `profileExcludedDependency` for inactive deps; `COMPOSE_PROFILES` deferred.
-- `ComposeCore/Terminal/` is presentation-only (no Container API imports); `Runtime/` holds orchestration (`ServiceRunner` waves only, `LogStream`, `SignalForwarding`, `ExecSession`, `AttachAfterUp`, `ProjectStatus`).
+- `ComposeCore/Terminal/` is presentation-only (no Container API imports); `Runtime/` holds orchestration (`ServiceRunner` waves + `HealthWait` inter-wave gating, `LogStream`, `SignalForwarding`, `ExecSession`, `AttachAfterUp`, `ProjectStatus`).
 - `compose top` streams `ContainerClient.stats()` filtered by project labels (not in-container `ps`); `compose logs` multiplexes upstream file handles (merged containerLog + bootlog).
 - SIGINT during `up`/`down` orchestration leaves started containers running; `SignalForwarding` coordinates stop/teardown for attach, logs follow, top, exec, and run.
 - State tracking uses `com.docker.compose.*` labels on `ContainerRun`; discovery, `ps`, and `logs` read `snapshot.configuration.labels`.

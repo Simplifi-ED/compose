@@ -24,13 +24,13 @@ package enum ProfileFilter {
 
         for (serviceName, service) in active {
             for dependency in service.dependsOn {
-                guard let dependencyService = services[dependency] else {
+                guard let dependencyService = services[dependency.service] else {
                     continue
                 }
-                if active[dependency] == nil {
+                if active[dependency.service] == nil {
                     throw ComposeError.profileExcludedDependency(
                         service: serviceName,
-                        dependency: dependency,
+                        dependency: dependency.service,
                         requiredProfiles: dependencyService.profiles
                     )
                 }

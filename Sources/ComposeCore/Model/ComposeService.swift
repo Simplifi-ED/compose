@@ -18,9 +18,10 @@ public struct ComposeService: Sendable, Equatable {
     public let volumes: [String]
     public let environment: ComposeEnvironment?
     public let containerName: String?
-    public let dependsOn: [String]
+    public let dependsOn: [ComposeDependency]
     public let profiles: [String]
     public let deploy: ComposeDeploy?
+    public let healthcheck: ComposeHealthcheck?
 
     public init(
         image: String?,
@@ -29,9 +30,10 @@ public struct ComposeService: Sendable, Equatable {
         volumes: [String] = [],
         environment: ComposeEnvironment?,
         containerName: String?,
-        dependsOn: [String] = [],
+        dependsOn: [ComposeDependency] = [],
         profiles: [String] = [],
-        deploy: ComposeDeploy? = nil
+        deploy: ComposeDeploy? = nil,
+        healthcheck: ComposeHealthcheck? = nil
     ) {
         self.image = image
         self.command = command
@@ -42,6 +44,7 @@ public struct ComposeService: Sendable, Equatable {
         self.dependsOn = dependsOn
         self.profiles = profiles
         self.deploy = deploy
+        self.healthcheck = healthcheck
     }
 }
 
@@ -56,6 +59,7 @@ extension ComposeService: Decodable {
         case dependsOn = "depends_on"
         case profiles
         case deploy
+        case healthcheck
     }
 
     public init(from decoder: Decoder) throws {
@@ -69,6 +73,7 @@ extension ComposeService: Decodable {
         dependsOn = try Self.decodeDependsOn(from: container)
         profiles = try Self.decodeProfiles(from: container)
         deploy = try Self.decodeDeploy(from: container)
+        healthcheck = try Self.decodeHealthcheck(from: container)
     }
 
     private static func decodeDeploy(
@@ -81,6 +86,19 @@ extension ComposeService: Decodable {
             throw error
         } catch {
             throw ComposeError.invalidField("deploy", reason: "expected a map with an integer replicas value")
+        }
+    }
+
+    private static func decodeHealthcheck(
+        from container: KeyedDecodingContainer<CodingKeys>
+    ) throws -> ComposeHealthcheck? {
+        guard container.contains(.healthcheck) else { return nil }
+        do {
+            return try container.decode(ComposeHealthcheck.self, forKey: .healthcheck)
+        } catch let error as ComposeError {
+            throw error
+        } catch {
+            throw ComposeError.invalidField("healthcheck", reason: "expected a map with a test command")
         }
     }
 
@@ -99,12 +117,22 @@ extension ComposeService: Decodable {
 
     private static func decodeDependsOn(
         from container: KeyedDecodingContainer<CodingKeys>
-    ) throws -> [String] {
+    ) throws -> [ComposeDependency] {
         guard container.contains(.dependsOn) else { return [] }
         if let value = try? container.decode([String].self, forKey: .dependsOn) {
-            return value
+            return value.map { ComposeDependency(service: $0, condition: .orderingOnly) }
         }
-        throw ComposeError.invalidField("depends_on", reason: "expected a list of service names")
+        if let value = try? container.decode([String: DependsOnEntry].self, forKey: .dependsOn) {
+            return try value.keys.sorted().map { serviceName in
+                let entry = value[serviceName]!
+                let condition = try DependsOnCondition.parse(entry.condition)
+                return ComposeDependency(service: serviceName, condition: condition)
+            }
+        }
+        throw ComposeError.invalidField(
+            "depends_on",
+            reason: "expected a list of service names or a map of service conditions"
+        )
     }
 
     private static func decodeVolumes(
@@ -142,4 +170,8 @@ extension ComposeService: Decodable {
         }
         throw ComposeError.invalidField("environment", reason: "expected a map or list of KEY=VAL strings")
     }
+}
+
+private struct DependsOnEntry: Decodable {
+    let condition: String
 }
