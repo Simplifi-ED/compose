@@ -92,7 +92,10 @@ public enum ComposeError: LocalizedError, Sendable {
         case .undefinedService(let service):
             return "Service '\(service)' isn't defined in the compose file. Check the service name."
         case .serviceNotFound(let service, let project):
-            return "No container for service '\(service)' in project '\(project)'. Check the service name and run compose up."
+            return """
+                No container for service '\(service)' in project '\(project)'. \
+                Check the service name and run compose up.
+                """
         case .serviceNotRunning(let service, let state):
             return "Service '\(service)' isn't running (state: \(state)). Start it with compose up."
         case .ambiguousService(let service, let containers):

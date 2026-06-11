@@ -9,14 +9,14 @@ build:
 	$(SWIFT) build -c $(BUILD_CONFIGURATION) $(SWIFT_FLAGS)
 
 lint:
-	SWIFTLINT_DISABLE_SOURCEKIT=1 swiftlint lint --strict --disable-sourcekit Sources/
+	./scripts/lint.sh
 
 test:
 	$(SWIFT) run -c release compose-verify
 
 dist:
 	./scripts/package.sh
-	tar -czf dist/compose-plugin.tar.gz -C dist compose
+	tar -czf dist/compose-plugin.tar.gz -C dist/compose .
 
 clean:
 	@rm -rf .build dist

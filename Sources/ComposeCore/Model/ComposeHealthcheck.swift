@@ -77,55 +77,63 @@ extension ComposeHealthcheck: Decodable {
     }
 
     if let command = try? container.decode(String.self, forKey: .test) {
-      let trimmed = command.trimmingCharacters(in: .whitespacesAndNewlines)
-      if trimmed.uppercased() == "NONE" {
-        throw ComposeError.invalidField("healthcheck.test", reason: "NONE is not supported")
-      }
-      if trimmed.uppercased().hasPrefix("CMD-SHELL ") {
-        let script = String(trimmed.dropFirst("CMD-SHELL ".count))
-        guard !script.isEmpty else {
-          throw ComposeError.invalidField("healthcheck.test", reason: "CMD-SHELL requires a command")
-        }
-        return .cmdShell(script)
-      }
-      if trimmed.uppercased().hasPrefix("CMD ") {
-        let payload = String(trimmed.dropFirst("CMD ".count))
-        let parts = payload.split(whereSeparator: \.isWhitespace).map(String.init)
-        guard !parts.isEmpty else {
-          throw ComposeError.invalidField("healthcheck.test", reason: "CMD requires a command")
-        }
-        return .cmd(parts)
-      }
-      let parts = trimmed.split(whereSeparator: \.isWhitespace).map(String.init)
-      guard !parts.isEmpty else {
-        throw ComposeError.invalidField("healthcheck.test", reason: "expected a command")
-      }
-      return .cmd(parts)
+      return try decodeStringTest(command)
     }
 
     if let values = try? container.decode([String].self, forKey: .test) {
-      guard let head = values.first else {
-        throw ComposeError.invalidField("healthcheck.test", reason: "expected a command")
-      }
-      switch head.uppercased() {
-      case "NONE":
-        throw ComposeError.invalidField("healthcheck.test", reason: "NONE is not supported")
-      case "CMD":
-        let command = Array(values.dropFirst())
-        guard !command.isEmpty else {
-          throw ComposeError.invalidField("healthcheck.test", reason: "CMD requires a command")
-        }
-        return .cmd(command)
-      case "CMD-SHELL":
-        guard values.count == 2, !values[1].isEmpty else {
-          throw ComposeError.invalidField("healthcheck.test", reason: "CMD-SHELL requires a shell command")
-        }
-        return .cmdShell(values[1])
-      default:
-        return .cmd(values)
-      }
+      return try decodeListTest(values)
     }
 
     throw ComposeError.invalidField("healthcheck.test", reason: "expected a string or list of strings")
+  }
+
+  private static func decodeStringTest(_ command: String) throws -> ComposeHealthcheckTest {
+    let trimmed = command.trimmingCharacters(in: .whitespacesAndNewlines)
+    if trimmed.uppercased() == "NONE" {
+      throw ComposeError.invalidField("healthcheck.test", reason: "NONE is not supported")
+    }
+    if trimmed.uppercased().hasPrefix("CMD-SHELL ") {
+      let script = String(trimmed.dropFirst("CMD-SHELL ".count))
+      guard !script.isEmpty else {
+        throw ComposeError.invalidField("healthcheck.test", reason: "CMD-SHELL requires a command")
+      }
+      return .cmdShell(script)
+    }
+    if trimmed.uppercased().hasPrefix("CMD ") {
+      let payload = String(trimmed.dropFirst("CMD ".count))
+      let parts = payload.split(whereSeparator: \.isWhitespace).map(String.init)
+      guard !parts.isEmpty else {
+        throw ComposeError.invalidField("healthcheck.test", reason: "CMD requires a command")
+      }
+      return .cmd(parts)
+    }
+    let parts = trimmed.split(whereSeparator: \.isWhitespace).map(String.init)
+    guard !parts.isEmpty else {
+      throw ComposeError.invalidField("healthcheck.test", reason: "expected a command")
+    }
+    return .cmd(parts)
+  }
+
+  private static func decodeListTest(_ values: [String]) throws -> ComposeHealthcheckTest {
+    guard let head = values.first else {
+      throw ComposeError.invalidField("healthcheck.test", reason: "expected a command")
+    }
+    switch head.uppercased() {
+    case "NONE":
+      throw ComposeError.invalidField("healthcheck.test", reason: "NONE is not supported")
+    case "CMD":
+      let command = Array(values.dropFirst())
+      guard !command.isEmpty else {
+        throw ComposeError.invalidField("healthcheck.test", reason: "CMD requires a command")
+      }
+      return .cmd(command)
+    case "CMD-SHELL":
+      guard values.count == 2, !values[1].isEmpty else {
+        throw ComposeError.invalidField("healthcheck.test", reason: "CMD-SHELL requires a shell command")
+      }
+      return .cmdShell(values[1])
+    default:
+      return .cmd(values)
+    }
   }
 }

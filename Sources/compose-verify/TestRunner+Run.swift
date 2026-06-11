@@ -93,6 +93,10 @@ extension TestRunner {
         }
         expect(cleanupCount == 0, "runUntilExit skips terminalCleanup on normal completion")
 
+        runRunTerminalInterruptCleanupTests()
+    }
+
+    private mutating func runRunTerminalInterruptCleanupTests() {
         let interruptCleanupCount = blockingAwait { () -> Int in
             final class Counter: @unchecked Sendable {
                 var value = 0

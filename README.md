@@ -339,7 +339,7 @@ The release workflow builds the tarball, uploads it with a SHA256 checksum, and 
 Configure these repository settings for automated tap bumps:
 
 - Variable `HOMEBREW_TAP_REPO` — e.g. `Simplifi-ED/homebrew-tap`
-- Secret `HOMEBREW_TAP_TOKEN` — PAT with `contents: write` on the tap repo
+- Secret `HOMEBREW_TAP_TOKEN` — PAT with `contents: write` and `pull_requests: write` on the tap repo
 
 Canonical formula template: [`homebrew-tap/Formula/container-compose.rb`](homebrew-tap/Formula/container-compose.rb).
 

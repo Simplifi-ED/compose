@@ -41,15 +41,15 @@ public struct Up: AsyncParsableCommand {
         )
         let composeDirectory = fileURLs[0].deletingLastPathComponent()
 
+        let scaleOverrides = try scaleOptions.resolvedScaleOverrides()
         let layers = try ServicePlanner.startupLayers(
             for: composeFile,
             projectName: projectName,
             composeDirectory: composeDirectory,
             activeProfiles: profileOptions.activeProfileSet,
-            scaleOverrides: scaleOptions.resolvedScaleOverrides()
+            scaleOverrides: scaleOverrides
         )
         let plans = layers.flatMap { $0 }
-        let scaleOverrides = try scaleOptions.resolvedScaleOverrides()
         let healthContext = HealthWaitContext(
             services: composeFile.services,
             projectName: projectName,
@@ -80,10 +80,23 @@ public struct Up: AsyncParsableCommand {
             )
         }
 
+        try await finishStartup(
+            plans: plans,
+            projectName: projectName,
+            composeFile: composeFile,
+            fileURLs: fileURLs
+        )
+    }
+
+    private func finishStartup(
+        plans: [ServicePlan],
+        projectName: String,
+        composeFile: ComposeFile,
+        fileURLs: [URL]
+    ) async throws {
         for line in UpStartupSummary.lines(for: plans) {
             print(line)
         }
-
         try await attachIfRequested(
             projectName: projectName,
             composeFile: composeFile,

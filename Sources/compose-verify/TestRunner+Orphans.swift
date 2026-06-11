@@ -67,7 +67,10 @@ extension TestRunner {
             DiscoveredContainer(name: "legacy", serviceName: nil)
         ]
         let merged = OrphanRemoval.mergingContainers(selected, with: orphans)
-        expect(merged.map(\.name) == ["demo_api", "demo_web", "legacy"], "merge combines selected and orphan containers")
+        expect(
+            merged.map(\.name) == ["demo_api", "demo_web", "legacy"],
+            "merge combines selected and orphan containers"
+        )
     }
 
     mutating func runOrphanShutdownLayerTests() throws {

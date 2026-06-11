@@ -13,7 +13,29 @@ jobs:
     runs-on: macos-15
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      - name: Select Xcode 26 (Swift 6.2)
+        run: |
+          for app in /Applications/Xcode_26*.app; do
+            if [ -d "$app" ]; then
+              sudo xcode-select -s "$app/Contents/Developer"
+              break
+            fi
+          done
+          xcrun swift --version
+
+      - name: Install SwiftLint
+        run: ./scripts/install-swiftlint.sh
+
+      - name: Lint Source Code
+        run: make lint
+
+      - name: Build Debug (Strict Warnings)
+        run: make build BUILD_CONFIGURATION=debug WARNINGS_AS_ERRORS=true
+
+      - name: Run Integration Checks
+        run: make test
 
       - name: Build Release Package
         run: make dist
@@ -22,7 +44,7 @@ jobs:
         run: shasum -a 256 dist/compose-plugin.tar.gz | awk '{print $1}' > dist/compose-plugin.tar.gz.sha256
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v3.0.0
         with:
           files: |
             dist/compose-plugin.tar.gz
@@ -32,17 +54,17 @@ jobs:
   bump-homebrew-tap:
     needs: release
     runs-on: ubuntu-latest
-    if: ${{ vars.HOMEBREW_TAP_REPO != '' }}
+    if: ${{ vars.HOMEBREW_TAP_REPO != '' && secrets.HOMEBREW_TAP_TOKEN != '' }}
     steps:
       - name: Checkout Tap Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           repository: ${{ vars.HOMEBREW_TAP_REPO }}
           token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
           path: tap
 
       - name: Checkout Compose Formula Template
-        uses: actions/checkout@v4
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           ref: ${{ github.ref }}
           path: compose
@@ -67,7 +89,7 @@ jobs:
           sed -i "s|sha256 \".*\"|sha256 \"${SHA256}\"|" "$FORMULA"
 
       - name: Open Tap Pull Request
-        uses: peter-evans/create-pull-request@v6
+        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
         with:
           token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
           path: tap

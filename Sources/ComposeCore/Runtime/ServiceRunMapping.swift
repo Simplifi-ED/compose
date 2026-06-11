@@ -1,32 +1,39 @@
 import Foundation
 
+struct ServiceRunConfiguration: Sendable {
+    let serviceName: String
+    let service: ComposeService
+    let projectName: String
+    let composeDirectory: URL
+    let image: String
+    let command: [String]
+    var containerNumber: Int = 1
+}
+
 enum ServiceRunMapping {
     static func appendServiceRunConfiguration(
         to arguments: inout [String],
-        serviceName: String,
-        service: ComposeService,
-        projectName: String,
-        composeDirectory: URL,
-        image: String,
-        command: [String],
-        containerNumber: Int = 1
+        configuration: ServiceRunConfiguration
     ) throws {
         arguments.append(contentsOf: ComposeLabels.runFlags(
-            projectName: projectName,
-            serviceName: serviceName,
-            containerNumber: containerNumber
+            projectName: configuration.projectName,
+            serviceName: configuration.serviceName,
+            containerNumber: configuration.containerNumber
         ))
-        arguments.append(contentsOf: environmentFlags(service.environment))
-        for port in service.ports {
+        arguments.append(contentsOf: environmentFlags(configuration.service.environment))
+        for port in configuration.service.ports {
             if let flag = try publishFlag(for: port) {
                 arguments.append(contentsOf: ["-p", flag])
             }
         }
-        for volume in service.volumes {
-            arguments.append(contentsOf: ["-v", try volumeFlag(for: volume, relativeTo: composeDirectory)])
+        for volume in configuration.service.volumes {
+            arguments.append(contentsOf: [
+                "-v",
+                try volumeFlag(for: volume, relativeTo: configuration.composeDirectory)
+            ])
         }
-        arguments.append(image)
-        arguments.append(contentsOf: command)
+        arguments.append(configuration.image)
+        arguments.append(contentsOf: configuration.command)
     }
 
     static func environmentFlags(_ environment: ComposeEnvironment?) -> [String] {

@@ -5,7 +5,7 @@ extension ServiceRunner {
     package static func parallelRunHonorsCancellation() async -> Bool {
         let task = Task {
             let result = await parallelRun(
-                [(label: "work", collectOnSuccess: nil, value: ())],
+                [ParallelRunItem(label: "work", collectOnSuccess: nil, value: ())],
                 work: { _ in
                     try await Task.sleep(for: .seconds(30))
                 }
@@ -41,16 +41,18 @@ extension ServiceRunner {
                 layers: [[fast], [slow]],
                 progress: nil,
                 healthContext: nil,
-                runContainer: { plan in
-                    if plan.serviceName == "slow" {
-                        try await Task.sleep(for: .seconds(30))
-                    }
-                    await recorder.recordStarted(plan.name)
-                },
-                rollbackTeardown: { name in
-                    await recorder.recordRollback(name)
-                },
-                waitForDependencies: { _, _ in }
+                hooks: UpOperationHooks(
+                    runContainer: { plan in
+                        if plan.serviceName == "slow" {
+                            try await Task.sleep(for: .seconds(30))
+                        }
+                        await recorder.recordStarted(plan.name)
+                    },
+                    rollbackTeardown: { name in
+                        await recorder.recordRollback(name)
+                    },
+                    waitForDependencies: { _, _ in }
+                )
             )
         }
 

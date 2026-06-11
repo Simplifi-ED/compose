@@ -4,7 +4,7 @@ cd "$(git rev-parse --show-toplevel)"
 
 # Clean past artifacts and build
 rm -rf dist
-swift build -c release
+make build BUILD_CONFIGURATION=release
 
 # Assemble layout
 mkdir -p dist/compose/bin

@@ -58,7 +58,9 @@ public enum OrphanRemoval {
         guard !orphans.isEmpty else { return }
 
         let result = await ServiceRunner.parallelRun(
-            orphans.map { (label: $0.name, collectOnSuccess: $0.name, value: $0) }
+            orphans.map {
+                ServiceRunner.ParallelRunItem(label: $0.name, collectOnSuccess: $0.name, value: $0)
+            }
         ) { container in
             try await ContainerTeardown.teardownRespectingCancellation(id: container.name)
         }
@@ -75,7 +77,9 @@ public enum OrphanRemoval {
         }
     }
 
-    private static func policyParameters(_ policy: Policy) -> (activeProfiles: Set<String>, includeProfileSkipped: Bool) {
+    private static func policyParameters(
+        _ policy: Policy
+    ) -> (activeProfiles: Set<String>, includeProfileSkipped: Bool) {
         switch policy {
         case .beforeUp(let activeProfiles):
             return (activeProfiles, true)

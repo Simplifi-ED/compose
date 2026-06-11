@@ -170,12 +170,14 @@ public enum ServicePlanner {
         }
         try ServiceRunMapping.appendServiceRunConfiguration(
             to: &arguments,
-            serviceName: serviceName,
-            service: service,
-            projectName: projectName,
-            composeDirectory: composeDirectory,
-            image: image,
-            command: command
+            configuration: ServiceRunConfiguration(
+                serviceName: serviceName,
+                service: service,
+                projectName: projectName,
+                composeDirectory: composeDirectory,
+                image: image,
+                command: command
+            )
         )
 
         return ServicePlan(
@@ -205,13 +207,15 @@ public enum ServicePlanner {
         var arguments = ["-d", "--name", name]
         try ServiceRunMapping.appendServiceRunConfiguration(
             to: &arguments,
-            serviceName: serviceName,
-            service: service,
-            projectName: projectName,
-            composeDirectory: composeDirectory,
-            image: image,
-            command: ServiceRunMapping.commandArguments(service.command),
-            containerNumber: replicaIndex
+            configuration: ServiceRunConfiguration(
+                serviceName: serviceName,
+                service: service,
+                projectName: projectName,
+                composeDirectory: composeDirectory,
+                image: image,
+                command: ServiceRunMapping.commandArguments(service.command),
+                containerNumber: replicaIndex
+            )
         )
 
         return ServicePlan(

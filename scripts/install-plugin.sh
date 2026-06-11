@@ -4,7 +4,10 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
-CONTAINER_PATH="$(command -v container)"
+if ! CONTAINER_PATH="$(command -v container)"; then
+  echo "error: container CLI not found in PATH" >&2
+  exit 1
+fi
 INSTALL_ROOT="$(dirname "$(dirname "$CONTAINER_PATH")")"
 PLUGIN_DEST="${INSTALL_ROOT}/libexec/container-plugins/compose"
 
