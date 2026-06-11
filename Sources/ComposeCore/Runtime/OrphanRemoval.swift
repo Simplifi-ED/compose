@@ -65,6 +65,13 @@ public enum OrphanRemoval {
             try await ContainerTeardown.teardownRespectingCancellation(id: container.name)
         }
 
+        if !result.succeeded.isEmpty {
+            WorkspaceHygieneOutput.printOrphanRemovalSummary(
+                count: result.succeeded.count,
+                names: result.succeeded.sorted()
+            )
+        }
+
         if result.wasInterrupted {
             throw CancellationError()
         }
@@ -72,7 +79,7 @@ public enum OrphanRemoval {
             throw ComposeError.multipleServiceFailures(result.failures)
         }
 
-        for name in orphans.map(\.name).sorted() {
+        for name in result.succeeded.sorted() {
             onRemoved?(name)
         }
     }

@@ -1,7 +1,7 @@
 import Foundation
 
-enum DownShutdown {
-    struct VolumePurgeContext: Sendable {
+package enum DownShutdown {
+    package struct VolumePurgeContext: Sendable {
         let composeFile: ComposeFile
         let fileURLs: [URL]
         let teardownServiceNames: Set<String>
@@ -24,7 +24,19 @@ enum DownShutdown {
         return ProjectStatus.filteredDiscoveredContainers(from: discovered, filter: serviceFilter)
     }
 
-    static func volumePurgeContext(
+    package static func volumePurgeSkipReason(
+        context: ProjectOptions.LabelCommandContext
+    ) -> String {
+        if context.composeFile == nil {
+            return "compose file required"
+        }
+        if context.fileURLs == nil || context.fileURLs?.isEmpty == true {
+            return "compose file path required"
+        }
+        return "volume purge unavailable"
+    }
+
+    package static func volumePurgeContext(
         context: ProjectOptions.LabelCommandContext,
         discovered: [DiscoveredContainer],
         teardownContainers: [DiscoveredContainer]

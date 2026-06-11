@@ -106,7 +106,7 @@ public struct Down: AsyncParsableCommand {
             if shouldPurgeVolumes, let volumePurgeContext {
                 DownShutdown.purgeVolumes(context: volumePurgeContext)
             } else if shouldPurgeVolumes {
-                BindMountPurge.warnPurgeSkipped("compose file required")
+                BindMountPurge.warnPurgeSkipped(DownShutdown.volumePurgeSkipReason(context: context))
             }
         }
     }

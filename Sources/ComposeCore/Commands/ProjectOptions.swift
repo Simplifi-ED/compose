@@ -58,6 +58,12 @@ public struct ProjectOptions: ParsableArguments {
         package let projectName: String
         package let composeFile: ComposeFile?
         package let fileURLs: [URL]?
+
+        package init(projectName: String, composeFile: ComposeFile?, fileURLs: [URL]?) {
+            self.projectName = projectName
+            self.composeFile = composeFile
+            self.fileURLs = fileURLs
+        }
     }
 
     package func resolvedLabelCommandContext(

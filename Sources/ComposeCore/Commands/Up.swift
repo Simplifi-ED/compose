@@ -56,6 +56,27 @@ public struct Up: AsyncParsableCommand {
             scaleOverrides: scaleOverrides
         )
 
+        try await orchestrateStartup(
+            projectName: projectName,
+            composeFile: composeFile,
+            layers: layers,
+            healthContext: healthContext
+        )
+
+        try await finishStartup(
+            plans: plans,
+            projectName: projectName,
+            composeFile: composeFile,
+            fileURLs: fileURLs
+        )
+    }
+
+    private func orchestrateStartup(
+        projectName: String,
+        composeFile: ComposeFile,
+        layers: [[ServicePlan]],
+        healthContext: HealthWaitContext
+    ) async throws {
         let shouldRemoveOrphans = workspaceHygiene.shouldRemoveOrphans
         let activeProfiles = profileOptions.activeProfileSet
         let orchestration = makeProgressOrchestration(
@@ -67,17 +88,11 @@ public struct Up: AsyncParsableCommand {
             interruptedMessage: "Startup interrupted. Started containers are still running."
         ) {
             if shouldRemoveOrphans {
-                do {
-                    try await UpOrphanRemoval.removeBeforeStartup(
-                        projectName: projectName,
-                        composeFile: composeFile,
-                        activeProfiles: activeProfiles
-                    )
-                } catch let removalError as CancellationError {
-                    throw removalError
-                } catch {
-                    WorkspaceHygieneOutput.warnOrphanRemovalSkipped(error.localizedDescription)
-                }
+                try await UpOrphanRemoval.removeBeforeStartupBestEffort(
+                    projectName: projectName,
+                    composeFile: composeFile,
+                    activeProfiles: activeProfiles
+                )
             }
             try await ServiceRunner.up(
                 layers: layers,
@@ -85,13 +100,6 @@ public struct Up: AsyncParsableCommand {
                 healthContext: healthContext
             )
         }
-
-        try await finishStartup(
-            plans: plans,
-            projectName: projectName,
-            composeFile: composeFile,
-            fileURLs: fileURLs
-        )
     }
 
     private func finishStartup(

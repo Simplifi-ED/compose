@@ -1,7 +1,7 @@
 import Foundation
 
-enum BindMountPathResolver {
-    enum ResolvedHostPath: Equatable {
+package enum BindMountPathResolver {
+    package enum ResolvedHostPath: Equatable {
         case projectRelative(URL)
         case absoluteExternal(URL)
     }
@@ -38,7 +38,7 @@ enum BindMountPathResolver {
         return (hostPath, containerPath)
     }
 
-    static func resolveHostPath(
+    package static func resolveHostPath(
         _ hostPath: String,
         relativeTo composeDirectory: URL
     ) throws -> ResolvedHostPath {

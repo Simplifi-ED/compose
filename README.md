@@ -65,7 +65,7 @@ container compose down -v                 # remove project-local bind-mount path
 - Scopes to the active project via `com.docker.compose.project` (exact label match).
 - Removes containers with no service label, a service removed from the compose file, or a service not in the current profile set (same rules as `up` / `down --profile`).
 - Prints a one-line summary when orphans are removed on `up`. On plain `down` (no `--profile`), all project containers are already stopped.
-- On `up`, orphan removal runs inside the same signal-handled phase as startup; discovery or teardown errors fail the command instead of continuing.
+- On `up`, orphan removal runs inside the same signal-handled phase as startup. Discovery or teardown failures warn and startup continues; successfully removed orphans still print a summary when removal is partial.
 
 **`down -v` / `--volumes`** (Phase 1 — bind mounts only):
 
