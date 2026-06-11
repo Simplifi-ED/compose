@@ -10,22 +10,22 @@ You are building a **Minimal Real Compose Plugin**—NOT a generic orchestration
 
 ### **In Scope (To Code):**
 
-* Parsing a standard, single-file `docker-compose.yml` [1].
-* Multi-file compose: `-f` merge, auto-discovery (`compose.yaml` + override), and `COMPOSE_FILE` [1].
-* Project naming: `-p`, `COMPOSE_PROJECT_NAME`, compose `name:`, first-file parent directory [1].
-* Instantiating and mapping configuration directly into Apple's programmatic `ContainerCommands` API [1].
-* Basic container lifecycles: Starting (via `ContainerRun`) and Stopping (via `ContainerStop`) [1].
-* Attributes to map: `image`, `command`, `environment`, standard host-to-container `ports`, short-syntax bind-mount `volumes` (`host:container`), and short-form `depends_on` (list of service names) [1].
-* Dependency-aware startup ordering: topological sort with parallel waves via structured concurrency [1].
-* Partial-`up` rollback: tear down containers from successful waves when a later wave fails [1].
-* Reverse-topological `down` when a compose file is available; parallel `down` fallback for `-p`-only [1].
+- Parsing a standard, single-file `docker-compose.yml` [1].
+- Multi-file compose: `-f` merge, auto-discovery (`compose.yaml` + override), and `COMPOSE_FILE` [1].
+- Project naming: `-p`, `COMPOSE_PROJECT_NAME`, compose `name:`, first-file parent directory [1].
+- Instantiating and mapping configuration directly into Apple's programmatic `ContainerCommands` API [1].
+- Basic container lifecycles: Starting (via `ContainerRun`) and Stopping (via `ContainerStop`) [1].
+- Attributes to map: `image`, `command`, `environment`, standard host-to-container `ports`, short-syntax bind-mount `volumes` (`host:container`), and short-form `depends_on` (list of service names) [1].
+- Dependency-aware startup ordering: topological sort with parallel waves via structured concurrency [1].
+- Partial-`up` rollback: tear down containers from successful waves when a later wave fails [1].
+- Reverse-topological `down` when a compose file is available; parallel `down` fallback for `-p`-only [1].
 
 ### **Out of Scope (DO NOT CODE):**
 
-* Custom bridging networks, overlay networks, or advanced routing [1].
-* Named volume declarations, volume drivers, read-only mount suffixes (`:ro`), and root-level `volumes:` blocks [1].
-* Long-form `depends_on` with `condition:` (for example `service_healthy`), health-check gating, or restart policies [1].
-* Image-building lifecycles (no parsing of `build:` blocks or running Dockerfiles) [1].
+- Custom bridging networks, overlay networks, or advanced routing [1].
+- Named volume declarations, volume drivers, read-only mount suffixes (`:ro`), and root-level `volumes:` blocks [1].
+- Long-form `depends_on` with `condition:` (for example `service_healthy`), health-check gating, or restart policies [1].
+- Image-building lifecycles (no parsing of `build:` blocks or running Dockerfiles) [1].
 
 ---
 
@@ -50,24 +50,24 @@ You are building a **Minimal Real Compose Plugin**—NOT a generic orchestration
 
 To prevent code-bloat, code-rot, and unmaintainable abstractions, you must obey these code style rules:
 
-* **No "Manager" or "Factory" Classes:**
+- **No "Manager" or "Factory" Classes:**
   Do not write abstract orchestration layers (e.g., `ComposeManager`, `ContainerCommandFactory`, `LifecycleCoordinator`). Keep the architecture flat. If you need to map a YAML service to a command, write a direct, stateless mapping function or a lightweight data structure.
-* **No Speculative Protocols:**
+- **No Speculative Protocols:**
   Do not write protocols with a single implementation (e.g., `protocol ComposeParsing`, `protocol CommandExecuting`). Use concrete, straightforward `structs` and `final classes`.
-* **No Unnecessary Generics:**
+- **No Unnecessary Generics:**
   Keep type signatures concrete. Avoid generic wrappers.
-* **No Useless Abstraction Layers:**
+- **No Useless Abstraction Layers:**
   Do not wrap Apple's existing libraries inside custom wrappers just to "simplify" things. Call `ContainerCommands` directly.
 
 ---
 
 ## 4. Code Preservation (What NOT to Break)
 
-* **Do Not Touch Core Apple Files:**
+- **Do Not Touch Core Apple Files:**
   Do not touch any files in the parent `apple/container` repository or modify their internal targets. All of your implementation must reside strictly inside your isolated plugin package target (`Sources/` of your plugin package).
-* **Do Not Delete Comments:**
+- **Do Not Delete Comments:**
   Do not delete existing developer comments, documentation headers, or inline parameter descriptions when refactoring.
-* **Do Not Rewrite Working Code:**
+- **Do Not Rewrite Working Code:**
   If a parser block or CLI command works, do not rewrite it to use a different styling preference (e.g., changing synchronous execution patterns to async/await wrappers unless explicitly instructed).
 
 ---
