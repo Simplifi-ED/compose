@@ -191,7 +191,7 @@ services:
 container compose up                  # 2 web replicas from deploy.replicas
 container compose up --scale web=3   # CLI override: 3 replicas
 container compose up --scale web=3 --scale db=2
-container compose up --parallel 2    # at most 2 containers start/stop per wave
+container compose up --parallel 2    # at most 2 containers start per wave
 container compose up --scale web=3 --parallel 2   # 3 web replicas, two-at-a-time in the same wave
 ```
 
