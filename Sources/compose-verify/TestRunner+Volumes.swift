@@ -6,6 +6,77 @@ extension TestRunner {
         try runVolumePurgeCollectionTests()
         try runVolumePurgeSharedMountTests()
         try runVolumePurgeIntegrationTests()
+        try runVolumePurgeSkipReasonTests()
+        try runBindMountAbsoluteSymlinkTests()
+    }
+
+    mutating func runVolumePurgeSkipReasonTests() throws {
+        let fixture = try ComposeParser.parse(fileURL: Self.fixtureURL("minimal-compose.yml"))
+        let fileURL = Self.fixtureURL("minimal-compose.yml")
+        let emptyPaths = ProjectOptions.LabelCommandContext(
+            projectName: "demo",
+            composeFile: fixture,
+            fileURLs: []
+        )
+        expect(
+            DownShutdown.volumePurgeSkipReason(context: emptyPaths) == "compose file path required",
+            "purge skip reason for empty compose file paths"
+        )
+        expect(
+            DownShutdown.volumePurgeContext(
+                context: emptyPaths,
+                discovered: [],
+                teardownContainers: []
+            ) == nil,
+            "volume purge context nil for empty compose file paths"
+        )
+
+        let noCompose = ProjectOptions.LabelCommandContext(
+            projectName: "demo",
+            composeFile: nil,
+            fileURLs: nil
+        )
+        expect(
+            DownShutdown.volumePurgeSkipReason(context: noCompose) == "compose file required",
+            "purge skip reason without compose file"
+        )
+
+        let complete = ProjectOptions.LabelCommandContext(
+            projectName: "demo",
+            composeFile: fixture,
+            fileURLs: [fileURL]
+        )
+        expect(
+            DownShutdown.volumePurgeContext(
+                context: complete,
+                discovered: [],
+                teardownContainers: []
+            ) != nil,
+            "volume purge context present when compose paths exist"
+        )
+    }
+
+    mutating func runBindMountAbsoluteSymlinkTests() throws {
+        let outside = FileManager.default.temporaryDirectory
+            .appendingPathComponent("compose-verify-abs-outside-\(UUID().uuidString)")
+        let linkParent = FileManager.default.temporaryDirectory
+            .appendingPathComponent("compose-verify-abs-link-\(UUID().uuidString)")
+        defer {
+            try? FileManager.default.removeItem(at: outside)
+            try? FileManager.default.removeItem(at: linkParent)
+        }
+        try FileManager.default.createDirectory(at: outside, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: linkParent, withIntermediateDirectories: true)
+        let symlink = linkParent.appendingPathComponent("mnt")
+        try FileManager.default.createSymbolicLink(at: symlink, withDestinationURL: outside)
+
+        let resolved = try BindMountPathResolver.resolveHostPath(symlink.path, relativeTo: linkParent)
+        guard case .absoluteExternal(let url) = resolved else {
+            expect(false, "absolute bind-mount path resolves as external")
+            return
+        }
+        let expected = outside.standardizedFileURL.resolvingSymlinksInPath().path
+        expect(url.standardizedFileURL.path == expected, "absolute symlink resolves to target path")
     }
 
     mutating func runVolumePurgeCollectionTests() throws {
@@ -91,7 +162,7 @@ extension TestRunner {
             name: nil,
             services: [
                 "web": ComposeService(
-                    image: "docker.io/library/alpine:latest",
+                    image: "docker.io/library/alpine:3.24",
                     command: .string("sleep 300"),
                     ports: [],
                     volumes: ["./data:/mnt/data"],

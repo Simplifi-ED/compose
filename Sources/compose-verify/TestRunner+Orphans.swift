@@ -6,6 +6,45 @@ extension TestRunner {
         try runOrphanDetectionTests()
         try runOrphanUnionTests()
         try runOrphanShutdownLayerTests()
+        runOrphanHygieneMessageTests()
+        try runOrphanBestEffortTests()
+    }
+
+    mutating func runOrphanHygieneMessageTests() {
+        let listMessage = WorkspaceHygieneOutput.listContainersFailureMessage(
+            URLError(.notConnectedToInternet)
+        )
+        expect(
+            listMessage.hasPrefix("couldn't list project containers:"),
+            "list failure message prefix"
+        )
+
+        let removalMessage = WorkspaceHygieneOutput.orphanRemovalFailureMessage(
+            ComposeError.multipleServiceFailures([
+                (service: "legacy", error: URLError(.cannotFindHost))
+            ])
+        )
+        expect(removalMessage.contains("legacy"), "partial removal failure names orphan")
+    }
+
+    mutating func runOrphanBestEffortTests() throws {
+        let driftFixture = try ComposeParser.parse(fileURL: Self.fixtureURL("orphan-drift-compose.yml"))
+        let activeOnly = [
+            DiscoveredContainer(name: "demo_web", serviceName: "web")
+        ]
+        let noop = blockingAwait {
+            do {
+                try await UpOrphanRemoval.removeDiscoveredOrphansBestEffort(
+                    discovered: activeOnly,
+                    composeFile: driftFixture,
+                    activeProfiles: []
+                )
+                return true
+            } catch {
+                return false
+            }
+        }
+        expect(noop, "best effort succeeds when no orphans are present")
     }
 
     mutating func runOrphanDetectionTests() throws {

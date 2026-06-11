@@ -1,12 +1,37 @@
 import Foundation
 
-enum UpOrphanRemoval {
-    static func removeBeforeStartup(
+package enum UpOrphanRemoval {
+    /// Best-effort pre-startup orphan cleanup for `up --remove-orphans`.
+    /// Discovery and removal failures warn and continue; cancellation propagates.
+    package static func removeBeforeStartupBestEffort(
         projectName: String,
         composeFile: ComposeFile,
         activeProfiles: Set<String>
     ) async throws {
-        let discovered = try await ContainerDiscovery.containers(forProject: projectName)
+        let discovered: [DiscoveredContainer]
+        do {
+            discovered = try await ContainerDiscovery.containers(forProject: projectName)
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            WorkspaceHygieneOutput.warnOrphanRemovalSkipped(
+                WorkspaceHygieneOutput.listContainersFailureMessage(error)
+            )
+            return
+        }
+
+        try await removeDiscoveredOrphansBestEffort(
+            discovered: discovered,
+            composeFile: composeFile,
+            activeProfiles: activeProfiles
+        )
+    }
+
+    package static func removeDiscoveredOrphansBestEffort(
+        discovered: [DiscoveredContainer],
+        composeFile: ComposeFile,
+        activeProfiles: Set<String>
+    ) async throws {
         let orphans = OrphanRemoval.orphans(
             in: discovered,
             composeFile: composeFile,
@@ -14,10 +39,15 @@ enum UpOrphanRemoval {
         )
         guard !orphans.isEmpty else { return }
 
-        try await OrphanRemoval.removeOrphans(orphans)
-        WorkspaceHygieneOutput.printOrphanRemovalSummary(
-            count: orphans.count,
-            names: orphans.map(\.name)
-        )
+        do {
+            try await OrphanRemoval.removeOrphans(orphans)
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            WorkspaceHygieneOutput.warnOrphanRemovalSkipped(
+                WorkspaceHygieneOutput.orphanRemovalFailureMessage(error)
+            )
+        }
     }
+
 }
