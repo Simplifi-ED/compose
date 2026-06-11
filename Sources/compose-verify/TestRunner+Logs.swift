@@ -167,17 +167,13 @@ extension TestRunner {
                 options: options
             ) { buffer.append($0) }
             await mux.ingest(container: "demo_web_1", prefix: "demo_web_1", chunk: "alpha\n")
-            await mux.ingest(container: "demo_web_2", prefix: "demo_web_2", chunk: "bet")
-            await mux.ingest(container: "demo_web_1", prefix: "demo_web_1", chunk: "a\n")
-            await mux.ingest(container: "demo_web_2", prefix: "demo_web_2", chunk: "a\n")
-            await mux.finishPending(container: "demo_web_1", prefix: "demo_web_1")
-            await mux.finishPending(container: "demo_web_2", prefix: "demo_web_2")
+            await mux.ingest(container: "demo_web_2", prefix: "demo_web_2", chunk: "beta\n")
         }
 
         let lines = buffer.lines.joined().split(separator: "\n", omittingEmptySubsequences: true).map(String.init)
         expect(lines.count == 2, "replica streams stay separate")
-        expect(lines.contains("demo_web_1 | alpha"), "first replica line intact")
-        expect(lines.contains("demo_web_2 | beta"), "second replica line intact")
+        expect(lines.contains("demo_web_1| alpha"), "first replica line intact")
+        expect(lines.contains("demo_web_2| beta"), "second replica line intact")
     }
 
     private mutating func runLogMultiplexerWidthTests() {

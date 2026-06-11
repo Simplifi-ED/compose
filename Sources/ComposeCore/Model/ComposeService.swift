@@ -75,10 +75,13 @@ extension ComposeService: Decodable {
         from container: KeyedDecodingContainer<CodingKeys>
     ) throws -> ComposeDeploy? {
         guard container.contains(.deploy) else { return nil }
-        if let value = try? container.decode(ComposeDeploy.self, forKey: .deploy) {
-            return value
+        do {
+            return try container.decode(ComposeDeploy.self, forKey: .deploy)
+        } catch let error as ComposeError {
+            throw error
+        } catch {
+            throw ComposeError.invalidField("deploy", reason: "expected a map with an integer replicas value")
         }
-        throw ComposeError.invalidField("deploy", reason: "expected a map with an integer replicas value")
     }
 
     private static func decodeProfiles(
