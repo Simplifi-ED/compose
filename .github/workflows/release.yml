@@ -1,0 +1,81 @@
+name: Compose Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-15
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Build Release Package
+        run: make dist
+
+      - name: Write SHA256 Checksum
+        run: shasum -a 256 dist/compose-plugin.tar.gz | awk '{print $1}' > dist/compose-plugin.tar.gz.sha256
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/compose-plugin.tar.gz
+            dist/compose-plugin.tar.gz.sha256
+          generate_release_notes: true
+
+  bump-homebrew-tap:
+    needs: release
+    runs-on: ubuntu-latest
+    if: ${{ vars.HOMEBREW_TAP_REPO != '' }}
+    steps:
+      - name: Checkout Tap Repository
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ vars.HOMEBREW_TAP_REPO }}
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          path: tap
+
+      - name: Checkout Compose Formula Template
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+          path: compose
+          sparse-checkout: |
+            homebrew-tap
+          sparse-checkout-cone-mode: false
+
+      - name: Update container-compose Formula
+        env:
+          TAG: ${{ github.ref_name }}
+          REPO: ${{ github.repository }}
+        run: |
+          URL="https://github.com/${REPO}/releases/download/${TAG}/compose-plugin.tar.gz"
+          curl -fsSL "$URL" -o compose-plugin.tar.gz
+          SHA256="$(shasum -a 256 compose-plugin.tar.gz | awk '{print $1}')"
+          FORMULA="tap/Formula/container-compose.rb"
+          if [ ! -f "$FORMULA" ]; then
+            mkdir -p tap/Formula
+            cp compose/homebrew-tap/Formula/container-compose.rb "$FORMULA"
+          fi
+          sed -i "s|url \".*\"|url \"${URL}\"|" "$FORMULA"
+          sed -i "s|sha256 \".*\"|sha256 \"${SHA256}\"|" "$FORMULA"
+
+      - name: Open Tap Pull Request
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          path: tap
+          branch: bump-container-compose-${{ github.ref_name }}
+          title: container-compose ${{ github.ref_name }}
+          commit-message: container-compose ${{ github.ref_name }}
+          body: |
+            Automated bump for [${{ github.ref_name }}](https://github.com/${{ github.repository }}/releases/tag/${{ github.ref_name }}).
+          author: github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>
+          committer: github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>
+          delete-branch: true

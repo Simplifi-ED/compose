@@ -21,7 +21,9 @@ Maintained by [Omnivya](https://www.omnivya.fr) ([Simplifi-ED](https://github.co
 - Failed `up` rolls back containers started in earlier waves
 - `down` stops dependents before dependencies when the compose file is present; `-p`-only `down` stops containers in parallel
 - `down` validates only the dependency graph (not `image` or other startup fields), so teardown still works if the file was edited after `up`
-- Containers without a `com.docker.compose.service` label (or not listed in the compose file) stop last and may not follow `depends_on` order
+- Containers without a `com.docker.compose.service` label (or not listed in the compose file) stop last and may not follow `depends_on` order; pass `--remove-orphans` on `up` to remove them before startup
+- Opt-in `--remove-orphans` on `up` and `down` removes project containers whose service is missing from the compose file or not in the active profile set
+- `down -v` / `down --volumes` removes project-local bind-mount host paths declared in the compose file (see [Workspace hygiene](#workspace-hygiene))
 - Container labels for project tracking (`com.docker.compose.project`, `com.docker.compose.service`)
 - `container compose ps` (list project containers), `container compose top` (live CPU/memory stats stream), and `container compose run` (one-off foreground container from a service definition)
 
@@ -47,6 +49,34 @@ container compose run debugger sh             # auto-enables the service's profi
 `depends_on` referencing a profile-only service that is not active fails at plan time with an actionable error.
 
 `down --profile` is container-scoped only (no network or named-volume teardown in v1). Containers left running may still hold ports or bind mounts; resolve conflicts before re-running `up`.
+
+With `--remove-orphans`, `up` removes stale containers before startup. On `down --profile`, it also stops profile-skipped containers that would otherwise keep running.
+
+### Workspace hygiene
+
+```bash
+container compose up --remove-orphans     # remove stale containers before startup
+container compose down --remove-orphans   # with --profile, also stop profile-skipped containers
+container compose down -v                 # remove project-local bind-mount paths after containers stop
+```
+
+**`--remove-orphans`** (opt-in on `up` and `down`):
+
+- Scopes to the active project via `com.docker.compose.project` (exact label match).
+- Removes containers with no service label, a service removed from the compose file, or a service not in the current profile set (same rules as `up` / `down --profile`).
+- Prints a one-line summary when orphans are removed on `up`. On plain `down` (no `--profile`), all project containers are already stopped.
+- On `up`, orphan removal runs inside the same signal-handled phase as startup; discovery or teardown errors fail the command instead of continuing.
+
+**`down -v` / `--volumes`** (Phase 1 — bind mounts only):
+
+| Removed | Not removed |
+|---------|-------------|
+| Relative bind-mount host paths (`./data:/app`) resolved under the compose file directory | Absolute host paths (`/var/data:/app`) |
+| Paths declared on services in the tear-down scope | Named volumes, `:ro` mounts, root `volumes:` blocks |
+| Duplicate paths across services (deduped) | Compose YAML files, compose root directory |
+| | Paths outside the project after symlink resolution |
+
+Containers are stopped before host paths are deleted. Named-volume purge is deferred until root `volumes:` support lands.
 
 ### Scaling
 
@@ -279,9 +309,68 @@ container system kernel set --url <kernel-tarball-url>
 ## Development
 
 ```bash
+make build
+make lint
+make test
+make dist    # dist/compose/ and dist/compose-plugin.tar.gz
+```
+
+Or without Make:
+
+```bash
 swift build -c release
 swift run -c release compose-verify
 .build/release/compose up -f fixtures/minimal-compose.yml -p dev
+```
+
+CI on every pull request runs `make lint`, debug build with warnings-as-errors, and `compose-verify` on `macos-15`.
+
+## Release
+
+Tag a version to publish `compose-plugin.tar.gz` to GitHub Releases:
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+The release workflow builds the tarball, uploads it with a SHA256 checksum, and (when configured) opens a pull request to bump the Homebrew tap.
+
+Configure these repository settings for automated tap bumps:
+
+- Variable `HOMEBREW_TAP_REPO` — e.g. `Simplifi-ED/homebrew-tap`
+- Secret `HOMEBREW_TAP_TOKEN` — PAT with `contents: write` on the tap repo
+
+Canonical formula template: [`homebrew-tap/Formula/container-compose.rb`](homebrew-tap/Formula/container-compose.rb).
+
+## Homebrew install
+
+```bash
+brew tap Simplifi-ED/tap   # after the tap repository exists
+brew install container-compose
+```
+
+After install, create a symlink so `container` discovers the plugin (see `brew info container-compose` caveats):
+
+**Cask or PKG install** (`brew install --cask container`):
+
+```bash
+sudo mkdir -p /usr/local/libexec/container-plugins
+sudo ln -sf "$(brew --prefix container-compose)/libexec" /usr/local/libexec/container-plugins/compose
+```
+
+**Homebrew formula install** (experimental `brew install container`):
+
+```bash
+mkdir -p "$(brew --prefix)/opt/container/libexec/container-plugins"
+ln -sf "$(brew --prefix container-compose)/libexec" "$(brew --prefix)/opt/container/libexec/container-plugins/compose"
+```
+
+Verify:
+
+```bash
+container --help | grep -A2 PLUGINS
+container compose --help
 ```
 
 ## Architecture

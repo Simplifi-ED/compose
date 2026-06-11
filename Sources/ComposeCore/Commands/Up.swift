@@ -23,6 +23,9 @@ public struct Up: AsyncParsableCommand {
     @OptionGroup
     var scaleOptions: ScaleOptions
 
+    @OptionGroup
+    var workspaceHygiene: WorkspaceHygieneOptions
+
     @Flag(
         name: .long,
         help: "After startup, follow service logs in the foreground until services exit or you interrupt."
@@ -37,6 +40,7 @@ public struct Up: AsyncParsableCommand {
             fileURL: fileURLs[0]
         )
         let composeDirectory = fileURLs[0].deletingLastPathComponent()
+
         let layers = try ServicePlanner.startupLayers(
             for: composeFile,
             projectName: projectName,
@@ -52,6 +56,8 @@ public struct Up: AsyncParsableCommand {
             scaleOverrides: scaleOverrides
         )
 
+        let shouldRemoveOrphans = workspaceHygiene.shouldRemoveOrphans
+        let activeProfiles = profileOptions.activeProfileSet
         let orchestration = makeProgressOrchestration(
             display: progressOptions.resolvedDisplay(),
             phase: .starting
@@ -60,6 +66,13 @@ public struct Up: AsyncParsableCommand {
             lines: orchestration.lines,
             interruptedMessage: "Startup interrupted. Started containers are still running."
         ) {
+            if shouldRemoveOrphans {
+                try await UpOrphanRemoval.removeBeforeStartup(
+                    projectName: projectName,
+                    composeFile: composeFile,
+                    activeProfiles: activeProfiles
+                )
+            }
             try await ServiceRunner.up(
                 layers: layers,
                 progress: orchestration.handlers,
@@ -71,8 +84,21 @@ public struct Up: AsyncParsableCommand {
             print(line)
         }
 
-        guard attach else { return }
+        try await attachIfRequested(
+            projectName: projectName,
+            composeFile: composeFile,
+            fileURLs: fileURLs,
+            plans: plans
+        )
+    }
 
+    private func attachIfRequested(
+        projectName: String,
+        composeFile: ComposeFile,
+        fileURLs: [URL],
+        plans: [ServicePlan]
+    ) async throws {
+        guard attach else { return }
         let shutdownContext = ProjectShutdownContext(
             projectName: projectName,
             composeFile: composeFile,

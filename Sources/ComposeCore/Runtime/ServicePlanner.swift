@@ -120,12 +120,7 @@ public enum ServicePlanner {
         in containers: [DiscoveredContainer],
         composeFile: ComposeFile
     ) -> [DiscoveredContainer] {
-        let knownServices = Set(composeFile.services.keys)
-        return containers.filter { container in
-            guard let serviceName = container.serviceName else { return true }
-            return !knownServices.contains(serviceName)
-        }
-        .sorted { $0.name < $1.name }
+        OrphanRemoval.orphans(in: containers, composeFile: composeFile, policy: .yamlOnly)
     }
 
     /// Base name for one-off `run` containers; `up` uses `ReplicaPlanning.indexedContainerName`.

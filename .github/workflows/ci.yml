@@ -1,0 +1,23 @@
+name: Compose CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  validate:
+    runs-on: macos-15
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Lint Source Code
+        run: make lint
+
+      - name: Build Debug (Strict Warnings)
+        run: make build BUILD_CONFIGURATION=debug WARNINGS_AS_ERRORS=true
+
+      - name: Run Integration Checks
+        run: make test

@@ -195,6 +195,8 @@ do {
     try runner.runMergeTests()
     try runner.runProjectOptionsTests()
     try runner.runShutdownLayerTests()
+    try runner.runOrphanTests()
+    try runner.runVolumePurgeTests()
     runner.runLabelTests()
     runner.runRollbackTests()
     runner.runTeardownErrorTests()

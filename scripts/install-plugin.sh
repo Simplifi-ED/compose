@@ -8,14 +8,7 @@ CONTAINER_PATH="$(command -v container)"
 INSTALL_ROOT="$(dirname "$(dirname "$CONTAINER_PATH")")"
 PLUGIN_DEST="${INSTALL_ROOT}/libexec/container-plugins/compose"
 
-echo "Building release binary..."
-swift build -c release
-
-echo "Packaging plugin..."
-rm -rf dist/compose
-mkdir -p dist/compose/bin
-cp .build/release/compose dist/compose/bin/compose
-cp config.toml dist/compose/
+bash "$ROOT_DIR/scripts/package.sh"
 
 echo "Starting container system (required for plugin discovery)..."
 if ! container system start; then

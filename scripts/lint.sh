@@ -11,4 +11,4 @@ if ! command -v "$SWIFTLINT" >/dev/null; then
 fi
 
 export SWIFTLINT_DISABLE_SOURCEKIT="${SWIFTLINT_DISABLE_SOURCEKIT:-1}"
-exec "$SWIFTLINT" lint --disable-sourcekit Sources "$@"
+exec "$SWIFTLINT" lint --strict --disable-sourcekit Sources "$@"
