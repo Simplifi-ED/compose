@@ -195,6 +195,7 @@ do {
     runner.runParallelTests()
     try runner.runMergeTests()
     try runner.runConfigTests()
+    try runner.runSecretsTests()
     try runner.runIncludeTests()
     try runner.runProjectOptionsTests()
     try runner.runShutdownLayerTests()

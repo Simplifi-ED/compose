@@ -22,12 +22,15 @@ You are building a **Minimal Real Compose Plugin**—NOT a generic orchestration
 - Partial-`up` rollback: tear down containers from successful waves when a later wave fails [1].
 - Reverse-topological `down` when a compose file is available; parallel `down` fallback for `-p`-only [1].
 - Opt-in `--remove-orphans` on `up`/`down`: profile-aware orphan detection and removal (project label scoped) [1].
+- Root-level `configs:` / `secrets:` with local `file:` sources (`external: false` only); service-level short and long refs; read-only staged mounts at `/run/configs/` and `/run/secrets/` via `-v …:ro` [1].
 - `down -v` / `--volumes`: Phase 1 bind-mount purge for project-relative host paths only; symlink-safe allowlist [1].
+- Staged config/secret files under a project temp directory (`0600` secrets, `0644` configs); removed on container teardown and `down` [1].
 
 ### **Out of Scope (DO NOT CODE):**
 
 - Custom bridging networks, overlay networks, or advanced routing [1].
-- Named volume declarations, volume drivers, read-only mount suffixes (`:ro`), and root-level `volumes:` blocks [1].
+- Named volume declarations, volume drivers, user `volumes:` `:ro` suffixes, and root-level `volumes:` blocks [1].
+- External secret/config managers (`external: true`, Vault, cloud SM) [1].
 - `depends_on` condition `service_completed_successfully`, restart policies, and HTTP health checks beyond exec/CMD probes [1].
 - Image-building lifecycles (no parsing of `build:` blocks or running Dockerfiles) [1].
 

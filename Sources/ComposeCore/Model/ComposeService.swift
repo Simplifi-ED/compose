@@ -22,6 +22,8 @@ public struct ComposeService: Sendable, Equatable {
     public let profiles: [String]
     public let deploy: ComposeDeploy?
     public let healthcheck: ComposeHealthcheck?
+    public let configs: [ComposeServiceMount]
+    public let secrets: [ComposeServiceMount]
     /// Base directory for relative bind-mount paths; nil uses the CLI compose file directory.
     public let projectDirectory: URL?
 
@@ -36,6 +38,8 @@ public struct ComposeService: Sendable, Equatable {
         profiles: [String] = [],
         deploy: ComposeDeploy? = nil,
         healthcheck: ComposeHealthcheck? = nil,
+        configs: [ComposeServiceMount] = [],
+        secrets: [ComposeServiceMount] = [],
         projectDirectory: URL? = nil
     ) {
         self.image = image
@@ -48,6 +52,8 @@ public struct ComposeService: Sendable, Equatable {
         self.profiles = profiles
         self.deploy = deploy
         self.healthcheck = healthcheck
+        self.configs = configs
+        self.secrets = secrets
         self.projectDirectory = projectDirectory
     }
 
@@ -68,6 +74,8 @@ public struct ComposeService: Sendable, Equatable {
             profiles: profiles,
             deploy: deploy,
             healthcheck: healthcheck,
+            configs: configs,
+            secrets: secrets,
             projectDirectory: directory
         )
     }
@@ -84,6 +92,8 @@ public struct ComposeService: Sendable, Equatable {
             profiles: profiles,
             deploy: ComposeDeploy(replicas: replicas),
             healthcheck: healthcheck,
+            configs: configs,
+            secrets: secrets,
             projectDirectory: projectDirectory
         )
     }
@@ -101,6 +111,8 @@ extension ComposeService: Decodable {
         case profiles
         case deploy
         case healthcheck
+        case configs
+        case secrets
     }
 
     public init(from decoder: Decoder) throws {
@@ -115,7 +127,28 @@ extension ComposeService: Decodable {
         profiles = try Self.decodeProfiles(from: container)
         deploy = try Self.decodeDeploy(from: container)
         healthcheck = try Self.decodeHealthcheck(from: container)
+        configs = try Self.decodeServiceMounts(from: container, key: .configs, kind: .config)
+        secrets = try Self.decodeServiceMounts(from: container, key: .secrets, kind: .secret)
         projectDirectory = nil
+    }
+
+    private static func decodeServiceMounts(
+        from container: KeyedDecodingContainer<CodingKeys>,
+        key: CodingKeys,
+        kind: ComposeFileMountKind
+    ) throws -> [ComposeServiceMount] {
+        guard container.contains(key) else { return [] }
+
+        if let strings = try? container.decode([String].self, forKey: key) {
+            return try strings.map { try ComposeServiceMountDecoder.decodeShortSyntax($0, kind: kind) }
+        }
+        if let entries = try? container.decode([ComposeServiceMountEntry].self, forKey: key) {
+            return entries.map { ComposeServiceMount(source: $0.source, target: $0.target) }
+        }
+        throw ComposeError.invalidField(
+            kind.rootFieldName,
+            reason: "expected a list of names or source/target maps"
+        )
     }
 
     private static func decodeDeploy(

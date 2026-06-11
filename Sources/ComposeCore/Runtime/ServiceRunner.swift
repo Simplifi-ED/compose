@@ -28,6 +28,7 @@ public enum ServiceRunner {
         healthContext: HealthWaitContext? = nil,
         execution: WaveExecutionPolicy = .unlimited
     ) async throws {
+        let allPlans = layers.flatMap { $0 }
         try await orchestrateUp(
             layers: layers,
             progress: progress,
@@ -35,12 +36,15 @@ public enum ServiceRunner {
             execution: execution,
             hooks: UpOperationHooks(
                 runContainer: { plan in
-                    try await ContainerTeardown.teardownRespectingCancellation(id: plan.name) {
-                        let command = try Application.ContainerRun.parse(plan.runArguments)
-                        try await command.run()
-                    }
+                    try await runContainerWithFileMounts(plan)
                 },
                 rollbackTeardown: { name in
+                    if let plan = allPlans.first(where: { $0.name == name }) {
+                        ComposeFileStaging.removeContainerStaging(
+                            projectName: plan.projectName,
+                            containerName: name
+                        )
+                    }
                     try await ContainerTeardown.teardown(id: name)
                 },
                 waitForDependencies: { gates, context in
@@ -64,6 +68,15 @@ public enum ServiceRunner {
             execution: execution,
             hooks: hooks
         )
+    }
+
+    package static func runContainerWithFileMounts(_ plan: ServicePlan) async throws {
+        try await ContainerTeardown.teardownRespectingCancellation(id: plan.name) {
+            let command = try Application.ContainerRun.parse(
+                ComposeFileStaging.preparedRunArguments(for: plan)
+            )
+            try await command.run()
+        }
     }
 
     package static func orchestrateUp(

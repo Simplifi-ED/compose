@@ -1,6 +1,18 @@
 import Foundation
 
 public enum ServicePlanner {
+    package struct PlanningContext: Sendable {
+        package let composeFile: ComposeFile
+        package let projectName: String
+        package let composeDirectory: URL
+
+        package init(composeFile: ComposeFile, projectName: String, composeDirectory: URL) {
+            self.composeFile = composeFile
+            self.projectName = projectName
+            self.composeDirectory = composeDirectory
+        }
+    }
+
     public static func plans(
         for composeFile: ComposeFile,
         projectName: String,
@@ -44,10 +56,13 @@ public enum ServicePlanner {
                 )
                 return try (1...replicas).map { index in
                     try buildUpPlan(
+                        context: PlanningContext(
+                            composeFile: composeFile,
+                            projectName: projectName,
+                            composeDirectory: composeDirectory
+                        ),
                         serviceName: serviceName,
                         service: service,
-                        projectName: projectName,
-                        composeDirectory: composeDirectory,
                         replicaIndex: index
                     )
                 }
@@ -136,10 +151,9 @@ public enum ServicePlanner {
     }
 
     package static func runPlan(
+        context: PlanningContext,
         serviceName: String,
         service: ComposeService,
-        projectName: String,
-        composeDirectory: URL,
         options: RunPlanOptions
     ) throws -> ServicePlan {
         guard let image = service.image, !image.isEmpty else {
@@ -149,7 +163,7 @@ public enum ServicePlanner {
         let baseName = runContainerBaseName(
             serviceName: serviceName,
             service: service,
-            projectName: projectName
+            projectName: context.projectName
         )
         let name = "\(baseName)_run_\(options.nameSuffix)"
 
@@ -173,25 +187,32 @@ public enum ServicePlanner {
             configuration: ServiceRunConfiguration(
                 serviceName: serviceName,
                 service: service,
-                projectName: projectName,
-                composeDirectory: service.projectDirectory(orDefault: composeDirectory),
+                projectName: context.projectName,
+                composeDirectory: service.projectDirectory(orDefault: context.composeDirectory),
                 image: image,
                 command: command
             )
         )
 
+        let fileMounts = try ComposeFileMountResolver.plannedMounts(
+            for: service,
+            composeFile: context.composeFile
+        )
+
         return ServicePlan(
             serviceName: serviceName,
             name: name,
-            runArguments: arguments
+            projectName: context.projectName,
+            image: image,
+            runArguments: arguments,
+            fileMounts: fileMounts
         )
     }
 
     package static func buildUpPlan(
+        context: PlanningContext,
         serviceName: String,
         service: ComposeService,
-        projectName: String,
-        composeDirectory: URL,
         replicaIndex: Int
     ) throws -> ServicePlan {
         guard let image = service.image, !image.isEmpty else {
@@ -199,7 +220,7 @@ public enum ServicePlanner {
         }
 
         let name = ReplicaPlanning.indexedContainerName(
-            projectName: projectName,
+            projectName: context.projectName,
             serviceName: serviceName,
             index: replicaIndex
         )
@@ -210,18 +231,26 @@ public enum ServicePlanner {
             configuration: ServiceRunConfiguration(
                 serviceName: serviceName,
                 service: service,
-                projectName: projectName,
-                composeDirectory: service.projectDirectory(orDefault: composeDirectory),
+                projectName: context.projectName,
+                composeDirectory: service.projectDirectory(orDefault: context.composeDirectory),
                 image: image,
                 command: ServiceRunMapping.commandArguments(service.command),
                 containerNumber: replicaIndex
             )
         )
 
+        let fileMounts = try ComposeFileMountResolver.plannedMounts(
+            for: service,
+            composeFile: context.composeFile
+        )
+
         return ServicePlan(
             serviceName: serviceName,
             name: name,
+            projectName: context.projectName,
+            image: image,
             runArguments: arguments,
+            fileMounts: fileMounts,
             replicaIndex: replicaIndex
         )
     }

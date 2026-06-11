@@ -13,7 +13,9 @@ enum ComposeIncludeResolver {
     ) throws -> ComposeFile {
         var model = ComposeFile(
             name: document.name,
-            services: stampServices(document.services, projectDirectory: localProjectDirectory)
+            services: stampServices(document.services, projectDirectory: localProjectDirectory),
+            configs: ComposeFileResourceDecoder.stamp(document.configs, resolutionRoot: localProjectDirectory),
+            secrets: ComposeFileResourceDecoder.stamp(document.secrets, resolutionRoot: localProjectDirectory)
         )
 
         let hostDirectory = hostFileURL.deletingLastPathComponent().standardizedFileURL
@@ -153,7 +155,56 @@ enum ComposeIncludeResolver {
             }
             services[serviceName] = service
         }
-        model = ComposeFile(name: model.name, services: services)
+        try mergeIncludedResources(
+            into: &model,
+            included: included,
+            includePath: includePath,
+            definedIn: definedIn
+        )
+        model = ComposeFile(
+            name: model.name,
+            services: services,
+            configs: model.configs,
+            secrets: model.secrets
+        )
+    }
+
+    private static func mergeIncludedResources(
+        into model: inout ComposeFile,
+        included: ComposeFile,
+        includePath: String,
+        definedIn: String
+    ) throws {
+        var configs = model.configs
+        for (name, resource) in included.configs {
+            if configs[name] != nil {
+                throw ComposeError.includeResourceConflict(
+                    name: name,
+                    kind: .config,
+                    includePath: includePath,
+                    definedIn: definedIn
+                )
+            }
+            configs[name] = resource
+        }
+        var secrets = model.secrets
+        for (name, resource) in included.secrets {
+            if secrets[name] != nil {
+                throw ComposeError.includeResourceConflict(
+                    name: name,
+                    kind: .secret,
+                    includePath: includePath,
+                    definedIn: definedIn
+                )
+            }
+            secrets[name] = resource
+        }
+        model = ComposeFile(
+            name: model.name,
+            services: model.services,
+            configs: configs,
+            secrets: secrets
+        )
     }
 
     private static func stampServices(

@@ -30,7 +30,9 @@ package enum RunSession {
         // Remove a stale same-name container before start. Interrupt cleanup is owned by
         // `stopRunContainer` (graceful `--timeout`), not `teardownRespectingCancellation`.
         try await ContainerTeardown.teardown(id: plan.name)
-        let command = try Application.ContainerRun.parse(plan.runArguments)
+        let command = try Application.ContainerRun.parse(
+            ComposeFileStaging.preparedRunArguments(for: plan)
+        )
         do {
             try await command.run()
             return 0

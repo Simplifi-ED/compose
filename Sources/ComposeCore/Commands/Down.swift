@@ -102,6 +102,7 @@ public struct Down: AsyncParsableCommand {
             lines: orchestration.lines,
             interruptedMessage: "Shutdown interrupted. Some containers may still be running."
         ) {
+            defer { ComposeFileStaging.removeProjectStaging(projectName: context.projectName) }
             try await DownShutdown.tearDownContainers(
                 context: context,
                 containers: containers,
