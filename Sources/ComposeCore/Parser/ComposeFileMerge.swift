@@ -38,7 +38,8 @@ enum ComposeFileMerge {
             ),
             environment: merge(base: base.environment, override: override.environment),
             containerName: override.containerName ?? base.containerName,
-            dependsOn: base.dependsOn + override.dependsOn
+            dependsOn: base.dependsOn + override.dependsOn,
+            profiles: override.profiles.isEmpty ? base.profiles : override.profiles
         )
     }
 

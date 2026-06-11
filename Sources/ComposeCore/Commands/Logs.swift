@@ -11,6 +11,9 @@ public struct Logs: AsyncParsableCommand {
     @OptionGroup
     var projectOptions: ProjectOptions
 
+    @OptionGroup
+    var profileOptions: ProfileOptions
+
     @Flag(name: .long, help: "Stream new log lines.")
     var follow = false
 
@@ -31,10 +34,16 @@ public struct Logs: AsyncParsableCommand {
 
     public func run() async throws {
         let context = try projectOptions.resolvedLabelCommandContext(
-            skipComposeFileOnExplicitProject: true
+            skipComposeFileOnExplicitProject: true,
+            profileFilterRequested: profileOptions.profileFilterRequested
         )
         let containers = try await ContainerDiscovery.projectContainers(forProject: context.projectName)
-        let sources = makeLogSources(from: containers, services: services)
+        let filter = try projectOptions.resolvedQueryServiceFilter(
+            context: context,
+            profileOptions: profileOptions,
+            positionalServices: services
+        )
+        let sources = makeLogSources(from: containers, filter: filter)
         guard !sources.isEmpty else { return }
 
         let mode = TerminalMode.resolve()

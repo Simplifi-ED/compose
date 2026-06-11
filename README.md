@@ -14,7 +14,7 @@ Maintained by [Omnivya](https://www.omnivya.fr) ([Simplifi-ED](https://github.co
 
 - Compose files (`-f`, auto-discovery of `compose.yaml` / `docker-compose.yml` + override; `COMPOSE_FILE`; repeat `-f` to merge)
 - Project name (`-p`, `COMPOSE_PROJECT_NAME`, compose `name:`, default: parent directory of the first compose file)
-- Per service: `image`, `command`, `ports`, `volumes` (bind mounts), `environment`, `container_name`, `depends_on` (list form)
+- Per service: `image`, `command`, `ports`, `volumes` (bind mounts), `environment`, `container_name`, `depends_on` (list form), `profiles`
 - `container compose up` (detached) and `container compose down` (stop and remove)
 - Dependency-aware startup: services start in `depends_on` order (start order only, not health/readiness); independent services run in parallel
 - Failed `up` rolls back containers started in earlier waves
@@ -24,7 +24,28 @@ Maintained by [Omnivya](https://www.omnivya.fr) ([Simplifi-ED](https://github.co
 - Container labels for project tracking (`com.docker.compose.project`, `com.docker.compose.service`)
 - `container compose ps` (list project containers), `container compose top` (live CPU/memory stats stream), and `container compose run` (one-off foreground container from a service definition)
 
-Not supported yet: long-form `depends_on` with health conditions, networks, named volumes, volume drivers, read-only mounts (`:ro`), `build`, profiles, YAML `extends` / `include`, `${VAR:+replacement}` / `${VAR?error}` forms, unbraced `$VAR` interpolation.
+Not supported yet: long-form `depends_on` with health conditions, networks, named volumes, volume drivers, read-only mounts (`:ro`), `build`, YAML `extends` / `include`, `${VAR:+replacement}` / `${VAR?error}` forms, unbraced `$VAR` interpolation, `COMPOSE_PROFILES` environment variable.
+
+### Profiles
+
+Services with `profiles` start only when a matching `--profile` is passed to `up`. Services without `profiles` always start on `up`. Repeat `--profile` to OR multiple profiles.
+
+```bash
+container compose up                          # unprofiled services only
+container compose up --profile debug          # unprofiled + debug profile
+container compose up --profile debug --profile metrics
+container compose run debugger sh             # auto-enables the service's profiles
+```
+
+| Command | No `--profile` | With `--profile debug` | With `--profile "*"` |
+|---------|----------------|------------------------|----------------------|
+| `up` | Unprofiled services only | Unprofiled + `debug` services | N/A |
+| `ps`, `logs`, `top` | All project containers | Unprofiled + `debug` containers | All project containers |
+| `down` | All project containers | Unprofiled + `debug` containers | All project containers |
+
+`depends_on` referencing a profile-only service that is not active fails at plan time with an actionable error.
+
+`down --profile` is container-scoped only (no network or named-volume teardown in v1). Containers left running may still hold ports or bind mounts; resolve conflicts before re-running `up`.
 
 ### Interrupt handling
 

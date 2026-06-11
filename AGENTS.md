@@ -15,7 +15,7 @@ You are building a **Minimal Real Compose Plugin**—NOT a generic orchestration
 - Project naming: `-p`, `COMPOSE_PROJECT_NAME`, compose `name:`, first-file parent directory [1].
 - Instantiating and mapping configuration directly into Apple's programmatic `ContainerCommands` API [1].
 - Basic container lifecycles: Starting (via `ContainerRun`) and Stopping (via `ContainerStop`) [1].
-- Attributes to map: `image`, `command`, `environment`, standard host-to-container `ports`, short-syntax bind-mount `volumes` (`host:container`), and short-form `depends_on` (list of service names) [1].
+- Attributes to map: `image`, `command`, `environment`, standard host-to-container `ports`, short-syntax bind-mount `volumes` (`host:container`), short-form `depends_on` (list of service names), and `profiles` [1].
 - Dependency-aware startup ordering: topological sort with parallel waves via structured concurrency [1].
 - Partial-`up` rollback: tear down containers from successful waves when a later wave fails [1].
 - Reverse-topological `down` when a compose file is available; parallel `down` fallback for `-p`-only [1].
@@ -122,6 +122,7 @@ The output of the discovery command **must** show the `compose` plugin. If it do
 - Multi-file merge: unique-key ports/volumes; env list by var name; `depends_on` append-only. Relative bind-mount paths resolve against the compose file directory, not shell CWD.
 - Per-file substitution before YAML parse: shell environment overrides `.env` beside each compose file; supports `${VAR}`, `${VAR:-default}`, `${VAR-default}`, and `$$` escapes; unresolved `${VAR}` errors; YAML anchors/aliases resolved by Yams during decode.
 - CLI subcommands: `up`, `down`, `ps`, `logs`, `top`, `exec`, `run`; `up`/`down` accept `--progress auto|plain|none`; `up --attach` multiplexes logs after detached start; `-f`/`-p` on subcommands, not `compose` root.
+- Profiles: default `up` skips profiled services; `--profile` (repeatable, OR) on `up`, `ps`, `logs`, `top`, `down`; `down --profile "*"` stops all project containers; `run` auto-enables the target service's profiles; filter before dependency graph with `profileExcludedDependency` for inactive deps; `COMPOSE_PROFILES` deferred.
 - `ComposeCore/Terminal/` is presentation-only (no Container API imports); `Runtime/` holds orchestration (`ServiceRunner` waves only, `LogStream`, `SignalForwarding`, `ExecSession`, `AttachAfterUp`, `ProjectStatus`).
 - `compose top` streams `ContainerClient.stats()` filtered by project labels (not in-container `ps`); `compose logs` multiplexes upstream file handles (merged containerLog + bootlog).
 - SIGINT during `up`/`down` orchestration leaves started containers running; `SignalForwarding` coordinates stop/teardown for attach, logs follow, top, exec, and run.

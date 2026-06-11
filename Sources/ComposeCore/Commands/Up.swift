@@ -17,6 +17,9 @@ public struct Up: AsyncParsableCommand {
     @OptionGroup
     var shutdownTimeoutOptions: ShutdownTimeoutOptions
 
+    @OptionGroup
+    var profileOptions: ProfileOptions
+
     @Flag(
         name: .long,
         help: "After startup, follow service logs in the foreground until services exit or you interrupt."
@@ -34,7 +37,8 @@ public struct Up: AsyncParsableCommand {
         let layers = try ServicePlanner.startupLayers(
             for: composeFile,
             projectName: projectName,
-            composeDirectory: composeDirectory
+            composeDirectory: composeDirectory,
+            activeProfiles: profileOptions.activeProfileSet
         )
         let plans = layers.flatMap { $0 }
 

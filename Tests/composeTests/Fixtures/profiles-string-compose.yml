@@ -1,0 +1,4 @@
+services:
+  debugger:
+    image: docker.io/library/alpine:latest
+    profiles: debug

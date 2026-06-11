@@ -1,58 +1,27 @@
 import Foundation
 
-public struct ServicePlan: Sendable, Equatable {
-    public let serviceName: String
-    public let name: String
-    public let runArguments: [String]
-
-    public init(serviceName: String, name: String, runArguments: [String]) {
-        self.serviceName = serviceName
-        self.name = name
-        self.runArguments = runArguments
-    }
-}
-
-package struct RunPlanOptions: Sendable, Equatable {
-    package let removeContainer: Bool
-    package let commandOverride: [String]?
-    package let interactive: Bool
-    package let processTerminal: Bool
-    package let nameSuffix: String
-
-    package init(
-        removeContainer: Bool,
-        commandOverride: [String]?,
-        interactive: Bool,
-        processTerminal: Bool,
-        nameSuffix: String
-    ) {
-        self.removeContainer = removeContainer
-        self.commandOverride = commandOverride
-        self.interactive = interactive
-        self.processTerminal = processTerminal
-        self.nameSuffix = nameSuffix
-    }
-}
-
 public enum ServicePlanner {
     public static func plans(
         for composeFile: ComposeFile,
         projectName: String,
-        composeDirectory: URL
+        composeDirectory: URL,
+        activeProfiles: Set<String> = []
     ) throws -> [ServicePlan] {
         try startupLayers(
             for: composeFile,
             projectName: projectName,
-            composeDirectory: composeDirectory
+            composeDirectory: composeDirectory,
+            activeProfiles: activeProfiles
         ).flatMap { $0 }
     }
 
     public static func startupLayers(
         for composeFile: ComposeFile,
         projectName: String,
-        composeDirectory: URL
+        composeDirectory: URL,
+        activeProfiles: Set<String> = []
     ) throws -> [[ServicePlan]] {
-        try dependencyLayers(for: composeFile).map { layer in
+        try dependencyLayers(for: composeFile, activeProfiles: activeProfiles).map { layer in
             try layer.map { serviceName, service in
                 try plan(
                     serviceName: serviceName,
@@ -65,9 +34,13 @@ public enum ServicePlanner {
     }
 
     static func dependencyLayers(
-        for composeFile: ComposeFile
+        for composeFile: ComposeFile,
+        activeProfiles: Set<String> = []
     ) throws -> [[(serviceName: String, service: ComposeService)]] {
-        let services = composeFile.services
+        let services = try ProfileFilter.activeServices(
+            from: composeFile.services,
+            activeProfiles: activeProfiles
+        )
         return try DependencyGraph.serviceLayers(for: services).map { layer in
             layer.map { ($0, services[$0]!) }
         }
@@ -175,9 +148,9 @@ public enum ServicePlanner {
         let command = if let override = options.commandOverride, !override.isEmpty {
             override
         } else {
-            commandArguments(service.command)
+            ServiceRunMapping.commandArguments(service.command)
         }
-        try appendServiceRunConfiguration(
+        try ServiceRunMapping.appendServiceRunConfiguration(
             to: &arguments,
             serviceName: serviceName,
             service: service,
@@ -211,14 +184,14 @@ public enum ServicePlanner {
         )
 
         var arguments = ["-d", "--name", name]
-        try appendServiceRunConfiguration(
+        try ServiceRunMapping.appendServiceRunConfiguration(
             to: &arguments,
             serviceName: serviceName,
             service: service,
             projectName: projectName,
             composeDirectory: composeDirectory,
             image: image,
-            command: commandArguments(service.command)
+            command: ServiceRunMapping.commandArguments(service.command)
         )
 
         return ServicePlan(
@@ -228,118 +201,11 @@ public enum ServicePlanner {
         )
     }
 
-    private static func appendServiceRunConfiguration(
-        to arguments: inout [String],
-        serviceName: String,
-        service: ComposeService,
-        projectName: String,
-        composeDirectory: URL,
-        image: String,
-        command: [String]
-    ) throws {
-        arguments.append(contentsOf: ComposeLabels.runFlags(projectName: projectName, serviceName: serviceName))
-        arguments.append(contentsOf: environmentFlags(service.environment))
-        for port in service.ports {
-            arguments.append(contentsOf: ["-p", try publishFlag(for: port)])
-        }
-        for volume in service.volumes {
-            arguments.append(contentsOf: ["-v", try volumeFlag(for: volume, relativeTo: composeDirectory)])
-        }
-        arguments.append(image)
-        arguments.append(contentsOf: command)
-    }
-
-    static func environmentFlags(_ environment: ComposeEnvironment?) -> [String] {
-        guard let environment else { return [] }
-        switch environment {
-        case .map(let values):
-            return values.flatMap { key, value in ["-e", "\(key)=\(value)"] }
-        case .list(let values):
-            return values.flatMap { ["-e", $0] }
-        }
-    }
-
-    static func commandArguments(_ command: ComposeCommandValue?) -> [String] {
-        guard let command else { return [] }
-        switch command {
-        case .string(let value):
-            return value.split(whereSeparator: \.isWhitespace).map(String.init)
-        case .list(let values):
-            return values
-        }
-    }
-
     public static func publishFlag(for port: String) throws -> String {
-        guard let spec = ComposeBindingKeys.parsePortSpec(port) else {
-            throw ComposeError.unsupportedPort(port)
-        }
-
-        if spec.protocolSuffix.isEmpty {
-            return "127.0.0.1:\(spec.hostPort):\(spec.containerPort)"
-        }
-        return "127.0.0.1:\(spec.hostPort):\(spec.containerPort)\(spec.protocolSuffix)"
+        try ServiceRunMapping.publishFlag(for: port)
     }
 
     public static func volumeFlag(for volume: String, relativeTo composeDirectory: URL) throws -> String {
-        let trimmed = volume.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else {
-            throw ComposeError.unsupportedVolume(volume)
-        }
-
-        let parts = trimmed.split(separator: ":", omittingEmptySubsequences: false)
-        if parts.count == 3 {
-            throw ComposeError.unsupportedVolumeOption(volume)
-        }
-        guard parts.count == 2 else {
-            throw ComposeError.unsupportedVolume(volume)
-        }
-
-        let hostPath = String(parts[0])
-        let containerPath = String(parts[1])
-
-        guard !hostPath.isEmpty, !containerPath.isEmpty else {
-            throw ComposeError.unsupportedVolume(volume)
-        }
-        guard containerPath.hasPrefix("/") else {
-            throw ComposeError.unsupportedVolume(volume)
-        }
-
-        let isBindMountSource = hostPath.contains("/") || hostPath == "." || hostPath == ".."
-        guard isBindMountSource else {
-            throw ComposeError.unsupportedNamedVolume(volume)
-        }
-
-        let resolvedHostURL: URL
-        if hostPath.hasPrefix("/") {
-            resolvedHostURL = URL(fileURLWithPath: hostPath)
-        } else {
-            resolvedHostURL = composeDirectory.appendingPathComponent(hostPath)
-            let standardized = resolvedHostURL.standardizedFileURL.resolvingSymlinksInPath()
-            let composeRoot = composeDirectory.standardizedFileURL.resolvingSymlinksInPath()
-            guard Self.isPathContained(standardized, within: composeRoot) else {
-                throw ComposeError.invalidField(
-                    "volumes",
-                    reason: "host path '\(hostPath)' resolves outside the compose file directory. "
-                        + "Use a path within the project or an absolute host path."
-                )
-            }
-        }
-        let absoluteHostPath = resolvedHostURL.standardizedFileURL.path
-
-        guard FileManager.default.fileExists(atPath: absoluteHostPath) else {
-            throw ComposeError.volumeHostPathNotFound(path: absoluteHostPath)
-        }
-
-        return "\(absoluteHostPath):\(containerPath)"
-    }
-
-    private static func isPathContained(_ path: URL, within root: URL) -> Bool {
-        let resolvedPath = path.standardizedFileURL.path
-        let rootPath = root.standardizedFileURL.path
-        if resolvedPath == rootPath {
-            return true
-        }
-        let prefix = rootPath.hasSuffix("/") ? rootPath : rootPath + "/"
-        return resolvedPath.hasPrefix(prefix)
+        try ServiceRunMapping.volumeFlag(for: volume, relativeTo: composeDirectory)
     }
 }
