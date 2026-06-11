@@ -1,0 +1,12 @@
+services:
+  web:
+    image: docker.io/library/alpine:latest
+    command: sleep 300
+    volumes:
+      - "./data:/mnt/data"
+  cache:
+    image: docker.io/library/alpine:latest
+    command: sleep 300
+    volumes:
+      - "./data:/mnt/cache"
+      - "/tmp/external:/mnt/external"

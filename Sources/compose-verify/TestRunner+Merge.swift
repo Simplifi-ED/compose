@@ -48,6 +48,14 @@ extension TestRunner {
             "merge environment list by variable name"
         )
 
+        try runMergeExtendedTests(mergeDirectory: mergeDirectory, baseURL: baseURL, overrideURL: overrideURL)
+    }
+
+    mutating func runMergeExtendedTests(
+        mergeDirectory: URL,
+        baseURL: URL,
+        overrideURL: URL
+    ) throws {
         expectComposeError(
             "missing second compose file",
             matching: { if case .fileNotFound = $0 { true } else { false } },

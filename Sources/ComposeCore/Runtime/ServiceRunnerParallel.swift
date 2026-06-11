@@ -8,6 +8,45 @@ extension ServiceRunner {
         let wasInterrupted: Bool
     }
 
+    package struct ParallelRunItem<T: Sendable>: Sendable {
+        let label: String
+        let collectOnSuccess: String?
+        let value: T
+    }
+
+    private struct ParallelTaskResult: Sendable {
+        let label: String
+        let collectOnSuccess: String?
+        let error: Error?
+    }
+
+    private struct ParallelRunAccumulator {
+        var succeeded: [String] = []
+        var completed: [String] = []
+        var failures: [(service: String, error: Error)] = []
+        var wasInterrupted = false
+
+        mutating func record(
+            _ result: ParallelTaskResult,
+            onCompletion: (@Sendable (String, Bool) async -> Void)?
+        ) async {
+            if let error = result.error {
+                if error is CancellationError {
+                    wasInterrupted = true
+                } else {
+                    failures.append((service: result.label, error: error))
+                    await onCompletion?(result.label, false)
+                }
+            } else {
+                completed.append(result.label)
+                if let collected = result.collectOnSuccess {
+                    succeeded.append(collected)
+                }
+                await onCompletion?(result.label, true)
+            }
+        }
+    }
+
     package static func runContainerWaves(
         layers: [[DiscoveredContainer]],
         progress: WaveProgressHandlers?,
@@ -21,7 +60,7 @@ extension ServiceRunner {
             try Task.checkCancellation()
             await progress?.onWaveStart?(index + 1, layers.count, layer.map(\.name))
             let result = await parallelRun(
-                layer.map { (label: $0.name, collectOnSuccess: nil, value: $0) },
+                layer.map { ParallelRunItem(label: $0.name, collectOnSuccess: nil, value: $0) },
                 onCompletion: progress?.onServiceComplete
             ) { container in
                 try await work(container)
@@ -57,7 +96,7 @@ extension ServiceRunner {
     }
 
     package static func parallelRun<T: Sendable>(
-        _ items: [(label: String, collectOnSuccess: String?, value: T)],
+        _ items: [ParallelRunItem<T>],
         onCompletion: (@Sendable (String, Bool) async -> Void)? = nil,
         work: @escaping @Sendable (T) async throws -> Void
     ) async -> ParallelRunResult {
@@ -69,15 +108,12 @@ extension ServiceRunner {
             return ParallelRunResult(succeeded: [], completed: [], failures: [], wasInterrupted: true)
         }
 
-        var succeeded: [String] = []
-        var completed: [String] = []
-        var failures: [(service: String, error: Error)] = []
-        var wasInterrupted = false
+        var accumulator = ParallelRunAccumulator()
 
-        await withTaskGroup(of: (String, String?, Error?).self) { group in
+        await withTaskGroup(of: ParallelTaskResult.self) { group in
             for item in items {
                 if Task.isCancelled {
-                    wasInterrupted = true
+                    accumulator.wasInterrupted = true
                     group.cancelAll()
                     break
                 }
@@ -85,38 +121,37 @@ extension ServiceRunner {
                     do {
                         try Task.checkCancellation()
                         try await work(item.value)
-                        return (item.label, item.collectOnSuccess, nil)
+                        return ParallelTaskResult(
+                            label: item.label,
+                            collectOnSuccess: item.collectOnSuccess,
+                            error: nil
+                        )
                     } catch is CancellationError {
-                        return (item.label, item.collectOnSuccess, CancellationError())
+                        return ParallelTaskResult(
+                            label: item.label,
+                            collectOnSuccess: item.collectOnSuccess,
+                            error: CancellationError()
+                        )
                     } catch {
-                        return (item.label, item.collectOnSuccess, error)
+                        return ParallelTaskResult(
+                            label: item.label,
+                            collectOnSuccess: item.collectOnSuccess,
+                            error: error
+                        )
                     }
                 }
             }
 
             for await result in group {
-                if let error = result.2 {
-                    if error is CancellationError {
-                        wasInterrupted = true
-                    } else {
-                        failures.append((service: result.0, error: error))
-                        await onCompletion?(result.0, false)
-                    }
-                } else {
-                    completed.append(result.0)
-                    if let collected = result.1 {
-                        succeeded.append(collected)
-                    }
-                    await onCompletion?(result.0, true)
-                }
+                await accumulator.record(result, onCompletion: onCompletion)
             }
         }
 
         return ParallelRunResult(
-            succeeded: succeeded,
-            completed: completed,
-            failures: failures,
-            wasInterrupted: wasInterrupted || Task.isCancelled
+            succeeded: accumulator.succeeded,
+            completed: accumulator.completed,
+            failures: accumulator.failures,
+            wasInterrupted: accumulator.wasInterrupted || Task.isCancelled
         )
     }
 }

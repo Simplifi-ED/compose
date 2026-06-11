@@ -1,0 +1,126 @@
+import Foundation
+
+public enum BindMountPurge {
+    public enum PurgeSkipReason: Equatable, Sendable {
+        case protectedComposeFile
+        case composeRootDirectory
+        case outsideComposeRoot
+        case stillInUseByRunningContainer
+        case removalFailed(String)
+    }
+
+    public struct PurgeResult: Sendable {
+        public let removed: [String]
+        public let skipped: [(path: String, reason: PurgeSkipReason)]
+    }
+
+    /// Collects project-local bind-mount host paths eligible for purge on `down -v`.
+    ///
+    /// Permissive vs `ServiceRunMapping.volumeFlag`: unparsable or absolute mounts are skipped
+    /// silently so purge never fails the whole `down` when the file lists non-purgeable volumes.
+    public static func collectPurgeablePaths(
+        composeFile: ComposeFile,
+        composeDirectory: URL,
+        serviceNames: Set<String>
+    ) -> [String] {
+        var paths: Set<String> = []
+        for (serviceName, service) in composeFile.services where serviceNames.contains(serviceName) {
+            for volume in service.volumes {
+                guard let hostPath = try? purgeableHostPath(for: volume, relativeTo: composeDirectory) else {
+                    continue
+                }
+                paths.insert(hostPath)
+            }
+        }
+        return paths.sorted()
+    }
+
+    /// Removes allowlisted bind-mount host paths after containers are stopped.
+    public static func purge(
+        paths: [String],
+        composeDirectory: URL,
+        protectedPaths: Set<String> = [],
+        pathsInUseByRunningServices: Set<String> = []
+    ) -> PurgeResult {
+        let composeRoot = composeDirectory.standardizedFileURL.resolvingSymlinksInPath().path
+        var removed: [String] = []
+        var skipped: [(path: String, reason: PurgeSkipReason)] = []
+
+        for path in paths {
+            let standardized = URL(fileURLWithPath: path).standardizedFileURL.resolvingSymlinksInPath()
+            let standardizedPath = standardized.path
+
+            if pathsInUseByRunningServices.contains(standardizedPath) {
+                skipped.append((path, .stillInUseByRunningContainer))
+                continue
+            }
+            if protectedPaths.contains(standardizedPath) {
+                skipped.append((path, .protectedComposeFile))
+                continue
+            }
+            if standardizedPath == composeRoot {
+                skipped.append((path, .composeRootDirectory))
+                continue
+            }
+            guard BindMountPathResolver.isPathContained(standardized, within: composeDirectory) else {
+                skipped.append((path, .outsideComposeRoot))
+                continue
+            }
+            guard FileManager.default.fileExists(atPath: standardizedPath) else {
+                continue
+            }
+
+            do {
+                try FileManager.default.removeItem(at: standardized)
+                removed.append(standardizedPath)
+            } catch {
+                skipped.append((path, .removalFailed(error.localizedDescription)))
+            }
+        }
+
+        return PurgeResult(removed: removed, skipped: skipped)
+    }
+
+    public static func protectedComposePaths(fileURLs: [URL]) -> Set<String> {
+        Set(fileURLs.map { $0.standardizedFileURL.resolvingSymlinksInPath().path })
+    }
+
+    static func warnPurgeSkipped(_ reason: String) {
+        fputs("Warning: skipping bind-mount removal; \(reason).\n", stderr)
+    }
+
+    static func printPurgeSummary(removed: [String]) {
+        guard !removed.isEmpty else { return }
+        let pathList = removed.joined(separator: ", ")
+        print("Removed \(removed.count) bind-mount path(s): \(pathList)")
+    }
+
+    static func warnSkippedPath(path: String, reason: PurgeSkipReason) {
+        switch reason {
+        case .outsideComposeRoot:
+            fputs("Warning: skipped '\(path)': resolves outside the compose file directory.\n", stderr)
+        case .stillInUseByRunningContainer:
+            fputs(
+                "Warning: skipped '\(path)': still mounted by a running project container.\n",
+                stderr
+            )
+        case .removalFailed(let message):
+            fputs("Warning: skipped '\(path)': \(message).\n", stderr)
+        case .protectedComposeFile, .composeRootDirectory:
+            break
+        }
+    }
+
+    private static func purgeableHostPath(for volume: String, relativeTo composeDirectory: URL) throws -> String? {
+        let (hostPath, _) = try BindMountPathResolver.parseVolumeSpec(volume)
+        guard !hostPath.hasPrefix("/") else {
+            return nil
+        }
+        switch try BindMountPathResolver.resolveHostPath(hostPath, relativeTo: composeDirectory) {
+        case .projectRelative(let url):
+            return url.path
+        case .absoluteExternal:
+            return nil
+        }
+    }
+}

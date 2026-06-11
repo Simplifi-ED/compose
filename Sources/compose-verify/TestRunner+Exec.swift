@@ -83,6 +83,10 @@ extension TestRunner {
             }
         )
 
+        runExecResolverAmbiguityTests(runningWeb: runningWeb)
+    }
+
+    private mutating func runExecResolverAmbiguityTests(runningWeb: ProjectContainer) {
         let duplicateA = ProjectContainer(
             name: "demo_web_a",
             serviceName: "web",
@@ -137,7 +141,10 @@ extension TestRunner {
             explicitTTY: false,
             stdinIsTTY: false
         )
-        expect(explicit.interactive && !explicit.processTerminal && !explicit.useInteractivePTY, "explicit -i without -t")
+        expect(
+            explicit.interactive && !explicit.processTerminal && !explicit.useInteractivePTY,
+            "explicit -i without -t"
+        )
 
         let auto = InteractiveSession.IOFlags.resolve(
             explicitInteractive: false,
@@ -151,7 +158,10 @@ extension TestRunner {
             explicitTTY: false,
             stdinIsTTY: false
         )
-        expect(!piped.interactive && !piped.processTerminal && !piped.useInteractivePTY, "piped stdin stays non-interactive")
+        expect(
+            !piped.interactive && !piped.processTerminal && !piped.useInteractivePTY,
+            "piped stdin stays non-interactive"
+        )
 
         let pipedExplicitTTY = InteractiveSession.IOFlags.resolve(
             explicitInteractive: true,
@@ -253,6 +263,10 @@ extension TestRunner {
         }
         expect(mismatch, "exec session rejects project label mismatch before ProcessIO")
 
+        runExecSessionProcessMockTests()
+    }
+
+    private mutating func runExecSessionProcessMockTests() {
         final class ConfigCapture: @unchecked Sendable {
             var configuration: ProcessConfiguration?
         }
@@ -354,7 +368,7 @@ extension TestRunner {
         var configuration = ContainerConfiguration(id: "demo_web", image: image, process: process)
         configuration.labels = [
             ComposeLabels.project: project,
-            ComposeLabels.service: service,
+            ComposeLabels.service: service
         ]
         return ContainerSnapshot(
             configuration: configuration,

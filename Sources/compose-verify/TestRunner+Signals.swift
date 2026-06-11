@@ -80,6 +80,10 @@ extension TestRunner {
         }
         expect(stopProject == .interrupted(signal), "stopProject maps to interrupted(signal)")
 
+        runSignalForwardingRunPolicyTests(signal: signal)
+    }
+
+    private mutating func runSignalForwardingRunPolicyTests(signal: InterruptSignal) {
         let stopRun = blockingAwait {
             try? await SignalForwarding.interruptedOutcome(
                 policy: .stopRunContainer(

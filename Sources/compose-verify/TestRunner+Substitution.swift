@@ -73,6 +73,10 @@ extension TestRunner {
         )
         expect(commentSkipped == "# legacy: ${OLD}\nimage: ok", "substitution skips comment lines")
 
+        try runSubstitutionAdvancedUnitTests()
+    }
+
+    mutating func runSubstitutionAdvancedUnitTests() throws {
         let indirect = try ComposeSubstitution.substitute(
             "image: ${A}",
             variables: ["A": "${B}", "B": "hello"],

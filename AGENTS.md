@@ -21,6 +21,8 @@ You are building a **Minimal Real Compose Plugin**—NOT a generic orchestration
 - Dependency-aware startup ordering: topological sort with parallel waves via structured concurrency [1].
 - Partial-`up` rollback: tear down containers from successful waves when a later wave fails [1].
 - Reverse-topological `down` when a compose file is available; parallel `down` fallback for `-p`-only [1].
+- Opt-in `--remove-orphans` on `up`/`down`: profile-aware orphan detection and removal (project label scoped) [1].
+- `down -v` / `--volumes`: Phase 1 bind-mount purge for project-relative host paths only; symlink-safe allowlist [1].
 
 ### **Out of Scope (DO NOT CODE):**
 
@@ -80,12 +82,12 @@ Before finalizing any task, run this exact sequence to ensure the plugin is heal
 
 ```bash
 # 1. Build and verify target compiles
-swift build -c release
+make build
+# or: swift build -c release
 
 # 2. Package into target directory structure
-mkdir -p dist/compose/bin
-cp .build/release/compose dist/compose/bin/
-cp config.toml dist/compose/
+make dist
+# or: ./scripts/package.sh
 
 # 3. Simulate installation to libexec
 INSTALL_ROOT="$(dirname "$(dirname "$(command -v container)")")"
@@ -133,3 +135,4 @@ The output of the discovery command **must** show the `compose` plugin. If it do
 - Scaling: `ReplicaPlanning` is pure validation/naming; replica loops live in `ServicePlanner.startupLayers`; `up` names are always `{project}_{service}_{index}` (1-based); `container_name` errors on `up` via `validateForUp` but still keys `run` via `runContainerBaseName`; `deploy.replicas` must be >= 1 at decode; static host port + replicas > 1 fails at plan time; container-only ports (`80`, `:80`) parse but emit no `-p`; replicas carry `com.docker.compose.container-number`; log multiplex keys by container name and disambiguates replica prefixes.
 - Host Linux kernel must be configured (`container system kernel set`) before `container run` or `compose up` succeed.
 - Explicit missing `-f` paths throw; only absent default discovery yields nil so `-p`-only `down`/`ps` can proceed.
+- `--remove-orphans` on `up`/`down` is opt-in; `OrphanRemoval` handles profile-aware detection. `down -v` purges project-relative bind-mount paths only (`BindMountPurge`); named volumes deferred.

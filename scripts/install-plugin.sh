@@ -4,18 +4,14 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
-CONTAINER_PATH="$(command -v container)"
+if ! CONTAINER_PATH="$(command -v container)"; then
+  echo "error: container CLI not found in PATH" >&2
+  exit 1
+fi
 INSTALL_ROOT="$(dirname "$(dirname "$CONTAINER_PATH")")"
 PLUGIN_DEST="${INSTALL_ROOT}/libexec/container-plugins/compose"
 
-echo "Building release binary..."
-swift build -c release
-
-echo "Packaging plugin..."
-rm -rf dist/compose
-mkdir -p dist/compose/bin
-cp .build/release/compose dist/compose/bin/compose
-cp config.toml dist/compose/
+bash "$ROOT_DIR/scripts/package.sh"
 
 echo "Starting container system (required for plugin discovery)..."
 if ! container system start; then

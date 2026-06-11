@@ -50,6 +50,12 @@ extension TestRunner {
             }
         )
 
+        try runProjectOptionsDiscoveryTests(tempDir: tempDir)
+
+        try runProjectNamingTests()
+    }
+
+    mutating func runProjectOptionsDiscoveryTests(tempDir: URL) throws {
         try "services: {}\n".write(
             to: tempDir.appendingPathComponent("compose.yaml"),
             atomically: true,
@@ -100,8 +106,6 @@ extension TestRunner {
                 _ = try ComposeFileResolution.discover(cliFiles: [])
             }
         )
-
-        try runProjectNamingTests()
     }
 
     mutating func runProjectNamingTests() throws {

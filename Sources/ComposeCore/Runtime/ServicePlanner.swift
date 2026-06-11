@@ -120,12 +120,7 @@ public enum ServicePlanner {
         in containers: [DiscoveredContainer],
         composeFile: ComposeFile
     ) -> [DiscoveredContainer] {
-        let knownServices = Set(composeFile.services.keys)
-        return containers.filter { container in
-            guard let serviceName = container.serviceName else { return true }
-            return !knownServices.contains(serviceName)
-        }
-        .sorted { $0.name < $1.name }
+        OrphanRemoval.orphans(in: containers, composeFile: composeFile, policy: .yamlOnly)
     }
 
     /// Base name for one-off `run` containers; `up` uses `ReplicaPlanning.indexedContainerName`.
@@ -175,12 +170,14 @@ public enum ServicePlanner {
         }
         try ServiceRunMapping.appendServiceRunConfiguration(
             to: &arguments,
-            serviceName: serviceName,
-            service: service,
-            projectName: projectName,
-            composeDirectory: composeDirectory,
-            image: image,
-            command: command
+            configuration: ServiceRunConfiguration(
+                serviceName: serviceName,
+                service: service,
+                projectName: projectName,
+                composeDirectory: composeDirectory,
+                image: image,
+                command: command
+            )
         )
 
         return ServicePlan(
@@ -210,13 +207,15 @@ public enum ServicePlanner {
         var arguments = ["-d", "--name", name]
         try ServiceRunMapping.appendServiceRunConfiguration(
             to: &arguments,
-            serviceName: serviceName,
-            service: service,
-            projectName: projectName,
-            composeDirectory: composeDirectory,
-            image: image,
-            command: ServiceRunMapping.commandArguments(service.command),
-            containerNumber: replicaIndex
+            configuration: ServiceRunConfiguration(
+                serviceName: serviceName,
+                service: service,
+                projectName: projectName,
+                composeDirectory: composeDirectory,
+                image: image,
+                command: ServiceRunMapping.commandArguments(service.command),
+                containerNumber: replicaIndex
+            )
         )
 
         return ServicePlan(

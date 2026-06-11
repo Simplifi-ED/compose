@@ -80,13 +80,16 @@ extension TestRunner {
         let overrideURL = mergeDirectory.appendingPathComponent("override.yml")
 
         let shutdownMerged = try ComposeParser.parseForShutdown(fileURLs: [baseURL, overrideURL])
-        expect(shutdownMerged.services["web"]?.dependsOn.serviceNames == ["db", "cache"], "shutdown multi-file merge depends_on")
+        expect(
+            shutdownMerged.services["web"]?.dependsOn.serviceNames == ["db", "cache"],
+            "shutdown multi-file merge depends_on"
+        )
         let shutdownLayers = try ServicePlanner.shutdownContainerLayers(
             for: shutdownMerged,
             containers: [
                 DiscoveredContainer(name: "demo_web", serviceName: "web"),
                 DiscoveredContainer(name: "demo_db", serviceName: "db"),
-                DiscoveredContainer(name: "demo_cache", serviceName: "cache"),
+                DiscoveredContainer(name: "demo_cache", serviceName: "cache")
             ]
         )
         expect(shutdownLayers.count == 2, "shutdown multi-file layer count")

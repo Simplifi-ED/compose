@@ -2,6 +2,22 @@ import ContainerCommands
 import Foundation
 
 public enum ServiceRunner {
+    package struct UpOperationHooks: Sendable {
+        package let runContainer: @Sendable (ServicePlan) async throws -> Void
+        package let rollbackTeardown: @Sendable (String) async throws -> Void
+        package let waitForDependencies: @Sendable ([HealthGate], HealthWaitContext) async throws -> Void
+
+        package init(
+            runContainer: @escaping @Sendable (ServicePlan) async throws -> Void,
+            rollbackTeardown: @escaping @Sendable (String) async throws -> Void,
+            waitForDependencies: @escaping @Sendable ([HealthGate], HealthWaitContext) async throws -> Void
+        ) {
+            self.runContainer = runContainer
+            self.rollbackTeardown = rollbackTeardown
+            self.waitForDependencies = waitForDependencies
+        }
+    }
+
     public static func up(plans: [ServicePlan]) async throws {
         try await up(layers: [plans])
     }
@@ -15,18 +31,20 @@ public enum ServiceRunner {
             layers: layers,
             progress: progress,
             healthContext: healthContext,
-            runContainer: { plan in
-                try await ContainerTeardown.teardownRespectingCancellation(id: plan.name) {
-                    let command = try Application.ContainerRun.parse(plan.runArguments)
-                    try await command.run()
+            hooks: UpOperationHooks(
+                runContainer: { plan in
+                    try await ContainerTeardown.teardownRespectingCancellation(id: plan.name) {
+                        let command = try Application.ContainerRun.parse(plan.runArguments)
+                        try await command.run()
+                    }
+                },
+                rollbackTeardown: { name in
+                    try await ContainerTeardown.teardown(id: name)
+                },
+                waitForDependencies: { gates, context in
+                    try await HealthWait.waitForDependencies(gates: gates, context: context)
                 }
-            },
-            rollbackTeardown: { name in
-                try await ContainerTeardown.teardown(id: name)
-            },
-            waitForDependencies: { gates, context in
-                try await HealthWait.waitForDependencies(gates: gates, context: context)
-            }
+            )
         )
     }
 
@@ -34,17 +52,13 @@ public enum ServiceRunner {
     package static func up(
         layers: [[ServicePlan]],
         healthContext: HealthWaitContext?,
-        runContainer: @escaping @Sendable (ServicePlan) async throws -> Void,
-        rollbackTeardown: @escaping @Sendable (String) async throws -> Void,
-        waitForDependencies: @escaping @Sendable ([HealthGate], HealthWaitContext) async throws -> Void
+        hooks: UpOperationHooks
     ) async throws {
         try await orchestrateUp(
             layers: layers,
             progress: nil,
             healthContext: healthContext,
-            runContainer: runContainer,
-            rollbackTeardown: rollbackTeardown,
-            waitForDependencies: waitForDependencies
+            hooks: hooks
         )
     }
 
@@ -52,9 +66,7 @@ public enum ServiceRunner {
         layers: [[ServicePlan]],
         progress: WaveProgressHandlers?,
         healthContext: HealthWaitContext?,
-        runContainer: @escaping @Sendable (ServicePlan) async throws -> Void,
-        rollbackTeardown: @escaping @Sendable (String) async throws -> Void,
-        waitForDependencies: @escaping @Sendable ([HealthGate], HealthWaitContext) async throws -> Void
+        hooks: UpOperationHooks
     ) async throws {
         var startedWaves: [[String]] = []
         do {
@@ -63,10 +75,10 @@ public enum ServiceRunner {
                 // Progress keys on container names so replicas of one service stay distinct.
                 await progress?.onWaveStart?(index + 1, layers.count, layer.map(\.name))
                 let result = await parallelRun(
-                    layer.map { (label: $0.name, collectOnSuccess: $0.name, value: $0) },
+                    layer.map { ParallelRunItem(label: $0.name, collectOnSuccess: $0.name, value: $0) },
                     onCompletion: progress?.onServiceComplete
                 ) { plan in
-                    try await runContainer(plan)
+                    try await hooks.runContainer(plan)
                 }
                 if result.wasInterrupted {
                     throw CancellationError()
@@ -84,14 +96,17 @@ public enum ServiceRunner {
                         nextLayer: layers[index + 1],
                         context: healthContext
                     )
-                    try await waitForDependencies(gates, healthContext)
+                    try await hooks.waitForDependencies(gates, healthContext)
                 }
             }
         } catch is CancellationError {
             throw CancellationError()
         } catch {
             // Roll back in reverse startup order; parallel within each wave.
-            let rollbackFailures = await rollbackStartedContainers(startedWaves.reversed(), teardown: rollbackTeardown)
+            let rollbackFailures = await rollbackStartedContainers(
+                startedWaves.reversed(),
+                teardown: hooks.rollbackTeardown
+            )
             if !rollbackFailures.isEmpty {
                 let started = startedWaves.flatMap { $0 }
                 let rollbackMessage = ComposeError.rollbackFailed(
@@ -175,7 +190,7 @@ public enum ServiceRunner {
             }
             guard !wave.isEmpty else { continue }
             let result = await parallelRun(
-                wave.map { (label: $0, collectOnSuccess: nil, value: $0) }
+                wave.map { ParallelRunItem(label: $0, collectOnSuccess: nil, value: $0) }
             ) { name in
                 try await ContainerTeardown.teardownRespectingCancellation(id: name) {
                     try await teardown(name)
