@@ -53,6 +53,7 @@ public enum OrphanRemoval {
 
     public static func removeOrphans(
         _ orphans: [DiscoveredContainer],
+        execution: WaveExecutionPolicy = .unlimited,
         onRemoved: (@Sendable (String) -> Void)? = nil
     ) async throws {
         guard !orphans.isEmpty else { return }
@@ -60,7 +61,8 @@ public enum OrphanRemoval {
         let result = await ServiceRunner.parallelRun(
             orphans.map {
                 ServiceRunner.ParallelRunItem(label: $0.name, collectOnSuccess: $0.name, value: $0)
-            }
+            },
+            maxConcurrent: execution.maxConcurrent
         ) { container in
             try await ContainerTeardown.teardownRespectingCancellation(id: container.name)
         }

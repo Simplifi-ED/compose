@@ -24,6 +24,9 @@ public struct Up: AsyncParsableCommand {
     var scaleOptions: ScaleOptions
 
     @OptionGroup
+    var parallelOptions: ParallelOptions
+
+    @OptionGroup
     var workspaceHygiene: WorkspaceHygieneOptions
 
     @Flag(
@@ -33,6 +36,7 @@ public struct Up: AsyncParsableCommand {
     var attach = false
 
     public func run() async throws {
+        try parallelOptions.validate()
         let fileURLs = try projectOptions.resolvedFileURLs()
         let composeFile = try ComposeParser.parse(fileURLs: fileURLs)
         let projectName = try projectOptions.resolvedProjectName(
@@ -79,6 +83,7 @@ public struct Up: AsyncParsableCommand {
     ) async throws {
         let shouldRemoveOrphans = workspaceHygiene.shouldRemoveOrphans
         let activeProfiles = profileOptions.activeProfileSet
+        let execution = WaveExecutionPolicy(maxConcurrent: parallelOptions.resolvedMaxConcurrent())
         let orchestration = makeProgressOrchestration(
             display: progressOptions.resolvedDisplay(),
             phase: .starting
@@ -91,13 +96,15 @@ public struct Up: AsyncParsableCommand {
                 try await UpOrphanRemoval.removeBeforeStartupBestEffort(
                     projectName: projectName,
                     composeFile: composeFile,
-                    activeProfiles: activeProfiles
+                    activeProfiles: activeProfiles,
+                    execution: execution
                 )
             }
             try await ServiceRunner.up(
                 layers: layers,
                 progress: orchestration.handlers,
-                healthContext: healthContext
+                healthContext: healthContext,
+                execution: execution
             )
         }
     }

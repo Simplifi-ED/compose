@@ -160,7 +160,7 @@ container compose down -v                 # remove project-local bind-mount path
 - Scopes to the active project via `com.docker.compose.project` (exact label match).
 - Removes containers with no service label, a service removed from the compose file, or a service not in the current profile set (same rules as `up` / `down --profile`).
 - Prints a one-line summary when orphans are removed on `up`. On plain `down` (no `--profile`), all project containers are already stopped.
-- On `up`, orphan removal runs inside the same signal-handled phase as startup. Discovery or teardown failures warn and startup continues; successfully removed orphans still print a summary when removal is partial.
+- On `up`, orphan removal runs inside the same signal-handled phase as startup and honors `--parallel` when set. Discovery or teardown failures warn and startup continues; successfully removed orphans still print a summary when removal is partial.
 
 **`down -v` / `--volumes`** (Phase 1 — bind mounts only):
 
@@ -191,11 +191,13 @@ services:
 container compose up                  # 2 web replicas from deploy.replicas
 container compose up --scale web=3   # CLI override: 3 replicas
 container compose up --scale web=3 --scale db=2
+container compose up --parallel 2    # at most 2 containers start per wave
+container compose up --scale web=3 --parallel 2   # 3 web replicas, two-at-a-time in the same wave
 ```
 
 - Containers are always named `{project}_{service}_{index}` with a 1-based index (`demo_web_1`, `demo_web_2`), even at one replica.
 - All replicas share the `com.docker.compose.service` label, so `ps`, `logs web`, `top`, and `down` cover every replica. Each replica also gets a `com.docker.compose.container-number` label.
-- Replicas of a service start in parallel within their `depends_on` wave, and a failed wave rolls back all replicas started in earlier waves.
+- Replicas of a service start within their `depends_on` wave; by default all containers in a wave start at once. Use `--parallel N` on `up` or `down` to cap how many containers start or stop at once within each wave (dependency order and health waits between waves are unchanged). The same limit applies to `up --remove-orphans` teardown and to rollback after a failed wave. A failed wave rolls back all replicas started in earlier waves.
 - A static host port (`"8080:80"`) with more than one replica fails before any container starts — each replica would bind the same host port. Use a container-only port (`"80"` or `":80"`) to scale; the runtime doesn't allocate dynamic host ports, so container-only ports aren't bound on the host.
 - `container_name` conflicts with indexed naming and fails `up` at plan time; remove it from services you start with `up`. (`run` still honors it for one-off `{container_name}_run_*` containers.)
 - Other `deploy` keys (resources, placement, update_config, ...) are parsed and ignored.

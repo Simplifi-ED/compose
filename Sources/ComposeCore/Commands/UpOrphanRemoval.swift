@@ -6,7 +6,8 @@ package enum UpOrphanRemoval {
     package static func removeBeforeStartupBestEffort(
         projectName: String,
         composeFile: ComposeFile,
-        activeProfiles: Set<String>
+        activeProfiles: Set<String>,
+        execution: WaveExecutionPolicy = .unlimited
     ) async throws {
         let discovered: [DiscoveredContainer]
         do {
@@ -23,14 +24,16 @@ package enum UpOrphanRemoval {
         try await removeDiscoveredOrphansBestEffort(
             discovered: discovered,
             composeFile: composeFile,
-            activeProfiles: activeProfiles
+            activeProfiles: activeProfiles,
+            execution: execution
         )
     }
 
     package static func removeDiscoveredOrphansBestEffort(
         discovered: [DiscoveredContainer],
         composeFile: ComposeFile,
-        activeProfiles: Set<String>
+        activeProfiles: Set<String>,
+        execution: WaveExecutionPolicy = .unlimited
     ) async throws {
         let orphans = OrphanRemoval.orphans(
             in: discovered,
@@ -40,7 +43,7 @@ package enum UpOrphanRemoval {
         guard !orphans.isEmpty else { return }
 
         do {
-            try await OrphanRemoval.removeOrphans(orphans)
+            try await OrphanRemoval.removeOrphans(orphans, execution: execution)
         } catch is CancellationError {
             throw CancellationError()
         } catch {

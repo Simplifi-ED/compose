@@ -1,6 +1,56 @@
 import Foundation
 
 extension ServiceRunner {
+    /// Verifies `parallelRun` never exceeds `maxConcurrent` in-flight work (compose-verify).
+    package static func parallelRunPeakConcurrency(
+        maxConcurrent: Int?,
+        itemCount: Int
+    ) async -> Int {
+        actor ConcurrencyTracker {
+            private(set) var peak = 0
+            private var inFlight = 0
+
+            func enter() {
+                inFlight += 1
+                peak = max(peak, inFlight)
+            }
+
+            func leave() {
+                inFlight -= 1
+            }
+        }
+
+        let tracker = ConcurrencyTracker()
+        let items = (0..<itemCount).map { index in
+            ParallelRunItem(label: "item-\(index)", collectOnSuccess: nil, value: index)
+        }
+        _ = await parallelRun(items, maxConcurrent: maxConcurrent) { _ in
+            await tracker.enter()
+            try await Task.sleep(for: .milliseconds(50))
+            await tracker.leave()
+        }
+        return await tracker.peak
+    }
+
+    /// Verifies throttled `parallelRun` still records completed work after cancellation (compose-verify).
+    package static func parallelRunDrainsCompletedWorkOnCancellation() async -> [String] {
+        let items = [
+            ParallelRunItem(label: "fast", collectOnSuccess: "fast", value: "fast"),
+            ParallelRunItem(label: "slow", collectOnSuccess: "slow", value: "slow")
+        ]
+        let task = Task {
+            await parallelRun(items, maxConcurrent: 1) { label in
+                if label == "slow" {
+                    try await Task.sleep(for: .seconds(30))
+                }
+            }
+        }
+        try? await Task.sleep(for: .milliseconds(50))
+        task.cancel()
+        let result = await task.value
+        return result.completed
+    }
+
     /// Verifies `parallelRun` marks interruption when its parent task is cancelled (compose-verify).
     package static func parallelRunHonorsCancellation() async -> Bool {
         let task = Task {
