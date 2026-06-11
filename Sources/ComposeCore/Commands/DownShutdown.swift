@@ -29,7 +29,10 @@ enum DownShutdown {
         discovered: [DiscoveredContainer],
         teardownContainers: [DiscoveredContainer]
     ) -> VolumePurgeContext? {
-        guard let composeFile = context.composeFile, let fileURLs = context.fileURLs else {
+        guard let composeFile = context.composeFile,
+              let fileURLs = context.fileURLs,
+              !fileURLs.isEmpty
+        else {
             return nil
         }
 

@@ -43,7 +43,9 @@ enum BindMountPathResolver {
         relativeTo composeDirectory: URL
     ) throws -> ResolvedHostPath {
         if hostPath.hasPrefix("/") {
-            return .absoluteExternal(URL(fileURLWithPath: hostPath).standardizedFileURL)
+            return .absoluteExternal(
+                URL(fileURLWithPath: hostPath).standardizedFileURL.resolvingSymlinksInPath()
+            )
         }
 
         let resolvedHostURL = composeDirectory.appendingPathComponent(hostPath)

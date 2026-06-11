@@ -67,11 +67,17 @@ public struct Up: AsyncParsableCommand {
             interruptedMessage: "Startup interrupted. Started containers are still running."
         ) {
             if shouldRemoveOrphans {
-                try await UpOrphanRemoval.removeBeforeStartup(
-                    projectName: projectName,
-                    composeFile: composeFile,
-                    activeProfiles: activeProfiles
-                )
+                do {
+                    try await UpOrphanRemoval.removeBeforeStartup(
+                        projectName: projectName,
+                        composeFile: composeFile,
+                        activeProfiles: activeProfiles
+                    )
+                } catch let removalError as CancellationError {
+                    throw removalError
+                } catch {
+                    WorkspaceHygieneOutput.warnOrphanRemovalSkipped(error.localizedDescription)
+                }
             }
             try await ServiceRunner.up(
                 layers: layers,

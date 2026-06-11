@@ -91,7 +91,7 @@ extension TestRunner {
             name: nil,
             services: [
                 "web": ComposeService(
-                    image: "docker.io/library/alpine:latest",
+                    image: "docker.io/library/alpine:3.24",
                     command: .string("sleep 300"),
                     ports: [],
                     volumes: ["./data:/mnt/data"],
