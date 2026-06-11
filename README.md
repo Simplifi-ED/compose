@@ -25,7 +25,7 @@ Maintained by [Omnivya](https://www.omnivya.fr) ([Simplifi-ED](https://github.co
 - Opt-in `--remove-orphans` on `up` and `down` removes project containers whose service is missing from the compose file or not in the active profile set
 - `down -v` / `down --volumes` removes project-local bind-mount host paths declared in the compose file (see [Workspace hygiene](#workspace-hygiene))
 - Container labels for project tracking (`com.docker.compose.project`, `com.docker.compose.service`)
-- `container compose ps` (list project containers), `container compose top` (live CPU/memory stats stream), and `container compose run` (one-off foreground container from a service definition)
+- `container compose ps` (list project containers), `container compose top` (live CPU/memory stats stream), `container compose run` (one-off foreground container from a service definition), and `container compose config` (parse and print the resolved compose file without starting containers)
 
 Not supported yet: `depends_on` condition `service_completed_successfully`, networks, named volumes, volume drivers, read-only mounts (`:ro`), `build`, YAML `extends`, `${VAR:+replacement}` / `${VAR?error}` forms, unbraced `$VAR` interpolation, `COMPOSE_PROFILES` environment variable.
 
@@ -42,7 +42,7 @@ container compose run debugger sh             # auto-enables the service's profi
 
 | Command | No `--profile` | With `--profile debug` | With `--profile "*"` |
 |---------|----------------|------------------------|----------------------|
-| `up` | Unprofiled services only | Unprofiled + `debug` services | N/A |
+| `up`, `config` | Unprofiled services only | Unprofiled + `debug` services | N/A |
 | `ps`, `logs`, `top` | All project containers | Unprofiled + `debug` containers | All project containers |
 | `down` | All project containers | Unprofiled + `debug` containers | All project containers |
 
@@ -69,7 +69,30 @@ include:
 - **Environment:** each included file uses its own `env_file` list (or `.env` in `project_directory` by default). Shell environment variables override those values. The parent file's `.env` does not apply to included files.
 - **Bind mounts:** relative volume paths in included services resolve against `project_directory` (default: the included compose file's directory).
 
-`compose config` (when available) will use the same expanded model.
+### Config
+
+`container compose config` parses, merges, substitutes variables, and expands `include:` entries, then prints canonical YAML to stdout. It does not contact the container runtime.
+
+```bash
+container compose config
+container compose config -f docker-compose.yml
+container compose config -f base.yml -f override.yml
+container compose config --profile debug
+container compose config --scale web=3
+container compose config --quiet    # validate only; no output on success
+```
+
+| Flag | Behavior |
+|------|----------|
+| `-f` / auto-discovery | Same file resolution as `up` |
+| `-p` | Accepted for CLI parity; does not change emitted YAML (only compose `name:` appears) |
+| `--profile` | Output only services active under the same rules as `up` |
+| `--scale` | Writes CLI replica overrides into `deploy.replicas` in the output |
+| `--quiet` | Validate only; exit non-zero on failure without printing YAML |
+
+Substitution always runs (`.env` beside each compose file, shell environment overrides). There is no `--no-interpolate` flag in v1. Unresolved `${VAR}` placeholders fail with a file path and variable name in the error.
+
+Validation covers structural parsing, dependency graph checks, missing `image`, and the same planning rules as `up` for active services (for example `container_name` with scale, static host ports with multiple replicas). JSON Schema validation against the upstream compose-spec is deferred.
 
 ### Workspace hygiene
 
@@ -353,19 +376,14 @@ git tag v0.1.0
 git push origin v0.1.0
 ```
 
-The release workflow builds the tarball, uploads it with a SHA256 checksum, and (when configured) opens a pull request to bump the Homebrew tap.
+The release workflow builds the tarball, uploads it with a SHA256 checksum, and opens a pull request to bump `Formula/container-compose.rb` in this repository. No extra secrets or variables are required.
 
-Configure these repository settings for automated tap bumps:
-
-- Variable `HOMEBREW_TAP_REPO` — e.g. `Simplifi-ED/homebrew-tap`
-- Secret `HOMEBREW_TAP_TOKEN` — PAT with `contents: write` and `pull_requests: write` on the tap repo
-
-Canonical formula template: [`homebrew-tap/Formula/container-compose.rb`](homebrew-tap/Formula/container-compose.rb).
+Homebrew formula: [`Formula/container-compose.rb`](Formula/container-compose.rb).
 
 ## Homebrew install
 
 ```bash
-brew tap Simplifi-ED/tap   # after the tap repository exists
+brew tap Simplifi-ED/compose
 brew install container-compose
 ```
 

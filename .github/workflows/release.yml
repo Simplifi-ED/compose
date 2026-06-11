@@ -53,26 +53,17 @@ jobs:
             dist/compose-plugin.tar.gz.sha256
           generate_release_notes: true
 
-  bump-homebrew-tap:
+  bump-homebrew-formula:
     needs: release
     runs-on: ubuntu-latest
-    if: ${{ vars.HOMEBREW_TAP_REPO != '' && secrets.HOMEBREW_TAP_TOKEN != '' }}
+    permissions:
+      contents: write
+      pull-requests: write
     steps:
-      - name: Checkout Tap Repository
+      - name: Checkout Default Branch
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
-          repository: ${{ vars.HOMEBREW_TAP_REPO }}
-          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
-          path: tap
-
-      - name: Checkout Compose Formula Template
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
-        with:
-          ref: ${{ github.ref }}
-          path: compose
-          sparse-checkout: |
-            homebrew-tap
-          sparse-checkout-cone-mode: false
+          ref: ${{ github.event.repository.default_branch }}
 
       - name: Update container-compose Formula
         env:
@@ -82,19 +73,14 @@ jobs:
           URL="https://github.com/${REPO}/releases/download/${TAG}/compose-plugin.tar.gz"
           curl -fsSL "$URL" -o compose-plugin.tar.gz
           SHA256="$(shasum -a 256 compose-plugin.tar.gz | awk '{print $1}')"
-          FORMULA="tap/Formula/container-compose.rb"
-          if [ ! -f "$FORMULA" ]; then
-            mkdir -p tap/Formula
-            cp compose/homebrew-tap/Formula/container-compose.rb "$FORMULA"
-          fi
+          FORMULA="Formula/container-compose.rb"
           sed -i "s|url \".*\"|url \"${URL}\"|" "$FORMULA"
           sed -i "s|sha256 \".*\"|sha256 \"${SHA256}\"|" "$FORMULA"
 
-      - name: Open Tap Pull Request
+      - name: Open Formula Pull Request
         uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
         with:
-          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
-          path: tap
+          token: ${{ secrets.GITHUB_TOKEN }}
           branch: bump-container-compose-${{ github.ref_name }}
           title: container-compose ${{ github.ref_name }}
           commit-message: container-compose ${{ github.ref_name }}

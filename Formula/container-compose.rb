@@ -2,7 +2,7 @@ class ContainerCompose < Formula
   desc "Apple Container CLI compose plugin"
   homepage "https://github.com/Simplifi-ED/compose"
   url "https://github.com/Simplifi-ED/compose/releases/download/v0.1.0/compose-plugin.tar.gz"
-  # Replaced automatically by the release workflow before the first tap PR.
+  # Replaced automatically by the release workflow on each tag.
   sha256 "REPLACE_WITH_TARBALL_SHA256_HASH"
   license "Apache-2.0"
 

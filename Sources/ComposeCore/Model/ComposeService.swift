@@ -11,7 +11,7 @@ public enum ComposeEnvironment: Sendable, Equatable {
 }
 
 public struct ComposeService: Sendable, Equatable {
-    // MERGE: update ComposeFileMerge when adding stored properties.
+    // MERGE: update ComposeFileMerge and Parser/Compose*Encodable.swift when adding stored properties.
     public let image: String?
     public let command: ComposeCommandValue?
     public let ports: [String]
@@ -69,6 +69,22 @@ public struct ComposeService: Sendable, Equatable {
             deploy: deploy,
             healthcheck: healthcheck,
             projectDirectory: directory
+        )
+    }
+
+    func withDeploy(replicas: Int) -> ComposeService {
+        ComposeService(
+            image: image,
+            command: command,
+            ports: ports,
+            volumes: volumes,
+            environment: environment,
+            containerName: containerName,
+            dependsOn: dependsOn,
+            profiles: profiles,
+            deploy: ComposeDeploy(replicas: replicas),
+            healthcheck: healthcheck,
+            projectDirectory: projectDirectory
         )
     }
 }
