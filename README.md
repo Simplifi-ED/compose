@@ -376,19 +376,14 @@ git tag v0.1.0
 git push origin v0.1.0
 ```
 
-The release workflow builds the tarball, uploads it with a SHA256 checksum, and (when configured) opens a pull request to bump the Homebrew tap.
+The release workflow builds the tarball, uploads it with a SHA256 checksum, and opens a pull request to bump `Formula/container-compose.rb` in this repository. No extra secrets or variables are required.
 
-Configure these repository settings for automated tap bumps:
-
-- Variable `HOMEBREW_TAP_REPO` — e.g. `Simplifi-ED/homebrew-tap`
-- Secret `HOMEBREW_TAP_TOKEN` — PAT with `contents: write` and `pull_requests: write` on the tap repo
-
-Canonical formula template: [`homebrew-tap/Formula/container-compose.rb`](homebrew-tap/Formula/container-compose.rb).
+Homebrew formula: [`Formula/container-compose.rb`](Formula/container-compose.rb).
 
 ## Homebrew install
 
 ```bash
-brew tap Simplifi-ED/tap   # after the tap repository exists
+brew tap Simplifi-ED/compose
 brew install container-compose
 ```
 
