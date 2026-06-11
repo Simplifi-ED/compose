@@ -15,6 +15,8 @@ public enum ComposeError: LocalizedError, Sendable {
     case serviceFailed(service: String, underlying: Error)
     case multipleServiceFailures([(service: String, error: Error)])
     case unknownDependency(service: String, dependency: String)
+    case profileExcludedDependency(service: String, dependency: String, requiredProfiles: [String])
+    case profileFilterRequiresComposeFile
     case circularDependency(services: [String])
     case unresolvedVariable(name: String, composePath: String)
     case rollbackFailed(started: [String], failures: [(container: String, error: Error)])
@@ -58,6 +60,12 @@ public enum ComposeError: LocalizedError, Sendable {
         case .unknownDependency(let service, let dependency):
             return "Service '\(service)' depends on '\(dependency)', "
                 + "which isn't defined. Check service names in depends_on."
+        case .profileExcludedDependency(let service, let dependency, let requiredProfiles):
+            let flags = requiredProfiles.map { "--profile \($0)" }.joined(separator: " or ")
+            return "Service '\(service)' depends on '\(dependency)', which only starts with \(flags). "
+                + "Pass \(flags) or remove the dependency."
+        case .profileFilterRequiresComposeFile:
+            return "Using --profile requires a compose file. Pass -f or run from a directory with compose.yaml."
         case .circularDependency(let services):
             let path = services.joined(separator: " → ")
             return "Circular dependency: \(path). Remove or reorder depends_on entries."

@@ -1,0 +1,7 @@
+services:
+  db:
+    image: docker.io/library/alpine:latest
+  debugger:
+    image: docker.io/library/alpine:latest
+    profiles: [debug]
+    depends_on: [db]

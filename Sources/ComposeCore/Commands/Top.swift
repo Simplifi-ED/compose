@@ -11,21 +11,27 @@ public struct Top: AsyncParsableCommand {
     @OptionGroup
     var projectOptions: ProjectOptions
 
+    @OptionGroup
+    var profileOptions: ProfileOptions
+
     @Argument(help: "Limit output to these service names.")
     var services: [String] = []
 
     public func run() async throws {
         let context = try projectOptions.resolvedLabelCommandContext(
-            skipComposeFileOnExplicitProject: true
+            skipComposeFileOnExplicitProject: true,
+            profileFilterRequested: profileOptions.profileFilterRequested
         )
-        let containers = try await ContainerDiscovery.projectContainers(forProject: context.projectName)
-        let filter = services.isEmpty ? nil : Set(services)
-        let targets = ProjectStatus.filteredContainers(from: containers, filter: filter)
+        let filter = try projectOptions.resolvedQueryServiceFilter(
+            context: context,
+            profileOptions: profileOptions,
+            positionalServices: services
+        )
 
         let mode = TerminalMode.resolve()
         let table = ProjectStats.defaultStatsTable()
 
-        if targets.isEmpty {
+        if let filter, filter.isEmpty {
             print(table.formatHeader(mode: mode))
             return
         }

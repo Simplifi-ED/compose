@@ -19,6 +19,7 @@ public struct ComposeService: Sendable, Equatable {
     public let environment: ComposeEnvironment?
     public let containerName: String?
     public let dependsOn: [String]
+    public let profiles: [String]
 
     public init(
         image: String?,
@@ -27,7 +28,8 @@ public struct ComposeService: Sendable, Equatable {
         volumes: [String] = [],
         environment: ComposeEnvironment?,
         containerName: String?,
-        dependsOn: [String] = []
+        dependsOn: [String] = [],
+        profiles: [String] = []
     ) {
         self.image = image
         self.command = command
@@ -36,6 +38,7 @@ public struct ComposeService: Sendable, Equatable {
         self.environment = environment
         self.containerName = containerName
         self.dependsOn = dependsOn
+        self.profiles = profiles
     }
 }
 
@@ -48,6 +51,7 @@ extension ComposeService: Decodable {
         case environment
         case containerName = "container_name"
         case dependsOn = "depends_on"
+        case profiles
     }
 
     public init(from decoder: Decoder) throws {
@@ -59,6 +63,20 @@ extension ComposeService: Decodable {
         environment = try Self.decodeEnvironment(from: container)
         containerName = try container.decodeIfPresent(String.self, forKey: .containerName)
         dependsOn = try Self.decodeDependsOn(from: container)
+        profiles = try Self.decodeProfiles(from: container)
+    }
+
+    private static func decodeProfiles(
+        from container: KeyedDecodingContainer<CodingKeys>
+    ) throws -> [String] {
+        guard container.contains(.profiles) else { return [] }
+        if let value = try? container.decode(String.self, forKey: .profiles) {
+            return [value]
+        }
+        if let value = try? container.decode([String].self, forKey: .profiles) {
+            return value
+        }
+        throw ComposeError.invalidField("profiles", reason: "expected a string or list of profile names")
     }
 
     private static func decodeDependsOn(

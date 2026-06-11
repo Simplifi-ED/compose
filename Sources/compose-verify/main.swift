@@ -191,6 +191,7 @@ do {
     try runner.runSubstitutionTests()
     try runner.runPlannerTests()
     try runner.runDependencyTests()
+    try runner.runProfileTests()
     try runner.runMergeTests()
     try runner.runProjectOptionsTests()
     try runner.runShutdownLayerTests()

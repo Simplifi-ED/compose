@@ -22,13 +22,26 @@ public enum ProjectStatus {
         from containers: [ProjectContainer],
         filter: Set<String>?
     ) -> [ProjectContainer] {
-        if let filter, !filter.isEmpty {
-            return containers.filter { container in
-                guard let serviceName = container.serviceName else { return false }
-                return filter.contains(serviceName)
-            }
+        guard let filter else {
+            return containers
         }
-        return containers
+        return containers.filter { container in
+            guard let serviceName = container.serviceName else { return false }
+            return filter.contains(serviceName)
+        }
+    }
+
+    package static func filteredDiscoveredContainers(
+        from containers: [DiscoveredContainer],
+        filter: Set<String>?
+    ) -> [DiscoveredContainer] {
+        guard let filter else {
+            return containers
+        }
+        return containers.filter { container in
+            guard let serviceName = container.serviceName else { return false }
+            return filter.contains(serviceName)
+        }
     }
 
     public static func rows(

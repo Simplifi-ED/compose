@@ -300,6 +300,13 @@ package func makeLogSources(
     services: [String]
 ) -> [ServiceLogSource] {
     let filter = services.isEmpty ? nil : Set(services)
+    return makeLogSources(from: containers, filter: filter)
+}
+
+package func makeLogSources(
+    from containers: [ProjectContainer],
+    filter: Set<String>?
+) -> [ServiceLogSource] {
     let filtered = ProjectStatus.filteredContainers(from: containers, filter: filter)
     return filtered.map { container in
         ServiceLogSource(

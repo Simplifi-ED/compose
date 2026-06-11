@@ -61,9 +61,10 @@ public struct ProjectOptions: ParsableArguments {
     }
 
     package func resolvedLabelCommandContext(
-        skipComposeFileOnExplicitProject: Bool = false
+        skipComposeFileOnExplicitProject: Bool = false,
+        profileFilterRequested: Bool = false
     ) throws -> LabelCommandContext {
-        if skipComposeFileOnExplicitProject, hasExplicitProjectName {
+        if skipComposeFileOnExplicitProject, hasExplicitProjectName, !profileFilterRequested {
             let projectName = try resolvedProjectName()
             return LabelCommandContext(projectName: projectName, composeFile: nil, fileURLs: nil)
         }
@@ -80,6 +81,19 @@ public struct ProjectOptions: ParsableArguments {
             projectName: projectName,
             composeFile: composeFile,
             fileURLs: fileURLs
+        )
+    }
+
+    package func resolvedQueryServiceFilter(
+        context: LabelCommandContext,
+        profileOptions: ProfileOptions,
+        positionalServices: [String]
+    ) throws -> Set<String>? {
+        try ProfileFilter.queryServiceFilter(
+            composeFile: context.composeFile,
+            activeProfiles: profileOptions.activeProfileSet,
+            positionalServices: positionalServices,
+            profileFilterRequested: profileOptions.profileFilterRequested
         )
     }
 }

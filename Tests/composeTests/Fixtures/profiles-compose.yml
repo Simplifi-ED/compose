@@ -1,0 +1,15 @@
+services:
+  web:
+    image: docker.io/library/alpine:latest
+    command: sleep 300
+  db:
+    image: docker.io/library/alpine:latest
+    command: sleep 300
+  debugger:
+    image: docker.io/library/alpine:latest
+    command: sleep 300
+    profiles: [debug]
+  metrics:
+    image: docker.io/library/alpine:latest
+    command: sleep 300
+    profiles: metrics

@@ -14,9 +14,25 @@ public struct Down: AsyncParsableCommand {
     @OptionGroup
     var progressOptions: ProgressOptions
 
+    @OptionGroup
+    var profileOptions: ProfileOptions
+
     public func run() async throws {
-        let context = try projectOptions.resolvedLabelCommandContext()
-        let containers = try await ContainerDiscovery.containers(forProject: context.projectName)
+        let context = try projectOptions.resolvedLabelCommandContext(
+            profileFilterRequested: profileOptions.profileFilterRequested
+        )
+        let discovered = try await ContainerDiscovery.containers(forProject: context.projectName)
+        let containers: [DiscoveredContainer]
+        if profileOptions.profileFilterRequested {
+            let serviceFilter = try ProfileFilter.downServiceFilter(
+                composeFile: context.composeFile,
+                activeProfiles: profileOptions.activeProfileSet,
+                tearsDownAll: profileOptions.tearsDownAll
+            )
+            containers = ProjectStatus.filteredDiscoveredContainers(from: discovered, filter: serviceFilter)
+        } else {
+            containers = discovered
+        }
 
         let useOrderedShutdown = context.fileURLs != nil && !projectOptions.hasExplicitProjectName
 
