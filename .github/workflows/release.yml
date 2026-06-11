@@ -42,8 +42,10 @@ jobs:
       - name: Build Release Package
         run: make dist
 
-      - name: Write SHA256 Checksum
-        run: shasum -a 256 dist/compose-plugin.tar.gz | awk '{print $1}' > dist/compose-plugin.tar.gz.sha256
+      - name: Write SHA256 Checksums
+        run: |
+          shasum -a 256 dist/compose-plugin.tar.gz | awk '{print $1}' > dist/compose-plugin.tar.gz.sha256
+          shasum -a 256 dist/container-compose-macos-arm64.zip | awk '{print $1}' > dist/container-compose-macos-arm64.zip.sha256
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v3.0.0
@@ -51,6 +53,8 @@ jobs:
           files: |
             dist/compose-plugin.tar.gz
             dist/compose-plugin.tar.gz.sha256
+            dist/container-compose-macos-arm64.zip
+            dist/container-compose-macos-arm64.zip.sha256
           generate_release_notes: true
 
   bump-homebrew-formula:

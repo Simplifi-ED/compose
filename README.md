@@ -6,9 +6,62 @@ Maintained by [Omnivya](https://www.omnivya.fr) ([Simplifi-ED](https://github.co
 
 ## Requirements
 
-- macOS 15+ on Apple Silicon
+- macOS 15+ on Apple Silicon (arm64)
 - [container](https://github.com/apple/container) CLI 1.0.0+
-- Swift 6.2+ (Command Line Tools or Xcode)
+- Swift 6.2+ (Command Line Tools or Xcode) — source builds only
+
+## Install
+
+**Homebrew (recommended):**
+
+```bash
+brew tap Simplifi-ED/compose
+brew install container-compose
+container system start
+container --help | grep -A2 PLUGINS
+```
+
+`post_install` symlinks the plugin when the target directory is writable. If install used a root-owned `/usr/local` container PKG, run the manual symlink from `brew info container-compose` with `sudo`.
+
+**GitHub Release:**
+
+```bash
+curl -fsSLO https://github.com/Simplifi-ED/compose/releases/latest/download/container-compose-macos-arm64.zip
+unzip container-compose-macos-arm64.zip -d container-compose
+# layout: bin/compose, config.toml
+./scripts/install.sh   # from a git checkout, or copy into libexec manually
+```
+
+Prebuilt tarball for Homebrew: `compose-plugin.tar.gz` (same layout).
+
+**From source:**
+
+```bash
+git clone https://github.com/Simplifi-ED/compose.git && cd compose
+./scripts/install.sh
+```
+
+## Quick start
+
+```bash
+container system start
+container compose up -f fixtures/minimal-compose.yml -p demo
+curl http://127.0.0.1:18080/
+container compose down -f fixtures/minimal-compose.yml -p demo
+```
+
+## Supported compose keys (v1)
+
+| Key / feature | Status | Notes |
+|---------------|--------|-------|
+| `image`, `command`, `ports`, `environment` | supported | standard host-to-container ports |
+| `volumes` (bind mounts, short syntax) | supported | project-relative paths only for `down -v` purge |
+| `depends_on` (list) | supported | order-only between waves |
+| `depends_on` (`service_started` / `service_healthy`) | supported | health via compose-side exec probe |
+| `healthcheck` | supported | exec/CMD probes |
+| `profiles`, `deploy.replicas`, `name:` | supported | `--scale` overrides replicas |
+| `-f` merge, auto-discovery, `COMPOSE_FILE`, `include:` | supported | see sections below |
+| `build`, networks, named volumes, `:ro`, `service_completed_successfully` | not supported | v1 deferred |
 
 ## Features (v1)
 
@@ -310,35 +363,18 @@ If the compose file has a broken dependency graph (circular or unknown `depends_
 
 Containers created before label support have no labels. `compose down` cannot find them, and `compose up` fails if the container name already exists. Remove them first with `container rm <name>`, then run `compose up`.
 
-## Quick start
+## Troubleshooting
 
-```bash
-swift build -c release
-./scripts/install-plugin.sh
-```
+| Problem | Fix |
+|---------|-----|
+| Gatekeeper blocks the binary | Release builds are ad-hoc signed. Clear quarantine: `xattr -d com.apple.quarantine dist/compose/bin/compose` |
+| Port `18080` in use | Change the host port in compose YAML or `container compose down -p <project>` |
+| `compose` not under PLUGINS | Run `container system start`; verify plugin at `{INSTALL_ROOT}/libexec/container-plugins/compose` |
+| Permission denied on `/usr/local` | Use `sudo` for mkdir/cp, or Homebrew symlink path from `brew info container-compose` |
+| Kernel / runtime error on `up` | `container system kernel set --url <kernel-tarball-url>` |
+| Smoke test image fails on arm64 | Use images with a `linux/arm64` manifest; see comment in `fixtures/minimal-compose.yml` |
 
-If install requires elevated permissions (e.g. `/usr/local`):
-
-```bash
-sudo mkdir -p "$(dirname "$(dirname "$(command -v container)")")/libexec/container-plugins/compose"
-sudo cp -R dist/compose/* "$(dirname "$(dirname "$(command -v container)")")/libexec/container-plugins/compose/"
-```
-
-Verify:
-
-```bash
-container system start
-container --help | grep -A2 PLUGINS
-container compose --help
-```
-
-Run a sample stack:
-
-```bash
-container compose up -f fixtures/minimal-compose.yml -p demo
-curl http://127.0.0.1:18080/
-container compose down -f fixtures/minimal-compose.yml -p demo
-```
+Plugin install path: `{INSTALL_ROOT}/libexec/container-plugins/compose` where `INSTALL_ROOT` is the parent of `container`'s `bin` directory (or `opt/container` for Homebrew formula installs).
 
 ## Kernel setup
 
@@ -353,8 +389,9 @@ container system kernel set --url <kernel-tarball-url>
 ```bash
 make build
 make lint
-make test
-make dist    # dist/compose/ and dist/compose-plugin.tar.gz
+make test          # compose-verify (not swift test on CLT)
+make dist          # dist/compose/, compose-plugin.tar.gz, container-compose-macos-arm64.zip
+make smoke         # end-to-end: install, up, curl, down (requires container runtime)
 ```
 
 Or without Make:
@@ -362,53 +399,23 @@ Or without Make:
 ```bash
 swift build -c release
 swift run -c release compose-verify
-.build/release/compose up -f fixtures/minimal-compose.yml -p dev
+./scripts/build-release.sh
 ```
 
-CI on every pull request runs `make lint`, debug build with warnings-as-errors, and `compose-verify` on `macos-15`.
+CI on every pull request: `make lint`, debug build with warnings-as-errors, `compose-verify`, and release-build codesign verification on `macos-15`. Live smoke tests run on `main` with `continue-on-error` (GHA runners may lack nested virtualization).
 
 ## Release
 
-Tag a version to publish `compose-plugin.tar.gz` to GitHub Releases:
+Tag a semver version to publish release artifacts:
 
 ```bash
-git tag v0.1.0
-git push origin v0.1.0
+git tag v0.0.1
+git push origin v0.0.1
 ```
 
-The release workflow builds the tarball, uploads it with a SHA256 checksum, and opens a pull request to bump `Formula/container-compose.rb` in this repository. No extra secrets or variables are required.
+The release workflow uploads `compose-plugin.tar.gz` and `container-compose-macos-arm64.zip` (each with SHA256 checksums), then opens a PR to bump [`Formula/container-compose.rb`](Formula/container-compose.rb). Release binaries are stripped and ad-hoc signed (`codesign -s -`).
 
-Homebrew formula: [`Formula/container-compose.rb`](Formula/container-compose.rb).
-
-## Homebrew install
-
-```bash
-brew tap Simplifi-ED/compose
-brew install container-compose
-```
-
-After install, create a symlink so `container` discovers the plugin (see `brew info container-compose` caveats):
-
-**Cask or PKG install** (`brew install --cask container`):
-
-```bash
-sudo mkdir -p /usr/local/libexec/container-plugins
-sudo ln -sf "$(brew --prefix container-compose)/libexec" /usr/local/libexec/container-plugins/compose
-```
-
-**Homebrew formula install** (experimental `brew install container`):
-
-```bash
-mkdir -p "$(brew --prefix)/opt/container/libexec/container-plugins"
-ln -sf "$(brew --prefix container-compose)/libexec" "$(brew --prefix)/opt/container/libexec/container-plugins/compose"
-```
-
-Verify:
-
-```bash
-container --help | grep -A2 PLUGINS
-container compose --help
-```
+**Migrating from manual installs:** reinstall via Homebrew or `./scripts/install.sh`; ensure the plugin symlink under `libexec/container-plugins/compose` points at the new version.
 
 ## Architecture
 

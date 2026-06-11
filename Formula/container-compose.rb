@@ -1,7 +1,7 @@
 class ContainerCompose < Formula
   desc "Apple Container CLI compose plugin"
   homepage "https://github.com/Simplifi-ED/compose"
-  url "https://github.com/Simplifi-ED/compose/releases/download/v0.1.0/compose-plugin.tar.gz"
+  url "https://github.com/Simplifi-ED/compose/releases/download/v0.0.1/compose-plugin.tar.gz"
   # Replaced automatically by the release workflow on each tag.
   sha256 "REPLACE_WITH_TARBALL_SHA256_HASH"
   license "Apache-2.0"
@@ -14,25 +14,67 @@ class ContainerCompose < Formula
     (libexec/"bin").install "bin/compose"
   end
 
+  def post_install
+    link_plugin(
+      dest: Pathname("/usr/local/libexec/container-plugins/compose"),
+      source: opt_libexec
+    )
+  rescue StandardError => e
+    ohai "Could not auto-link compose plugin: #{e.message}"
+    manual_symlink_caveats
+  end
+
   def caveats
     <<~EOS
-      To enable native discovery in apple/container, you must create a symlink
-      to the plugin directory. Run the command matching your container install type:
+      If plugin discovery did not succeed automatically, create a symlink manually:
 
-      If you installed via Cask (brew install --cask container) or PKG:
+      Cask or PKG install (container under /usr/local):
         sudo mkdir -p /usr/local/libexec/container-plugins
         sudo ln -sf #{opt_libexec} /usr/local/libexec/container-plugins/compose
 
-      If you installed via the experimental Homebrew formula:
+      Homebrew formula install (experimental brew install container):
         mkdir -p #{HOMEBREW_PREFIX}/opt/container/libexec/container-plugins
         ln -sf #{opt_libexec} #{HOMEBREW_PREFIX}/opt/container/libexec/container-plugins/compose
 
       Verify discovery with:
+        container system start
         container --help
     EOS
   end
 
   test do
     assert_match "compose", shell_output("#{opt_libexec}/bin/compose --help")
+  end
+
+  private
+
+  def link_plugin(dest:, source:)
+    dest.parent.mkpath
+    return if dest.symlink? && dest.readlink == source
+
+    if dest.exist? && !dest.symlink?
+      raise "destination exists and is not a symlink: #{dest}"
+    end
+
+    if dest.parent.writable?
+      dest.make_symlink(source)
+      return
+    end
+
+    brew_dest = HOMEBREW_PREFIX/"opt/container/libexec/container-plugins/compose"
+    brew_dest.parent.mkpath
+    if brew_dest.parent.writable?
+      brew_dest.make_symlink(source)
+      return
+    end
+
+    raise "no writable plugin directory; run the manual symlink command from brew info container-compose"
+  end
+
+  def manual_symlink_caveats
+    opoo <<~EOS
+      Automatic plugin linking failed (likely a root-owned /usr/local install).
+      Run the manual symlink command shown in `brew info container-compose` with sudo.
+    EOS
   end
 end
