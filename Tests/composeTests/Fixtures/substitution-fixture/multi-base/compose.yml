@@ -1,0 +1,4 @@
+services:
+  web:
+    image: ${IMAGE}
+    command: sleep 300

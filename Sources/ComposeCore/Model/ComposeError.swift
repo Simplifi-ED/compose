@@ -63,7 +63,8 @@ public enum ComposeError: LocalizedError, Sendable {
             return "Circular dependency: \(path). Remove or reorder depends_on entries."
         case .unresolvedVariable(let name, let composePath):
             return "Unresolved variable '${name}' in \(composePath). "
-                + "Add \(name) to .env beside the compose file."
+                + "Set \(name) in the shell environment or .env beside the compose file, "
+                + "or use ${\(name):-default} / ${\(name)-default} for a fallback."
         case .rollbackFailed(let started, let failures):
             let startedList = started.joined(separator: ", ")
             let details = failures.map { "'\($0.container)': \($0.error.localizedDescription)" }.joined(separator: "; ")

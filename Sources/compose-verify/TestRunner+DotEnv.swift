@@ -10,7 +10,7 @@ extension TestRunner {
 
     mutating func runDotEnvFixtureTests() throws {
         let fixtureURL = Self.fixtureURL("env-fixture/env-compose.yml")
-        let parsed = try ComposeParser.parse(fileURL: fixtureURL)
+        let parsed = try ComposeParser.parse(fileURL: fixtureURL, processEnvironment: [:])
         let web = parsed.services["web"]
 
         expect(web?.image == "docker.io/library/alpine:latest", "env fixture image substitution")
@@ -43,29 +43,12 @@ extension TestRunner {
         let spacedKey = DotEnv.parse("FOO =bar\n")
         expect(spacedKey["FOO"] == "bar", "dotenv trims whitespace around key")
 
-        let substituted = try DotEnv.substitute(
+        let substituted = try ComposeSubstitution.substitute(
             "image: ${IMAGE} ports: ${IMAGE}",
             variables: ["IMAGE": "alpine:latest"],
             composePath: "/tmp/compose.yml"
         )
         expect(substituted == "image: alpine:latest ports: alpine:latest", "dotenv multiple placeholders")
-
-        let indirect = try DotEnv.substitute(
-            "image: ${A}",
-            variables: ["A": "${B}", "B": "hello"],
-            composePath: "/tmp/compose.yml"
-        )
-        expect(indirect == "image: ${B}", "indirect env value substitutes one level without false-positive error")
-
-        let commentSkipped = try DotEnv.substitute(
-            "# legacy image: ${OLD_IMAGE}\nimage: alpine:latest",
-            variables: [:],
-            composePath: "/tmp/compose.yml"
-        )
-        expect(
-            commentSkipped == "# legacy image: ${OLD_IMAGE}\nimage: alpine:latest",
-            "dotenv skips substitution in comment lines"
-        )
     }
 
     mutating func runDotEnvUnresolvedTests() throws {
@@ -84,7 +67,7 @@ extension TestRunner {
         expectComposeError(
             "unresolved placeholder",
             matching: { if case .unresolvedVariable(let name, _) = $0 { name == "MISSING_VAR" } else { false } },
-            body: { _ = try ComposeParser.parse(fileURL: composePath) }
+            body: { _ = try ComposeParser.parse(fileURL: composePath, processEnvironment: [:]) }
         )
     }
 }

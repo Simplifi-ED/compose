@@ -188,6 +188,7 @@ var runner = TestRunner()
 do {
     try runner.runParserTests()
     try runner.runDotEnvTests()
+    try runner.runSubstitutionTests()
     try runner.runPlannerTests()
     try runner.runDependencyTests()
     try runner.runMergeTests()

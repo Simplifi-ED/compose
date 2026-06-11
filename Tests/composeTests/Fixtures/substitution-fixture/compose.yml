@@ -1,0 +1,11 @@
+services:
+  web:
+    image: ${REQUIRED_IMAGE}
+    ports:
+      - "${COLON_UNSET:-19091}:80"
+    environment:
+      COLON_FALLBACK: "${COLON_EMPTY:-fallback}"
+      DASH_DEFAULT: "${DASH_UNSET-default-value}"
+      DASH_EMPTY_OK: "${DASH_EMPTY-ignored}"
+      ESCAPED_DOLLAR: "$$VAR"
+      ESCAPED_PRICE: "price is $$100"

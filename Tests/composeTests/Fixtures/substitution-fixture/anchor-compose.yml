@@ -1,0 +1,7 @@
+x-image: &base-image docker.io/library/alpine:latest
+
+services:
+  web:
+    image: *base-image
+  api:
+    image: *base-image
