@@ -3,23 +3,23 @@ import ContainerCommands
 import Foundation
 
 extension TestRunner {
-    mutating func runSecretsTests() throws {
-        try runSecretsSpikeTests()
-        try runSecretsParseTests()
-        try runSecretsValidationTests()
-        try runSecretsHardeningTests()
+    mutating func runFileMountsTests() throws {
+        try runFileMountsSpikeTests()
+        try runFileMountsParseTests()
+        try runFileMountsValidationTests()
+        try runFileMountsHardeningTests()
         try runStartupLayersMountValidationTests()
-        try runSecretsPlannerTests()
-        try runSecretsConfigExportTests()
-        try runSecretsMergeTests()
-        try runSecretsStagingTests()
+        try runFileMountsPlannerTests()
+        try runFileMountsConfigExportTests()
+        try runFileMountsMergeTests()
+        try runFileMountsStagingTests()
         try runRunStagingCleanupTests()
         try runDownPartialStagingTests()
     }
 
-    mutating func runSecretsSpikeTests() throws {
+    mutating func runFileMountsSpikeTests() throws {
         let tempDir = FileManager.default.temporaryDirectory
-            .appendingPathComponent("compose-verify-secret-\(UUID().uuidString)")
+            .appendingPathComponent("compose-verify-file-mount-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: tempDir) }
 
@@ -28,7 +28,7 @@ extension TestRunner {
 
         let args = [
             "-v",
-            ComposeFileMountResolver.readOnlyVolumeFlag(
+            ComposeFileStaging.readOnlyVolumeFlag(
                 hostPath: secretFile.path,
                 containerPath: "/run/secrets/x"
             ),
@@ -37,8 +37,8 @@ extension TestRunner {
         _ = try Application.ContainerRun.parse(args)
     }
 
-    mutating func runSecretsParseTests() throws {
-        let fixture = try ComposeParser.parse(fileURL: Self.fixtureURL("secrets-compose.yml"))
+    mutating func runFileMountsParseTests() throws {
+        let fixture = try ComposeParser.parse(fileURL: Self.fixtureURL("file-mounts-compose.yml"))
         expect(fixture.secrets["db_password"]?.file == "./secrets/db_password.txt", "secrets root decode")
         expect(fixture.services["app"]?.secrets.map(\.source) == ["db_password"], "service secret ref decode")
 
@@ -47,28 +47,28 @@ extension TestRunner {
         expect(combined.services["app"]?.configs.map(\.source) == ["app_config"], "service config ref decode")
     }
 
-    mutating func runSecretsPlannerTests() throws {
-        let fixturesDirectory = Self.fixtureURL("secrets-compose.yml").deletingLastPathComponent()
-        let composeFile = try ComposeParser.parse(fileURL: Self.fixtureURL("secrets-compose.yml"))
+    mutating func runFileMountsPlannerTests() throws {
+        let fixturesDirectory = Self.fixtureURL("file-mounts-compose.yml").deletingLastPathComponent()
+        let composeFile = try ComposeParser.parse(fileURL: Self.fixtureURL("file-mounts-compose.yml"))
         let layers = try ServicePlanner.startupLayers(
             for: composeFile,
             projectName: "demo",
             composeDirectory: fixturesDirectory
         )
         guard let plan = layers.first?.first else {
-            expect(false, "secrets planner produced a plan")
+            expect(false, "file mount planner produced a plan")
             return
         }
-        expect(plan.fileMounts.count == 1, "secrets planner file mount count")
-        expect(plan.fileMounts[0].containerTarget == "/run/secrets/db_password", "secrets planner target path")
-        expect(plan.image == "docker.io/library/alpine:3.20", "secrets planner image")
+        expect(plan.fileMounts.count == 1, "file mount planner file mount count")
+        expect(plan.fileMounts[0].containerTarget == "/run/secrets/db_password", "file mount planner target path")
+        expect(plan.image == "docker.io/library/alpine:3.20", "file mount planner image")
 
         let stagedArgs = try ComposeFileStaging.preparedRunArguments(for: plan)
-        expect(stagedArgs.contains(where: { $0.hasSuffix(":ro") }), "secrets staged mount uses :ro")
+        expect(stagedArgs.contains(where: { $0.hasSuffix(":ro") }), "file mount staged mount uses :ro")
         _ = try Application.ContainerRun.parse(stagedArgs)
     }
 
-    mutating func runSecretsConfigExportTests() throws {
+    mutating func runFileMountsConfigExportTests() throws {
         let yaml = try ComposeConfigResolver.resolveOutput(
             fileURLs: [Self.fixtureURL("configs-secrets-compose.yml")],
             activeProfiles: [],
@@ -85,10 +85,10 @@ extension TestRunner {
         expect(!yaml.contains("app_setting="), "config export redacts config contents")
     }
 
-    mutating func runSecretsMergeTests() throws {
+    mutating func runFileMountsMergeTests() throws {
         let overrideURL = Self.fixtureURL("merge/secrets-override-compose.yml")
         let merged = try ComposeParser.parse(fileURLs: [
-            Self.fixtureURL("secrets-compose.yml"),
+            Self.fixtureURL("file-mounts-compose.yml"),
             overrideURL
         ])
         expect(merged.secrets["db_password"]?.file == "./secrets/override.txt", "secrets merge override wins")

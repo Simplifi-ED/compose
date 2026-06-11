@@ -3,27 +3,47 @@ import Foundation
 public struct PlannedFileMount: Sendable, Equatable {
     public let kind: ComposeFileMountKind
     public let definitionName: String
-    public let sourcePath: URL
+    package let sourceRelativePath: String
+    package let resolutionRoot: URL
     public let containerTarget: String
 }
 
 package enum ComposeFileMountResolver {
-    static func validate(composeFile: ComposeFile) throws {
-        for (serviceName, service) in composeFile.services {
+    package static func validate(
+        composeFile: ComposeFile,
+        activeServiceNames: Set<String>
+    ) throws {
+        var referencedResources: [ComposeFileMountKind: Set<String>] = [
+            .config: [],
+            .secret: []
+        ]
+        for serviceName in activeServiceNames {
+            guard let service = composeFile.services[serviceName] else { continue }
             for kind in ComposeFileMountKind.allCases {
                 let mounts = service.mounts(for: kind)
                 let definitions = composeFile.resources(for: kind)
-                try validateServiceReferences(
-                    mounts: mounts,
-                    definitions: definitions,
-                    kind: kind
-                )
+                for mount in mounts {
+                    _ = try requireDefinition(
+                        name: mount.source,
+                        kind: kind,
+                        definitions: definitions
+                    )
+                    referencedResources[kind, default: []].insert(mount.source)
+                }
             }
             try validateUniqueTargets(serviceName: serviceName, service: service)
         }
         for kind in ComposeFileMountKind.allCases {
-            for definition in composeFile.resources(for: kind).values {
-                _ = try resolveDefinitionPath(definition, kind: kind)
+            let definitions = composeFile.resources(for: kind)
+            for name in referencedResources[kind, default: []] {
+                guard let definition = definitions[name],
+                      let root = definition.resolutionRoot
+                else { continue }
+                _ = try verifiedSourceFile(
+                    relativePath: definition.file,
+                    resolutionRoot: root,
+                    kind: kind
+                )
             }
         }
     }
@@ -41,16 +61,35 @@ package enum ComposeFileMountResolver {
         }
     }
 
-    private static func validateServiceReferences(
-        mounts: [ComposeServiceMount],
-        definitions: [String: ComposeFileResource],
+    package static func verifiedSourceFile(
+        relativePath: String,
+        resolutionRoot: URL,
         kind: ComposeFileMountKind
-    ) throws {
-        for mount in mounts {
-            guard definitions[mount.source] != nil else {
-                throw ComposeError.undefinedResource(name: mount.source, kind: kind)
-            }
+    ) throws -> URL {
+        let definition = ComposeFileResource(file: relativePath, resolutionRoot: resolutionRoot)
+        let url = try resolveDefinitionPathForPlanning(definition, kind: kind)
+        guard FileManager.default.fileExists(atPath: url.path) else {
+            throw ComposeError.resourceFileNotFound(path: relativePath, kind: kind)
         }
+        var isDirectory: ObjCBool = false
+        if FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory), isDirectory.boolValue {
+            throw ComposeError.invalidField(
+                kind.rootFieldName,
+                reason: "file '\(relativePath)' must point to a regular file, not a directory"
+            )
+        }
+        return url
+    }
+
+    private static func requireDefinition(
+        name: String,
+        kind: ComposeFileMountKind,
+        definitions: [String: ComposeFileResource]
+    ) throws -> ComposeFileResource {
+        guard let definition = definitions[name] else {
+            throw ComposeError.undefinedResource(name: name, kind: kind)
+        }
+        return definition
     }
 
     private static func validateUniqueTargets(
@@ -77,20 +116,29 @@ package enum ComposeFileMountResolver {
         kind: ComposeFileMountKind
     ) throws -> [PlannedFileMount] {
         try serviceMounts.map { mount in
-            guard let definition = definitions[mount.source] else {
-                throw ComposeError.undefinedResource(name: mount.source, kind: kind)
+            let definition = try requireDefinition(
+                name: mount.source,
+                kind: kind,
+                definitions: definitions
+            )
+            guard let root = definition.resolutionRoot else {
+                throw ComposeError.invalidField(
+                    kind.rootFieldName,
+                    reason: "missing compose file directory for '\(definition.file)'"
+                )
             }
-            let sourcePath = try resolveDefinitionPath(definition, kind: kind)
+            _ = try resolveDefinitionPathForPlanning(definition, kind: kind)
             return PlannedFileMount(
                 kind: kind,
                 definitionName: mount.source,
-                sourcePath: sourcePath,
+                sourceRelativePath: definition.file,
+                resolutionRoot: root,
                 containerTarget: mount.resolvedTarget(kind: kind)
             )
         }
     }
 
-    private static func resolveDefinitionPath(
+    private static func resolveDefinitionPathForPlanning(
         _ definition: ComposeFileResource,
         kind: ComposeFileMountKind
     ) throws -> URL {
@@ -118,20 +166,6 @@ package enum ComposeFileMountResolver {
                 reason: "file '\(definition.file)' must be relative to the compose file directory"
             )
         }
-        guard FileManager.default.fileExists(atPath: url.path) else {
-            throw ComposeError.resourceFileNotFound(path: definition.file, kind: kind)
-        }
-        var isDirectory: ObjCBool = false
-        if FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory), isDirectory.boolValue {
-            throw ComposeError.invalidField(
-                kind.rootFieldName,
-                reason: "file '\(definition.file)' must point to a regular file, not a directory"
-            )
-        }
         return url
-    }
-
-    package static func readOnlyVolumeFlag(hostPath: String, containerPath: String) -> String {
-        "\(hostPath):\(containerPath):ro"
     }
 }

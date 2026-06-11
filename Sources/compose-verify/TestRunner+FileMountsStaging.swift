@@ -2,9 +2,9 @@ import ComposeCore
 import Foundation
 
 extension TestRunner {
-    mutating func runSecretsStagingTests() throws {
-        let fixturesDirectory = Self.fixtureURL("secrets-compose.yml").deletingLastPathComponent()
-        let composeFile = try ComposeParser.parse(fileURL: Self.fixtureURL("secrets-compose.yml"))
+    mutating func runFileMountsStagingTests() throws {
+        let fixturesDirectory = Self.fixtureURL("file-mounts-compose.yml").deletingLastPathComponent()
+        let composeFile = try ComposeParser.parse(fileURL: Self.fixtureURL("file-mounts-compose.yml"))
         let layers = try ServicePlanner.startupLayers(
             for: composeFile,
             projectName: "staging-demo",
@@ -54,8 +54,8 @@ extension TestRunner {
     }
 
     mutating func runRunStagingCleanupTests() throws {
-        let fixturesDirectory = Self.fixtureURL("secrets-compose.yml").deletingLastPathComponent()
-        let composeFile = try ComposeParser.parse(fileURL: Self.fixtureURL("secrets-compose.yml"))
+        let fixturesDirectory = Self.fixtureURL("file-mounts-compose.yml").deletingLastPathComponent()
+        let composeFile = try ComposeParser.parse(fileURL: Self.fixtureURL("file-mounts-compose.yml"))
         let plan = try ServicePlanner.runPlan(
             context: ServicePlanner.PlanningContext(
                 composeFile: composeFile,
@@ -95,8 +95,8 @@ extension TestRunner {
     }
 
     mutating func runDownPartialStagingTests() throws {
-        let fixturesDirectory = Self.fixtureURL("secrets-compose.yml").deletingLastPathComponent()
-        let composeFile = try ComposeParser.parse(fileURL: Self.fixtureURL("secrets-compose.yml"))
+        let fixturesDirectory = Self.fixtureURL("file-mounts-compose.yml").deletingLastPathComponent()
+        let composeFile = try ComposeParser.parse(fileURL: Self.fixtureURL("file-mounts-compose.yml"))
         let layers = try ServicePlanner.startupLayers(
             for: composeFile,
             projectName: "down-staging-interrupt",

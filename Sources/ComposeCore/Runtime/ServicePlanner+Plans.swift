@@ -18,6 +18,11 @@ extension ServicePlanner {
         )
         let name = "\(baseName)_run_\(options.nameSuffix)"
 
+        try ComposeFileMountResolver.validate(
+            composeFile: context.composeFile,
+            activeServiceNames: [serviceName]
+        )
+
         var arguments: [String] = ["--name", name]
         if options.removeContainer {
             arguments.append("--rm")

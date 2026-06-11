@@ -36,8 +36,11 @@ public enum ServicePlanner {
         activeProfiles: Set<String> = [],
         scaleOverrides: [String: Int] = [:]
     ) throws -> [[ServicePlan]] {
-        try ComposeFileMountResolver.validate(composeFile: composeFile)
         let layers = try dependencyLayers(for: composeFile, activeProfiles: activeProfiles)
+        try ComposeFileMountResolver.validate(
+            composeFile: composeFile,
+            activeServiceNames: Set(layers.flatMap { $0.map(\.serviceName) })
+        )
         try ReplicaPlanning.validateScaleTargets(
             scaleOverrides: scaleOverrides,
             services: composeFile.services,

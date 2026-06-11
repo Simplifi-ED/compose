@@ -2,7 +2,17 @@ import ComposeCore
 import Foundation
 
 extension TestRunner {
-    mutating func runSecretsValidationTests() throws {
+    mutating func runFileMountsValidationTests() throws {
+        try runFileMountsResourceErrorTests()
+        try runProfileScopedMountValidationTests()
+    }
+
+    private mutating func runFileMountsResourceErrorTests() throws {
+        try runFileMountsMissingFileTests()
+        try runFileMountsUndefinedResourceTests()
+    }
+
+    private mutating func runFileMountsMissingFileTests() throws {
         expectComposeError(
             "missing secret file",
             matching: {
@@ -36,14 +46,20 @@ extension TestRunner {
                 )
             }
         )
+    }
 
+    private mutating func runFileMountsUndefinedResourceTests() throws {
         expectComposeError(
             "undefined secret",
             matching: {
                 if case .undefinedResource(name: "missing_secret", kind: .secret) = $0 { true } else { false }
             },
             body: {
-                _ = try ComposeParser.parse(fileURL: Self.fixtureURL("undefined-secret-compose.yml"))
+                _ = try ComposeConfigResolver.resolve(
+                    fileURLs: [Self.fixtureURL("undefined-secret-compose.yml")],
+                    activeProfiles: [],
+                    scaleOverrides: [:]
+                )
             }
         )
 
@@ -53,35 +69,24 @@ extension TestRunner {
                 if case .undefinedResource(name: "missing_config", kind: .config) = $0 { true } else { false }
             },
             body: {
-                _ = try ComposeParser.parse(fileURL: Self.fixtureURL("undefined-config-compose.yml"))
+                _ = try ComposeConfigResolver.resolve(
+                    fileURLs: [Self.fixtureURL("undefined-config-compose.yml")],
+                    activeProfiles: [],
+                    scaleOverrides: [:]
+                )
             }
         )
     }
 
-    mutating func runSecretsHardeningTests() throws {
+    mutating func runFileMountsHardeningTests() throws {
         for kind in ComposeFileMountKind.allCases {
             try runFileMountHardeningTests(for: kind)
         }
         try runCrossKindDuplicateTargetTest()
     }
 
-    private mutating func runCrossKindDuplicateTargetTest() throws {
-        expectComposeError(
-            "cross-kind duplicate target",
-            matching: {
-                if case .invalidField("secrets", let reason) = $0 {
-                    return reason.contains("maps multiple configs/secrets to '/run/shared/mount'")
-                }
-                return false
-            },
-            body: {
-                _ = try ComposeParser.parse(fileURL: Self.fixtureURL("cross-kind-target-compose.yml"))
-            }
-        )
-    }
-
     mutating func runStartupLayersMountValidationTests() throws {
-        let fixturesDirectory = Self.fixtureURL("secrets-compose.yml").deletingLastPathComponent()
+        let fixturesDirectory = Self.fixtureURL("file-mounts-compose.yml").deletingLastPathComponent()
         let service = ComposeService(
             image: "docker.io/library/alpine:3.20",
             command: nil,
@@ -104,6 +109,58 @@ extension TestRunner {
                     for: composeFile,
                     projectName: "demo",
                     composeDirectory: fixturesDirectory
+                )
+            }
+        )
+    }
+
+    private mutating func runProfileScopedMountValidationTests() throws {
+        let fixturesDirectory = Self.fixtureURL("profiled-broken-mount-compose.yml").deletingLastPathComponent()
+        let composeFile = try ComposeParser.parse(
+            fileURL: Self.fixtureURL("profiled-broken-mount-compose.yml")
+        )
+
+        let defaultLayers = try ServicePlanner.startupLayers(
+            for: composeFile,
+            projectName: "demo",
+            composeDirectory: fixturesDirectory,
+            activeProfiles: []
+        )
+        expect(defaultLayers.map { $0.map(\.serviceName) } == [["web"]], "default up skips profiled broken mounts")
+
+        expectComposeError(
+            "active profile validates broken mounts",
+            matching: {
+                if case .resourceFileNotFound(let path, .config) = $0 {
+                    return path == "./secrets/missing-config.txt"
+                }
+                return false
+            },
+            body: {
+                _ = try ServicePlanner.startupLayers(
+                    for: composeFile,
+                    projectName: "demo",
+                    composeDirectory: fixturesDirectory,
+                    activeProfiles: ["debug"]
+                )
+            }
+        )
+    }
+
+    private mutating func runCrossKindDuplicateTargetTest() throws {
+        expectComposeError(
+            "cross-kind duplicate target",
+            matching: {
+                if case .invalidField("secrets", let reason) = $0 {
+                    return reason.contains("maps multiple configs/secrets to '/run/shared/mount'")
+                }
+                return false
+            },
+            body: {
+                _ = try ComposeConfigResolver.resolve(
+                    fileURLs: [Self.fixtureURL("cross-kind-target-compose.yml")],
+                    activeProfiles: [],
+                    scaleOverrides: [:]
                 )
             }
         )
@@ -147,7 +204,11 @@ extension TestRunner {
                 return false
             },
             body: {
-                _ = try ComposeParser.parse(fileURL: Self.fixtureURL(fixture))
+                _ = try ComposeConfigResolver.resolve(
+                    fileURLs: [Self.fixtureURL(fixture)],
+                    activeProfiles: [],
+                    scaleOverrides: [:]
+                )
             }
         )
     }

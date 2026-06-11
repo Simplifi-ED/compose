@@ -1,0 +1,15 @@
+configs:
+  broken_config:
+    file: ./secrets/missing-config.txt
+secrets:
+  db_password:
+    file: ./secrets/db_password.txt
+services:
+  web:
+    image: docker.io/library/alpine:3.20
+  debug:
+    image: docker.io/library/alpine:3.20
+    profiles: [debug]
+    configs:
+      - source: broken_config
+        target: /run/configs/broken

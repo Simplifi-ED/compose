@@ -90,7 +90,6 @@ public enum ComposeParser {
 
         try validateShutdownGraph(composeFile)
         try DependencyValidation.validate(services: composeFile.services)
-        try ComposeFileMountResolver.validate(composeFile: composeFile)
     }
 
     static func validateShutdownGraph(_ composeFile: ComposeFile) throws {

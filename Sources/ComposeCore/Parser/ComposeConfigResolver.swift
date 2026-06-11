@@ -41,13 +41,17 @@ public enum ComposeConfigResolver {
             adjusted[serviceName] = scaled
         }
 
-        let resolved = ComposeFile(
+        try ComposeFileMountResolver.validate(
+            composeFile: parsed,
+            activeServiceNames: Set(activeServices.keys)
+        )
+
+        return ComposeFile(
             name: parsed.name,
             services: adjusted,
             configs: parsed.configs,
             secrets: parsed.secrets
         )
-        return resolved
     }
 
     /// Resolves the compose file and returns YAML unless `quiet` requests validation only.

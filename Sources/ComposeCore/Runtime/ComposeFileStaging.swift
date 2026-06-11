@@ -33,7 +33,7 @@ package enum ComposeFileStaging {
         do {
             return try mounts.map { mount in
                 let stagedURL = directory.appendingPathComponent(stagedFileName(for: mount))
-                try copySource(at: mount.sourcePath, to: stagedURL, kind: mount.kind)
+                try copySource(mount: mount, to: stagedURL)
                 return StagedMount(
                     containerTarget: mount.containerTarget,
                     hostPath: stagedURL.path
@@ -53,7 +53,7 @@ package enum ComposeFileStaging {
             containerName: plan.name
         )
         let volumeArgs = volumeArguments(for: staged)
-        insertVolumeArguments(into: &runArguments, image: plan.image, volumeArgs: volumeArgs)
+        try insertVolumeArguments(into: &runArguments, image: plan.image, volumeArgs: volumeArgs)
         return runArguments
     }
 
@@ -61,7 +61,7 @@ package enum ComposeFileStaging {
         stagedMounts.flatMap { staged in
             [
                 "-v",
-                ComposeFileMountResolver.readOnlyVolumeFlag(
+                readOnlyVolumeFlag(
                     hostPath: staged.hostPath,
                     containerPath: staged.containerTarget
                 )
@@ -69,13 +69,19 @@ package enum ComposeFileStaging {
         }
     }
 
-    static func insertVolumeArguments(into runArguments: inout [String], image: String, volumeArgs: [String]) {
+    static func insertVolumeArguments(
+        into runArguments: inout [String],
+        image: String,
+        volumeArgs: [String]
+    ) throws {
         guard !volumeArgs.isEmpty else { return }
-        if let imageIndex = runArguments.firstIndex(of: image) {
-            runArguments.insert(contentsOf: volumeArgs, at: imageIndex)
-        } else {
-            runArguments.insert(contentsOf: volumeArgs, at: runArguments.count)
+        guard let imageIndex = runArguments.firstIndex(of: image) else {
+            throw ComposeError.invalidField(
+                "run arguments",
+                reason: "image token '\(image)' not found; volume mounts must appear before the image"
+            )
         }
+        runArguments.insert(contentsOf: volumeArgs, at: imageIndex)
     }
 
     package static func removeContainerStaging(projectName: String, containerName: String) {
@@ -99,13 +105,22 @@ package enum ComposeFileStaging {
         }
     }
 
-    private static func copySource(at source: URL, to destination: URL, kind: ComposeFileMountKind) throws {
+    package static func readOnlyVolumeFlag(hostPath: String, containerPath: String) -> String {
+        "\(hostPath):\(containerPath):ro"
+    }
+
+    private static func copySource(mount: PlannedFileMount, to destination: URL) throws {
+        let source = try ComposeFileMountResolver.verifiedSourceFile(
+            relativePath: mount.sourceRelativePath,
+            resolutionRoot: mount.resolutionRoot,
+            kind: mount.kind
+        )
         if FileManager.default.fileExists(atPath: destination.path) {
             try FileManager.default.removeItem(at: destination)
         }
         try FileManager.default.copyItem(at: source, to: destination)
         let permissions: Int
-        switch kind {
+        switch mount.kind {
         case .secret:
             permissions = 0o600
         case .config:
