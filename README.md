@@ -14,7 +14,8 @@ Maintained by [Omnivya](https://www.omnivya.fr) ([Simplifi-ED](https://github.co
 
 - Compose files (`-f`, auto-discovery of `compose.yaml` / `docker-compose.yml` + override; `COMPOSE_FILE`; repeat `-f` to merge)
 - Project name (`-p`, `COMPOSE_PROJECT_NAME`, compose `name:`, default: parent directory of the first compose file)
-- Per service: `image`, `command`, `ports`, `volumes` (bind mounts), `environment`, `container_name`, `depends_on` (list form), `profiles`
+- Per service: `image`, `command`, `ports`, `volumes` (bind mounts), `environment`, `depends_on` (list form), `profiles`, `deploy.replicas`
+- Service scaling: `deploy.replicas` in the compose file or `up --scale SERVICE=COUNT` (CLI wins); containers are named `{project}_{service}_{index}`
 - `container compose up` (detached) and `container compose down` (stop and remove)
 - Dependency-aware startup: services start in `depends_on` order (start order only, not health/readiness); independent services run in parallel
 - Failed `up` rolls back containers started in earlier waves
@@ -46,6 +47,42 @@ container compose run debugger sh             # auto-enables the service's profi
 `depends_on` referencing a profile-only service that is not active fails at plan time with an actionable error.
 
 `down --profile` is container-scoped only (no network or named-volume teardown in v1). Containers left running may still hold ports or bind mounts; resolve conflicts before re-running `up`.
+
+### Scaling
+
+Run multiple instances of a service with `deploy.replicas` in the compose file or `--scale SERVICE=COUNT` on `up`. The CLI flag overrides the file value.
+
+```yaml
+services:
+  web:
+    image: docker.io/library/nginx:latest
+    ports:
+      - "80"          # container-only port; no host bind, so replicas don't collide
+    deploy:
+      replicas: 2
+```
+
+```bash
+container compose up                  # 2 web replicas from deploy.replicas
+container compose up --scale web=3   # CLI override: 3 replicas
+container compose up --scale web=3 --scale db=2
+```
+
+- Containers are always named `{project}_{service}_{index}` with a 1-based index (`demo_web_1`, `demo_web_2`), even at one replica.
+- All replicas share the `com.docker.compose.service` label, so `ps`, `logs web`, `top`, and `down` cover every replica. Each replica also gets a `com.docker.compose.container-number` label.
+- Replicas of a service start in parallel within their `depends_on` wave, and a failed wave rolls back all replicas started in earlier waves.
+- A static host port (`"8080:80"`) with more than one replica fails before any container starts — each replica would bind the same host port. Use a container-only port (`"80"` or `":80"`) to scale; the runtime doesn't allocate dynamic host ports, so container-only ports aren't bound on the host.
+- `container_name` conflicts with indexed naming and fails `up` at plan time; remove it from services you start with `up`. (`run` still honors it for one-off `{container_name}_run_*` containers.)
+- Other `deploy` keys (resources, placement, update_config, ...) are parsed and ignored.
+- Containers from older versions without an index suffix aren't reused; `down` removes them by project label.
+- After a successful `up`, stdout prints one aligned row per service (not one container name per line). Scripts that parsed flat stdout from older versions need to read the grouped rows or use `compose ps` instead:
+
+  ```
+  web  demo_web_1  demo_web_2
+  db   demo_db_1
+  ```
+
+- `compose logs` and `up --attach` prefix each replica with its container name when multiple replicas share a service; single-replica services keep the service name prefix.
 
 ### Interrupt handling
 
@@ -101,7 +138,7 @@ container compose exec -f docker-compose.yml -p demo db psql -U postgres
 - When stdin is a TTY, `-i` and `-t` are enabled automatically. Piped or redirected stdin stays non-interactive unless you pass `-i`. There is no `-T` flag yet to disable auto-allocation from an interactive terminal.
 - Use `--timeout` to set the SIGTERM grace period before SIGKILL when you interrupt (default 10 seconds). On `exec`, `-t` allocates a pseudo-TTY (not the shutdown timeout).
 - **Exit codes:** the exec process exit code on normal completion; 130 for SIGINT or 143 for SIGTERM when interrupted (project containers are stopped).
-- Not supported at the compose layer yet: `-e`, `-w`, `-u`, detach, or service scale/index selection.
+- Not supported at the compose layer yet: `-e`, `-w`, `-u`, detach, or replica index selection. When a service runs multiple replicas, `exec` asks you to target one with `container exec CONTAINER COMMAND`.
 - Use `container compose run` to start a new container from the service definition when nothing is running yet.
 
 ### Run

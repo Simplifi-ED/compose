@@ -88,13 +88,14 @@ extension TestRunner {
             environment: .map(["FOO": "bar"]),
             containerName: nil
         )
-        let plan = try ServicePlanner.plan(
+        let plan = try ServicePlanner.buildUpPlan(
             serviceName: "web",
             service: service,
             projectName: "demo",
-            composeDirectory: fixturesDirectory
+            composeDirectory: fixturesDirectory,
+            replicaIndex: 1
         )
-        expect(plan.name == "demo_web", "planner container name")
+        expect(plan.name == "demo_web_1", "planner container name")
         expect(plan.runArguments.contains("-d"), "planner detach")
         expect(plan.runArguments.contains("127.0.0.1:18080:80"), "planner publish")
         expect(plan.runArguments.contains("-l"), "planner label flag")
@@ -107,20 +108,14 @@ extension TestRunner {
             "planner service label"
         )
 
-        let named = ComposeService(
-            image: "docker.io/library/alpine:latest",
-            command: nil,
-            ports: [],
-            environment: nil,
-            containerName: "custom-worker"
-        )
-        let namedPlan = try ServicePlanner.plan(
-            serviceName: "worker",
-            service: named,
+        let indexedPlan = try ServicePlanner.buildUpPlan(
+            serviceName: "web",
+            service: service,
             projectName: "demo",
-            composeDirectory: fixturesDirectory
+            composeDirectory: fixturesDirectory,
+            replicaIndex: 2
         )
-        expect(namedPlan.name == "custom-worker", "planner container name override")
+        expect(indexedPlan.name == "demo_web_2", "planner replica index in container name")
     }
 
     mutating func runPlannerPublishTests(fixturesDirectory: URL) throws {
@@ -154,11 +149,12 @@ extension TestRunner {
             environment: nil,
             containerName: nil
         )
-        let volumePlan = try ServicePlanner.plan(
+        let volumePlan = try ServicePlanner.buildUpPlan(
             serviceName: "web",
             service: volumeService,
             projectName: "demo",
-            composeDirectory: fixturesDirectory
+            composeDirectory: fixturesDirectory,
+            replicaIndex: 1
         )
         expect(volumePlan.runArguments.contains("-v"), "planner volume flag")
         expect(volumePlan.runArguments.contains("\(expectedDataPath):/mnt/data"), "planner resolved volume")

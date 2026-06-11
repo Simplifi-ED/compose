@@ -20,6 +20,9 @@ public struct Up: AsyncParsableCommand {
     @OptionGroup
     var profileOptions: ProfileOptions
 
+    @OptionGroup
+    var scaleOptions: ScaleOptions
+
     @Flag(
         name: .long,
         help: "After startup, follow service logs in the foreground until services exit or you interrupt."
@@ -38,7 +41,8 @@ public struct Up: AsyncParsableCommand {
             for: composeFile,
             projectName: projectName,
             composeDirectory: composeDirectory,
-            activeProfiles: profileOptions.activeProfileSet
+            activeProfiles: profileOptions.activeProfileSet,
+            scaleOverrides: scaleOptions.resolvedScaleOverrides()
         )
         let plans = layers.flatMap { $0 }
 
@@ -53,8 +57,8 @@ public struct Up: AsyncParsableCommand {
             try await ServiceRunner.up(layers: layers, progress: orchestration.handlers)
         }
 
-        for plan in plans {
-            print(plan.name)
+        for line in UpStartupSummary.lines(for: plans) {
+            print(line)
         }
 
         guard attach else { return }

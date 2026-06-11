@@ -8,12 +8,19 @@ enum ServiceRunMapping {
         projectName: String,
         composeDirectory: URL,
         image: String,
-        command: [String]
+        command: [String],
+        containerNumber: Int = 1
     ) throws {
-        arguments.append(contentsOf: ComposeLabels.runFlags(projectName: projectName, serviceName: serviceName))
+        arguments.append(contentsOf: ComposeLabels.runFlags(
+            projectName: projectName,
+            serviceName: serviceName,
+            containerNumber: containerNumber
+        ))
         arguments.append(contentsOf: environmentFlags(service.environment))
         for port in service.ports {
-            arguments.append(contentsOf: ["-p", try publishFlag(for: port)])
+            if let flag = try publishFlag(for: port) {
+                arguments.append(contentsOf: ["-p", flag])
+            }
         }
         for volume in service.volumes {
             arguments.append(contentsOf: ["-v", try volumeFlag(for: volume, relativeTo: composeDirectory)])
@@ -42,15 +49,20 @@ enum ServiceRunMapping {
         }
     }
 
-    static func publishFlag(for port: String) throws -> String {
+    /// Publish flag for a port spec, or `nil` for container-only specs
+    /// (the runtime can't allocate dynamic host ports, so no host bind is made).
+    static func publishFlag(for port: String) throws -> String? {
         guard let spec = ComposeBindingKeys.parsePortSpec(port) else {
             throw ComposeError.unsupportedPort(port)
         }
+        guard let hostPort = spec.hostPort else {
+            return nil
+        }
 
         if spec.protocolSuffix.isEmpty {
-            return "127.0.0.1:\(spec.hostPort):\(spec.containerPort)"
+            return "127.0.0.1:\(hostPort):\(spec.containerPort)"
         }
-        return "127.0.0.1:\(spec.hostPort):\(spec.containerPort)\(spec.protocolSuffix)"
+        return "127.0.0.1:\(hostPort):\(spec.containerPort)\(spec.protocolSuffix)"
     }
 
     static func volumeFlag(for volume: String, relativeTo composeDirectory: URL) throws -> String {

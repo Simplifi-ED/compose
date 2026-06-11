@@ -15,7 +15,8 @@ You are building a **Minimal Real Compose Plugin**—NOT a generic orchestration
 - Project naming: `-p`, `COMPOSE_PROJECT_NAME`, compose `name:`, first-file parent directory [1].
 - Instantiating and mapping configuration directly into Apple's programmatic `ContainerCommands` API [1].
 - Basic container lifecycles: Starting (via `ContainerRun`) and Stopping (via `ContainerStop`) [1].
-- Attributes to map: `image`, `command`, `environment`, standard host-to-container `ports`, short-syntax bind-mount `volumes` (`host:container`), short-form `depends_on` (list of service names), and `profiles` [1].
+- Attributes to map: `image`, `command`, `environment`, standard host-to-container `ports`, short-syntax bind-mount `volumes` (`host:container`), short-form `depends_on` (list of service names), `profiles`, and `deploy.replicas` [1].
+- Service scaling: `deploy.replicas` and `up --scale SERVICE=COUNT` (CLI wins) with uniform `{project}_{service}_{index}` container naming [1].
 - Dependency-aware startup ordering: topological sort with parallel waves via structured concurrency [1].
 - Partial-`up` rollback: tear down containers from successful waves when a later wave fails [1].
 - Reverse-topological `down` when a compose file is available; parallel `down` fallback for `-p`-only [1].
@@ -127,5 +128,6 @@ The output of the discovery command **must** show the `compose` plugin. If it do
 - `compose top` streams `ContainerClient.stats()` filtered by project labels (not in-container `ps`); `compose logs` multiplexes upstream file handles (merged containerLog + bootlog).
 - SIGINT during `up`/`down` orchestration leaves started containers running; `SignalForwarding` coordinates stop/teardown for attach, logs follow, top, exec, and run.
 - State tracking uses `com.docker.compose.*` labels on `ContainerRun`; discovery, `ps`, and `logs` read `snapshot.configuration.labels`.
+- Scaling: `ReplicaPlanning` is pure validation/naming; replica loops live in `ServicePlanner.startupLayers`; `up` names are always `{project}_{service}_{index}` (1-based); `container_name` errors on `up` via `validateForUp` but still keys `run` via `runContainerBaseName`; `deploy.replicas` must be >= 1 at decode; static host port + replicas > 1 fails at plan time; container-only ports (`80`, `:80`) parse but emit no `-p`; replicas carry `com.docker.compose.container-number`; log multiplex keys by container name and disambiguates replica prefixes.
 - Host Linux kernel must be configured (`container system kernel set`) before `container run` or `compose up` succeed.
 - Explicit missing `-f` paths throw; only absent default discovery yields nil so `-p`-only `down`/`ps` can proceed.

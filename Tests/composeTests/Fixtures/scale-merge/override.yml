@@ -1,0 +1,4 @@
+services:
+  web:
+    deploy:
+      replicas: 2
