@@ -5,25 +5,40 @@ public enum ComposeHealthcheckTest: Sendable, Equatable {
   case cmdShell(String)
 }
 
+/// Tracks which healthcheck keys were present in the source YAML (for export without default fill-in).
+package struct ComposeHealthcheckExportPresence: Sendable, Equatable {
+  package let interval: Bool
+  package let timeout: Bool
+  package let retries: Bool
+  package let startPeriod: Bool
+}
+
 public struct ComposeHealthcheck: Sendable, Equatable {
+  public static let defaultInterval = Duration.seconds(30)
+  public static let defaultTimeout = Duration.seconds(5)
+  public static let defaultRetries = 3
+  public static let defaultStartPeriod = Duration.zero
+
   public let test: ComposeHealthcheckTest
   public let interval: Duration
   public let timeout: Duration
   public let retries: Int
   public let startPeriod: Duration
+  package let exportPresence: ComposeHealthcheckExportPresence?
 
   public init(
     test: ComposeHealthcheckTest,
-    interval: Duration = .seconds(30),
-    timeout: Duration = .seconds(5),
-    retries: Int = 3,
-    startPeriod: Duration = .zero
+    interval: Duration = defaultInterval,
+    timeout: Duration = defaultTimeout,
+    retries: Int = defaultRetries,
+    startPeriod: Duration = defaultStartPeriod
   ) {
     self.test = test
     self.interval = interval
     self.timeout = timeout
     self.retries = retries
     self.startPeriod = startPeriod
+    exportPresence = nil
   }
 
 }
@@ -44,16 +59,16 @@ extension ComposeHealthcheck: Decodable {
     if let intervalText = try container.decodeIfPresent(String.self, forKey: .interval) {
       interval = try ComposeDuration.parse(intervalText, field: "healthcheck.interval")
     } else {
-      interval = .seconds(30)
+      interval = Self.defaultInterval
     }
 
     if let timeoutText = try container.decodeIfPresent(String.self, forKey: .timeout) {
       timeout = try ComposeDuration.parse(timeoutText, field: "healthcheck.timeout")
     } else {
-      timeout = .seconds(5)
+      timeout = Self.defaultTimeout
     }
 
-    retries = try container.decodeIfPresent(Int.self, forKey: .retries) ?? 3
+    retries = try container.decodeIfPresent(Int.self, forKey: .retries) ?? Self.defaultRetries
     guard retries >= 1 else {
       throw ComposeError.invalidField("healthcheck.retries", reason: "expected an integer of 1 or more")
     }
@@ -65,8 +80,15 @@ extension ComposeHealthcheck: Decodable {
         allowZero: true
       )
     } else {
-      startPeriod = .zero
+      startPeriod = Self.defaultStartPeriod
     }
+
+    exportPresence = ComposeHealthcheckExportPresence(
+      interval: container.contains(.interval),
+      timeout: container.contains(.timeout),
+      retries: container.contains(.retries),
+      startPeriod: container.contains(.startPeriod)
+    )
   }
 
   private static func decodeTest(

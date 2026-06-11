@@ -77,4 +77,27 @@ enum ComposeDuration {
       throw ComposeError.invalidField(field, reason: "unknown duration unit '\(unit)' in '\(raw)'")
     }
   }
+
+  /// Canonical compose duration text for YAML export (for example `30s`, `1m`).
+  static func composeString(from duration: Duration) -> String {
+    let components = duration.components
+    let totalNanoseconds =
+      components.seconds * 1_000_000_000 + components.attoseconds / 1_000_000_000
+    guard totalNanoseconds > 0 else { return "0s" }
+
+    let units: [(Int64, String)] = [
+      (3_600 * 1_000_000_000, "h"),
+      (60 * 1_000_000_000, "m"),
+      (1_000_000_000, "s"),
+      (1_000_000, "ms"),
+      (1_000, "us"),
+      (1, "ns")
+    ]
+    for (unitNanos, suffix) in units {
+      guard totalNanoseconds % unitNanos == 0 else { continue }
+      let value = totalNanoseconds / unitNanos
+      return "\(value)\(suffix)"
+    }
+    return "\(totalNanoseconds)ns"
+  }
 }

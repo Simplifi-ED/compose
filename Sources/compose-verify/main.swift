@@ -193,6 +193,7 @@ do {
     try runner.runProfileTests()
     try runner.runScaleTests()
     try runner.runMergeTests()
+    try runner.runConfigTests()
     try runner.runIncludeTests()
     try runner.runProjectOptionsTests()
     try runner.runShutdownLayerTests()
