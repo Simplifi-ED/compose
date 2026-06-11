@@ -9,23 +9,26 @@ public struct PlannedFileMount: Sendable, Equatable {
 
 package enum ComposeFileMountResolver {
     static func validate(composeFile: ComposeFile) throws {
-        for (_, service) in composeFile.services {
-            try validateServiceReferences(
-                mounts: service.configs,
-                definitions: composeFile.configs,
-                kind: .config
-            )
-            try validateServiceReferences(
-                mounts: service.secrets,
-                definitions: composeFile.secrets,
-                kind: .secret
-            )
+        for (serviceName, service) in composeFile.services {
+            for kind in ComposeFileMountKind.allCases {
+                let mounts = service.mounts(for: kind)
+                let definitions = composeFile.resources(for: kind)
+                try validateServiceReferences(
+                    mounts: mounts,
+                    definitions: definitions,
+                    kind: kind
+                )
+                try validateUniqueTargets(
+                    serviceName: serviceName,
+                    mounts: mounts,
+                    kind: kind
+                )
+            }
         }
-        for definition in composeFile.configs.values {
-            _ = try resolveDefinitionPath(definition, kind: .config)
-        }
-        for definition in composeFile.secrets.values {
-            _ = try resolveDefinitionPath(definition, kind: .secret)
+        for kind in ComposeFileMountKind.allCases {
+            for definition in composeFile.resources(for: kind).values {
+                _ = try resolveDefinitionPath(definition, kind: kind)
+            }
         }
     }
 
@@ -33,17 +36,13 @@ package enum ComposeFileMountResolver {
         for service: ComposeService,
         composeFile: ComposeFile
     ) throws -> [PlannedFileMount] {
-        let configMounts = try resolvePlannedMounts(
-            serviceMounts: service.configs,
-            definitions: composeFile.configs,
-            kind: .config
-        )
-        let secretMounts = try resolvePlannedMounts(
-            serviceMounts: service.secrets,
-            definitions: composeFile.secrets,
-            kind: .secret
-        )
-        return configMounts + secretMounts
+        try ComposeFileMountKind.allCases.flatMap { kind in
+            try resolvePlannedMounts(
+                serviceMounts: service.mounts(for: kind),
+                definitions: composeFile.resources(for: kind),
+                kind: kind
+            )
+        }
     }
 
     private static func validateServiceReferences(
@@ -54,6 +53,23 @@ package enum ComposeFileMountResolver {
         for mount in mounts {
             guard definitions[mount.source] != nil else {
                 throw ComposeError.undefinedResource(name: mount.source, kind: kind)
+            }
+        }
+    }
+
+    private static func validateUniqueTargets(
+        serviceName: String,
+        mounts: [ComposeServiceMount],
+        kind: ComposeFileMountKind
+    ) throws {
+        var seenTargets: Set<String> = []
+        for mount in mounts {
+            let target = mount.resolvedTarget(kind: kind)
+            guard seenTargets.insert(target).inserted else {
+                throw ComposeError.invalidField(
+                    kind.rootFieldName,
+                    reason: "service '\(serviceName)' maps multiple \(kind.rootFieldName) to '\(target)'"
+                )
             }
         }
     }
@@ -87,22 +103,35 @@ package enum ComposeFileMountResolver {
                 reason: "missing compose file directory for '\(definition.file)'"
             )
         }
-        let resolved: URL
-        switch try BindMountPathResolver.resolveHostPath(definition.file, relativeTo: root) {
-        case .projectRelative(let url), .absoluteExternal(let url):
-            resolved = url
+        if definition.file.hasPrefix("/") {
+            throw ComposeError.invalidField(
+                kind.rootFieldName,
+                reason: "absolute file paths aren't supported for \(kind.rootFieldName). "
+                    + "Use a path relative to the compose file directory."
+            )
         }
-        guard FileManager.default.fileExists(atPath: resolved.path) else {
+        let resolved = try BindMountPathResolver.resolveHostPath(
+            definition.file,
+            relativeTo: root,
+            fieldName: kind.rootFieldName
+        )
+        guard case .projectRelative(let url) = resolved else {
+            throw ComposeError.invalidField(
+                kind.rootFieldName,
+                reason: "file '\(definition.file)' must be relative to the compose file directory"
+            )
+        }
+        guard FileManager.default.fileExists(atPath: url.path) else {
             throw ComposeError.resourceFileNotFound(path: definition.file, kind: kind)
         }
         var isDirectory: ObjCBool = false
-        if FileManager.default.fileExists(atPath: resolved.path, isDirectory: &isDirectory), isDirectory.boolValue {
+        if FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory), isDirectory.boolValue {
             throw ComposeError.invalidField(
                 kind.rootFieldName,
                 reason: "file '\(definition.file)' must point to a regular file, not a directory"
             )
         }
-        return resolved
+        return url
     }
 
     package static func readOnlyVolumeFlag(hostPath: String, containerPath: String) -> String {

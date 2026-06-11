@@ -1,6 +1,6 @@
 import Foundation
 
-public enum ComposeFileMountKind: String, Sendable, Equatable {
+public enum ComposeFileMountKind: String, Sendable, Equatable, CaseIterable {
     case config
     case secret
 

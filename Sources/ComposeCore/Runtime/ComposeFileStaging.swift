@@ -3,13 +3,13 @@ import Foundation
 package enum ComposeFileStaging {
     private static let rootFolderName = "container-compose"
 
-    static func projectRoot(projectName: String) -> URL {
+    package static func projectRoot(projectName: String) -> URL {
         URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
             .appendingPathComponent(rootFolderName, isDirectory: true)
             .appendingPathComponent(projectName, isDirectory: true)
     }
 
-    static func containerDirectory(projectName: String, containerName: String) -> URL {
+    package static func containerDirectory(projectName: String, containerName: String) -> URL {
         projectRoot(projectName: projectName)
             .appendingPathComponent(containerName, isDirectory: true)
     }
@@ -30,13 +30,18 @@ package enum ComposeFileStaging {
             withIntermediateDirectories: true,
             attributes: [.posixPermissions: NSNumber(value: 0o700)]
         )
-        return try mounts.map { mount in
-            let stagedURL = directory.appendingPathComponent(stagedFileName(for: mount))
-            try copySource(at: mount.sourcePath, to: stagedURL, kind: mount.kind)
-            return StagedMount(
-                containerTarget: mount.containerTarget,
-                hostPath: stagedURL.path
-            )
+        do {
+            return try mounts.map { mount in
+                let stagedURL = directory.appendingPathComponent(stagedFileName(for: mount))
+                try copySource(at: mount.sourcePath, to: stagedURL, kind: mount.kind)
+                return StagedMount(
+                    containerTarget: mount.containerTarget,
+                    hostPath: stagedURL.path
+                )
+            }
+        } catch {
+            removeContainerStaging(projectName: projectName, containerName: containerName)
+            throw error
         }
     }
 
@@ -73,13 +78,13 @@ package enum ComposeFileStaging {
         }
     }
 
-    static func removeContainerStaging(projectName: String, containerName: String) {
+    package static func removeContainerStaging(projectName: String, containerName: String) {
         let directory = containerDirectory(projectName: projectName, containerName: containerName)
         try? FileManager.default.removeItem(at: directory)
         pruneEmptyParents(startingAt: directory.deletingLastPathComponent())
     }
 
-    static func removeProjectStaging(projectName: String) {
+    package static func removeProjectStaging(projectName: String) {
         let directory = projectRoot(projectName: projectName)
         try? FileManager.default.removeItem(at: directory)
         pruneEmptyParents(startingAt: directory.deletingLastPathComponent())

@@ -155,7 +155,7 @@ enum ComposeIncludeResolver {
             }
             services[serviceName] = service
         }
-        try mergeIncludedResources(
+        try ComposeIncludeResourceMerge.merge(
             into: &model,
             included: included,
             includePath: includePath,
@@ -166,44 +166,6 @@ enum ComposeIncludeResolver {
             services: services,
             configs: model.configs,
             secrets: model.secrets
-        )
-    }
-
-    private static func mergeIncludedResources(
-        into model: inout ComposeFile,
-        included: ComposeFile,
-        includePath: String,
-        definedIn: String
-    ) throws {
-        var configs = model.configs
-        for (name, resource) in included.configs {
-            if configs[name] != nil {
-                throw ComposeError.includeResourceConflict(
-                    name: name,
-                    kind: .config,
-                    includePath: includePath,
-                    definedIn: definedIn
-                )
-            }
-            configs[name] = resource
-        }
-        var secrets = model.secrets
-        for (name, resource) in included.secrets {
-            if secrets[name] != nil {
-                throw ComposeError.includeResourceConflict(
-                    name: name,
-                    kind: .secret,
-                    includePath: includePath,
-                    definedIn: definedIn
-                )
-            }
-            secrets[name] = resource
-        }
-        model = ComposeFile(
-            name: model.name,
-            services: model.services,
-            configs: configs,
-            secrets: secrets
         )
     }
 

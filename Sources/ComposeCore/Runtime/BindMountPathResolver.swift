@@ -40,7 +40,8 @@ package enum BindMountPathResolver {
 
     package static func resolveHostPath(
         _ hostPath: String,
-        relativeTo composeDirectory: URL
+        relativeTo composeDirectory: URL,
+        fieldName: String = "volumes"
     ) throws -> ResolvedHostPath {
         if hostPath.hasPrefix("/") {
             return .absoluteExternal(
@@ -53,7 +54,7 @@ package enum BindMountPathResolver {
         let composeRoot = composeDirectory.standardizedFileURL.resolvingSymlinksInPath()
         guard isPathContained(standardized, within: composeRoot) else {
             throw ComposeError.invalidField(
-                "volumes",
+                fieldName,
                 reason: "host path '\(hostPath)' resolves outside the compose file directory. "
                     + "Use a path within the project or an absolute host path."
             )

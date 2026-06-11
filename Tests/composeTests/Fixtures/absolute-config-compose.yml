@@ -1,0 +1,7 @@
+configs:
+  app_config:
+    file: /etc/passwd
+services:
+  app:
+    image: docker.io/library/alpine:3.20
+    configs: [app_config]

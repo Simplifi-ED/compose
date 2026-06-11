@@ -77,21 +77,25 @@ extension ComposeService: Encodable {
             try container.encode(deploy, forKey: .deploy)
         }
         try container.encodeIfPresent(healthcheck, forKey: .healthcheck)
-        if !configs.isEmpty {
-            try encodeServiceMounts(configs, kind: .config, to: &container)
-        }
-        if !secrets.isEmpty {
-            try encodeServiceMounts(secrets, kind: .secret, to: &container)
+        for kind in ComposeFileMountKind.allCases {
+            let serviceMounts = mounts(for: kind)
+            if !serviceMounts.isEmpty {
+                try encodeServiceMounts(serviceMounts, kind: kind, to: &container)
+            }
         }
     }
 
     private func encodeServiceMounts(
-        _ mounts: [ComposeServiceMount],
+        _ serviceMounts: [ComposeServiceMount],
         kind: ComposeFileMountKind,
         to container: inout KeyedEncodingContainer<CodingKeys>
     ) throws {
-        var list = container.nestedUnkeyedContainer(forKey: kind == .config ? .configs : .secrets)
-        for mount in mounts {
+        let key: CodingKeys = switch kind {
+        case .config: .configs
+        case .secret: .secrets
+        }
+        var list = container.nestedUnkeyedContainer(forKey: key)
+        for mount in serviceMounts {
             try list.encode(ResolvedServiceMountEncoder(mount: mount, kind: kind))
         }
     }

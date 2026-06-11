@@ -100,6 +100,7 @@ public enum ServiceRunner {
                     try await hooks.runContainer(plan)
                 }
                 if result.wasInterrupted {
+                    handleInterruptedWave(result: result, startedWaves: &startedWaves, layers: layers)
                     throw CancellationError()
                 }
                 if !result.succeeded.isEmpty {
@@ -127,6 +128,7 @@ public enum ServiceRunner {
                 execution: execution,
                 teardown: hooks.rollbackTeardown
             )
+            cleanupOrphanStaging(layers: layers, startedWaves: startedWaves)
             if !rollbackFailures.isEmpty {
                 let started = startedWaves.flatMap { $0 }
                 let rollbackMessage = ComposeError.rollbackFailed(
@@ -234,6 +236,27 @@ public enum ServiceRunner {
             failures.append(contentsOf: result.failures.map { (container: $0.service, error: $0.error) })
         }
         return failures
+    }
+
+    package static func cleanupOrphanStaging(layers: [[ServicePlan]], startedWaves: [[String]]) {
+        let started = Set(startedWaves.flatMap { $0 })
+        for plan in layers.flatMap({ $0 }) where !started.contains(plan.name) {
+            ComposeFileStaging.removeContainerStaging(
+                projectName: plan.projectName,
+                containerName: plan.name
+            )
+        }
+    }
+
+    private static func handleInterruptedWave(
+        result: ParallelRunResult,
+        startedWaves: inout [[String]],
+        layers: [[ServicePlan]]
+    ) {
+        if !result.succeeded.isEmpty {
+            startedWaves.append(result.succeeded)
+        }
+        cleanupOrphanStaging(layers: layers, startedWaves: startedWaves)
     }
 
 }

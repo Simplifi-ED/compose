@@ -117,7 +117,8 @@ The output of the discovery command **must** show the `compose` plugin. If it do
 - Deliver merge-ready PRs with polish included—not deferred follow-up cleanup.
 - Run Thermos parallel review (`thermo-nuclear-review` + code-quality subagents) before declaring feature work complete.
 - Run Thermos review on feature specs before filing GitHub issues.
-- CI/release automation (Makefile, GitHub Actions, Homebrew tap) targets this compose plugin repo only—not upstream `apple/container`.
+- CI/release automation targets this compose plugin repo only—not upstream `apple/container`; keep `.github/workflows/ci.yml` as a maintainer-run quality gate (`workflow_dispatch`), not per-commit, to conserve macOS runner minutes.
+- First public release follows semver starting at v0.0.1, not v1.0.0.
 - Keep new source files ≤250 lines; split modules when exceeded.
 - Reuse upstream ContainerCommands APIs (`ContainerLogs`, `ContainerExec`, `AsyncSignalHandler`) instead of reimplementing.
 - In test fixtures, pin container images to version tags—not `:latest` or sha digests.
@@ -125,7 +126,7 @@ The output of the discovery command **must** show the `compose` plugin. If it do
 ## Learned Workspace Facts
 
 - `container` CLI 1.0.0 at `/usr/local` for local dev; plugin at `{INSTALL_ROOT}/libexec/container-plugins/compose` via `scripts/install-plugin.sh` (`sudo` for `/usr/local`). Homebrew `container` sets `CONTAINER_INSTALL_ROOT` to `opt_prefix`, so plugins belong under `opt/container/libexec/container-plugins/compose`—not `HOMEBREW_PREFIX/libexec/...` from `command -v`. Run `container system start` before plugin discovery; host Linux kernel must be configured (`container system kernel set`) before `container run` or `compose up` succeed.
-- Package targets: `ComposeCore`, `compose`, `compose-verify`; on CLT use `swift run -c release compose-verify` (not `swift test`) and `scripts/lint.sh` with `SWIFTLINT_DISABLE_SOURCEKIT=1`. CI/release workflows install SwiftLint via `scripts/install-swiftlint.sh` before `make lint`.
+- Package targets: `ComposeCore`, `compose`, `compose-verify`; on CLT use `swift run -c release compose-verify` (not `swift test`) and `scripts/lint.sh` with `SWIFTLINT_DISABLE_SOURCEKIT=1`. CI (`ci.yml`) is manual-only via `workflow_dispatch` with opt-in `run_smoke`; `release.yml` still runs lint/build/test on version tags. Both install SwiftLint via `scripts/install-swiftlint.sh` before `make lint`.
 - `compose down` reverse-topological with compose file present; parallel fallback for explicit `-p` only (not `COMPOSE_PROJECT_NAME` or compose `name:`).
 - Default compose discovery: `compose.yaml` → … → `docker-compose.yml` + paired `*.override.*`; `COMPOSE_FILE` when no `-f`. Project name: `-p` → `COMPOSE_PROJECT_NAME` → merged `name:` → first-file parent dir. Explicit missing `-f` paths throw; only absent default discovery yields nil so `-p`-only `down`/`ps` can proceed.
 - Multi-file merge: unique-key ports/volumes; env list by var name; `depends_on` keyed merge (override wins per service); `healthcheck` override wins. Relative bind-mount paths resolve against the compose file directory, not shell CWD.

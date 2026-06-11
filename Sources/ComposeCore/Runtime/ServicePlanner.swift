@@ -36,6 +36,7 @@ public enum ServicePlanner {
         activeProfiles: Set<String> = [],
         scaleOverrides: [String: Int] = [:]
     ) throws -> [[ServicePlan]] {
+        try ComposeFileMountResolver.validate(composeFile: composeFile)
         let layers = try dependencyLayers(for: composeFile, activeProfiles: activeProfiles)
         try ReplicaPlanning.validateScaleTargets(
             scaleOverrides: scaleOverrides,
@@ -148,111 +149,6 @@ public enum ServicePlanner {
             return containerName
         }
         return "\(projectName)_\(serviceName)"
-    }
-
-    package static func runPlan(
-        context: PlanningContext,
-        serviceName: String,
-        service: ComposeService,
-        options: RunPlanOptions
-    ) throws -> ServicePlan {
-        guard let image = service.image, !image.isEmpty else {
-            throw ComposeError.missingImage(service: serviceName)
-        }
-
-        let baseName = runContainerBaseName(
-            serviceName: serviceName,
-            service: service,
-            projectName: context.projectName
-        )
-        let name = "\(baseName)_run_\(options.nameSuffix)"
-
-        var arguments: [String] = ["--name", name]
-        if options.removeContainer {
-            arguments.append("--rm")
-        }
-        if options.interactive {
-            arguments.append("-i")
-        }
-        if options.processTerminal {
-            arguments.append("-t")
-        }
-        let command = if let override = options.commandOverride, !override.isEmpty {
-            override
-        } else {
-            ServiceRunMapping.commandArguments(service.command)
-        }
-        try ServiceRunMapping.appendServiceRunConfiguration(
-            to: &arguments,
-            configuration: ServiceRunConfiguration(
-                serviceName: serviceName,
-                service: service,
-                projectName: context.projectName,
-                composeDirectory: service.projectDirectory(orDefault: context.composeDirectory),
-                image: image,
-                command: command
-            )
-        )
-
-        let fileMounts = try ComposeFileMountResolver.plannedMounts(
-            for: service,
-            composeFile: context.composeFile
-        )
-
-        return ServicePlan(
-            serviceName: serviceName,
-            name: name,
-            projectName: context.projectName,
-            image: image,
-            runArguments: arguments,
-            fileMounts: fileMounts
-        )
-    }
-
-    package static func buildUpPlan(
-        context: PlanningContext,
-        serviceName: String,
-        service: ComposeService,
-        replicaIndex: Int
-    ) throws -> ServicePlan {
-        guard let image = service.image, !image.isEmpty else {
-            throw ComposeError.missingImage(service: serviceName)
-        }
-
-        let name = ReplicaPlanning.indexedContainerName(
-            projectName: context.projectName,
-            serviceName: serviceName,
-            index: replicaIndex
-        )
-
-        var arguments = ["-d", "--name", name]
-        try ServiceRunMapping.appendServiceRunConfiguration(
-            to: &arguments,
-            configuration: ServiceRunConfiguration(
-                serviceName: serviceName,
-                service: service,
-                projectName: context.projectName,
-                composeDirectory: service.projectDirectory(orDefault: context.composeDirectory),
-                image: image,
-                command: ServiceRunMapping.commandArguments(service.command),
-                containerNumber: replicaIndex
-            )
-        )
-
-        let fileMounts = try ComposeFileMountResolver.plannedMounts(
-            for: service,
-            composeFile: context.composeFile
-        )
-
-        return ServicePlan(
-            serviceName: serviceName,
-            name: name,
-            projectName: context.projectName,
-            image: image,
-            runArguments: arguments,
-            fileMounts: fileMounts,
-            replicaIndex: replicaIndex
-        )
     }
 
     public static func publishFlag(for port: String) throws -> String? {

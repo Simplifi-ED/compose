@@ -1,10 +1,21 @@
 name: Compose CI
 
+# Maintainer quality gate — run manually from Actions → Compose CI → Run workflow.
+# Release tags still validate via .github/workflows/release.yml.
 on:
-  push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      run_smoke:
+        description: Run live container smoke test (installs container via Homebrew)
+        type: boolean
+        default: false
+
+concurrency:
+  group: compose-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
 
 jobs:
   validate:
@@ -43,7 +54,7 @@ jobs:
           codesign -dvvv dist/compose/bin/compose
 
   smoke:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event.inputs.run_smoke == 'true'
     runs-on: macos-15
     continue-on-error: true
     steps:

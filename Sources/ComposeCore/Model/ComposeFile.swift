@@ -24,14 +24,11 @@ public struct ComposeFile: Sendable, Equatable {
         for (serviceName, service) in services where serviceNames.contains(serviceName) {
             roots.insert(service.projectDirectory(orDefault: defaultDirectory).standardizedFileURL)
         }
-        for resource in configs.values {
-            if let root = resource.resolutionRoot {
-                roots.insert(root.standardizedFileURL)
-            }
-        }
-        for resource in secrets.values {
-            if let root = resource.resolutionRoot {
-                roots.insert(root.standardizedFileURL)
+        for kind in ComposeFileMountKind.allCases {
+            for resource in resources(for: kind).values {
+                if let root = resource.resolutionRoot {
+                    roots.insert(root.standardizedFileURL)
+                }
             }
         }
         return Array(roots)

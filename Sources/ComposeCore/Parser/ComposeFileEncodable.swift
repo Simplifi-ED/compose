@@ -12,25 +12,10 @@ extension ComposeFile: Encodable {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encodeIfPresent(name, forKey: .name)
 
-        if !configs.isEmpty {
-            var configsContainer = container.nestedContainer(
-                keyedBy: ComposeSerializeCodingKey.self,
-                forKey: .configs
-            )
-            for name in configs.keys.sorted() {
-                guard let resource = configs[name] else { continue }
-                try configsContainer.encode(resource, forKey: ComposeSerializeCodingKey(stringValue: name)!)
-            }
-        }
-
-        if !secrets.isEmpty {
-            var secretsContainer = container.nestedContainer(
-                keyedBy: ComposeSerializeCodingKey.self,
-                forKey: .secrets
-            )
-            for name in secrets.keys.sorted() {
-                guard let resource = secrets[name] else { continue }
-                try secretsContainer.encode(resource, forKey: ComposeSerializeCodingKey(stringValue: name)!)
+        for kind in ComposeFileMountKind.allCases {
+            let resources = resources(for: kind)
+            if !resources.isEmpty {
+                try encodeResourceMap(resources, to: &container, forKey: codingKey(for: kind))
             }
         }
 
@@ -44,6 +29,25 @@ extension ComposeFile: Encodable {
                 service,
                 forKey: ComposeSerializeCodingKey(stringValue: serviceName)!
             )
+        }
+    }
+
+    private func codingKey(for kind: ComposeFileMountKind) -> CodingKeys {
+        switch kind {
+        case .config: .configs
+        case .secret: .secrets
+        }
+    }
+
+    private func encodeResourceMap(
+        _ resources: [String: ComposeFileResource],
+        to container: inout KeyedEncodingContainer<CodingKeys>,
+        forKey key: CodingKeys
+    ) throws {
+        var nested = container.nestedContainer(keyedBy: ComposeSerializeCodingKey.self, forKey: key)
+        for name in resources.keys.sorted() {
+            guard let resource = resources[name] else { continue }
+            try nested.encode(resource, forKey: ComposeSerializeCodingKey(stringValue: name)!)
         }
     }
 }

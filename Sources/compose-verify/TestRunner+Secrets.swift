@@ -7,9 +7,12 @@ extension TestRunner {
         try runSecretsSpikeTests()
         try runSecretsParseTests()
         try runSecretsValidationTests()
+        try runSecretsHardeningTests()
+        try runStartupLayersMountValidationTests()
         try runSecretsPlannerTests()
         try runSecretsConfigExportTests()
         try runSecretsMergeTests()
+        try runSecretsStagingTests()
     }
 
     mutating func runSecretsSpikeTests() throws {
@@ -40,39 +43,6 @@ extension TestRunner {
         let combined = try ComposeParser.parse(fileURL: Self.fixtureURL("configs-secrets-compose.yml"))
         expect(combined.configs["app_config"]?.file == "./secrets/app_config.txt", "configs root decode")
         expect(combined.services["app"]?.configs.map(\.source) == ["app_config"], "service config ref decode")
-    }
-
-    mutating func runSecretsValidationTests() throws {
-        expectComposeError(
-            "missing secret file",
-            matching: {
-                if case .resourceFileNotFound(let path, .secret) = $0 {
-                    return path == "./secrets/missing.txt"
-                }
-                return false
-            },
-            body: {
-                _ = try ComposeConfigResolver.resolve(
-                    fileURLs: [Self.fixtureURL("missing-secret-compose.yml")],
-                    activeProfiles: [],
-                    scaleOverrides: [:]
-                )
-            }
-        )
-
-        expectComposeError(
-            "undefined secret",
-            matching: {
-                if case .undefinedResource(name: "missing_secret", kind: .secret) = $0 { true } else { false }
-            },
-            body: {
-                _ = try ServicePlanner.startupLayers(
-                    for: try ComposeParser.parse(fileURL: Self.fixtureURL("undefined-secret-compose.yml")),
-                    projectName: "demo",
-                    composeDirectory: Self.fixtureURL("undefined-secret-compose.yml").deletingLastPathComponent()
-                )
-            }
-        )
     }
 
     mutating func runSecretsPlannerTests() throws {
@@ -114,7 +84,6 @@ extension TestRunner {
     }
 
     mutating func runSecretsMergeTests() throws {
-        let base = try ComposeParser.parse(fileURL: Self.fixtureURL("secrets-compose.yml"))
         let overrideURL = Self.fixtureURL("merge/secrets-override-compose.yml")
         let merged = try ComposeParser.parse(fileURLs: [
             Self.fixtureURL("secrets-compose.yml"),
@@ -125,6 +94,5 @@ extension TestRunner {
             merged.services["app"]?.secrets.first?.resolvedTarget(kind: .secret) == "/run/secrets/custom",
             "service secret merge by source"
         )
-        _ = base
     }
 }
