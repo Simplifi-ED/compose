@@ -24,6 +24,7 @@ public struct ComposeService: Sendable, Equatable {
     public let healthcheck: ComposeHealthcheck?
     public let configs: [ComposeServiceMount]
     public let secrets: [ComposeServiceMount]
+    public let develop: ComposeDevelop?
     /// Base directory for relative bind-mount paths; nil uses the CLI compose file directory.
     public let projectDirectory: URL?
 
@@ -40,6 +41,7 @@ public struct ComposeService: Sendable, Equatable {
         healthcheck: ComposeHealthcheck? = nil,
         configs: [ComposeServiceMount] = [],
         secrets: [ComposeServiceMount] = [],
+        develop: ComposeDevelop? = nil,
         projectDirectory: URL? = nil
     ) {
         self.image = image
@@ -54,6 +56,7 @@ public struct ComposeService: Sendable, Equatable {
         self.healthcheck = healthcheck
         self.configs = configs
         self.secrets = secrets
+        self.develop = develop
         self.projectDirectory = projectDirectory
     }
 
@@ -76,7 +79,27 @@ public struct ComposeService: Sendable, Equatable {
             healthcheck: healthcheck,
             configs: configs,
             secrets: secrets,
+            develop: develop,
             projectDirectory: directory
+        )
+    }
+
+    func withDevelop(_ develop: ComposeDevelop?) -> ComposeService {
+        ComposeService(
+            image: image,
+            command: command,
+            ports: ports,
+            volumes: volumes,
+            environment: environment,
+            containerName: containerName,
+            dependsOn: dependsOn,
+            profiles: profiles,
+            deploy: deploy,
+            healthcheck: healthcheck,
+            configs: configs,
+            secrets: secrets,
+            develop: develop,
+            projectDirectory: projectDirectory
         )
     }
 
@@ -94,6 +117,7 @@ public struct ComposeService: Sendable, Equatable {
             healthcheck: healthcheck,
             configs: configs,
             secrets: secrets,
+            develop: develop,
             projectDirectory: projectDirectory
         )
     }

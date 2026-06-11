@@ -1,0 +1,11 @@
+services:
+  web:
+    image: docker.io/library/nginx:1.27.3
+    develop:
+      watch:
+        - action: sync
+          path: ./html
+          target: /usr/share/nginx/html
+          initial_sync: true
+          ignore:
+            - node_modules/

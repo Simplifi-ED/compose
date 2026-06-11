@@ -197,6 +197,7 @@ do {
     try runner.runConfigTests()
     try runner.runFileMountsTests()
     try runner.runIncludeTests()
+    try runner.runWatchTests()
     try runner.runProjectOptionsTests()
     try runner.runShutdownLayerTests()
     try runner.runOrphanTests()
