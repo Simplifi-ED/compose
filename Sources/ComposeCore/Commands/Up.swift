@@ -45,6 +45,12 @@ public struct Up: AsyncParsableCommand {
             scaleOverrides: scaleOptions.resolvedScaleOverrides()
         )
         let plans = layers.flatMap { $0 }
+        let scaleOverrides = try scaleOptions.resolvedScaleOverrides()
+        let healthContext = HealthWaitContext(
+            services: composeFile.services,
+            projectName: projectName,
+            scaleOverrides: scaleOverrides
+        )
 
         let orchestration = makeProgressOrchestration(
             display: progressOptions.resolvedDisplay(),
@@ -54,7 +60,11 @@ public struct Up: AsyncParsableCommand {
             lines: orchestration.lines,
             interruptedMessage: "Startup interrupted. Started containers are still running."
         ) {
-            try await ServiceRunner.up(layers: layers, progress: orchestration.handlers)
+            try await ServiceRunner.up(
+                layers: layers,
+                progress: orchestration.handlers,
+                healthContext: healthContext
+            )
         }
 
         for line in UpStartupSummary.lines(for: plans) {

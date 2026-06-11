@@ -32,6 +32,8 @@ public enum ComposeError: LocalizedError, Sendable {
     case containerNameNotSupportedWithReplicas(service: String, containerName: String)
     case staticPortBlocksScaling(service: String, port: String, replicas: Int)
     case scaleServiceRequiresProfile(service: String, requiredProfiles: [String])
+    case healthCheckTimeout(dependency: String, container: String)
+    case serviceStartTimeout(dependency: String, container: String)
 
     public var errorDescription: String? {
         switch self {
@@ -113,6 +115,12 @@ public enum ComposeError: LocalizedError, Sendable {
         case .scaleServiceRequiresProfile(let service, let requiredProfiles):
             let flags = requiredProfiles.map { "--profile \($0)" }.joined(separator: " or ")
             return "Service '\(service)' only starts with \(flags). Pass \(flags) to scale it."
+        case .healthCheckTimeout(let dependency, let container):
+            return "Service '\(dependency)' didn't become healthy in time (container '\(container)'). "
+                + "Check logs with compose logs \(dependency)."
+        case .serviceStartTimeout(let dependency, let container):
+            return "Service '\(dependency)' didn't start in time (container '\(container)'). "
+                + "Check logs with compose logs \(dependency)."
         }
     }
 }

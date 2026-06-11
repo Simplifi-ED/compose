@@ -107,8 +107,8 @@ struct TestRunner {
 
     mutating func runDependencyDecodeTests() throws {
         let dependsFixture = try ComposeParser.parse(fileURL: Self.fixtureURL("depends-compose.yml"))
-        expect(dependsFixture.services["web"]?.dependsOn == ["db", "cache"], "depends_on decode")
-        expect(dependsFixture.services["api"]?.dependsOn == ["db"], "depends_on single dep decode")
+        expect(dependsFixture.services["web"]?.dependsOn.serviceNames == ["db", "cache"], "depends_on decode")
+        expect(dependsFixture.services["api"]?.dependsOn.serviceNames == ["db"], "depends_on single dep decode")
         expect(dependsFixture.services["db"]?.dependsOn == [], "depends_on default empty")
     }
 
@@ -174,13 +174,10 @@ struct TestRunner {
             }
         )
 
-        expectComposeError(
-            "longform depends_on",
-            matching: { if case .invalidField("depends_on", _) = $0 { true } else { false } },
-            body: {
-                _ = try ComposeParser.parse(fileURL: Self.fixtureURL("longform-depends-compose.yml"))
-            }
-        )
+        let longformFixture = try ComposeParser.parse(fileURL: Self.fixtureURL("longform-depends-compose.yml"))
+        let webDependency = longformFixture.services["web"]?.dependsOn.first
+        expect(webDependency?.service == "db", "longform depends_on service decode")
+        expect(webDependency?.condition == .serviceHealthy, "longform depends_on condition decode")
     }
 }
 
@@ -192,6 +189,7 @@ do {
     try runner.runSubstitutionTests()
     try runner.runPlannerTests()
     try runner.runDependencyTests()
+    try runner.runHealthcheckTests()
     try runner.runProfileTests()
     try runner.runScaleTests()
     try runner.runMergeTests()

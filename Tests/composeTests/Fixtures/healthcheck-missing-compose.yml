@@ -2,8 +2,6 @@ services:
   db:
     image: docker.io/library/alpine:latest
     command: sleep 300
-    healthcheck:
-      test: ["CMD", "true"]
   web:
     image: docker.io/library/alpine:latest
     command: sleep 300

@@ -21,7 +21,7 @@ extension TestRunner {
             web?.environment == .map(["FOO": "base", "SHARED": "from-override", "BAR": "override-only"]),
             "merge environment map keys"
         )
-        expect(web?.dependsOn == ["db", "cache"], "merge appends depends_on")
+        expect(web?.dependsOn.serviceNames == ["db", "cache"], "merge appends depends_on")
 
         let commandOverrideURL = mergeDirectory.appendingPathComponent("override-command.yml")
         let commandMerged = try ComposeParser.parse(fileURLs: [baseURL, commandOverrideURL])
