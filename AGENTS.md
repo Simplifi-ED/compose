@@ -109,18 +109,22 @@ The output of the discovery command **must** show the `compose` plugin. If it do
 - Develop on Command Line Tools only (no full Xcode.app); use `mint install realm/SwiftLint` instead of `brew install swiftlint`.
 - Deliver merge-ready PRs with polish included—not deferred follow-up cleanup.
 - Run Thermos parallel review (`thermo-nuclear-review` + code-quality subagents) before declaring feature work complete.
+- Run Thermos review on feature specs before filing GitHub issues.
+- Keep new source files ≤250 lines; split modules when exceeded.
+- Reuse upstream ContainerCommands APIs (`ContainerLogs`, `ContainerExec`, `AsyncSignalHandler`) instead of reimplementing.
 
 ## Learned Workspace Facts
 
 - `container` CLI 1.0.0 at `/usr/local`; plugin at `{INSTALL_ROOT}/libexec/container-plugins/compose` (not Homebrew paths); `/usr/local` install needs `sudo` via `scripts/install-plugin.sh`. Run `container system start` before plugin discovery.
 - Package targets: `ComposeCore`, `compose`, `compose-verify`; on CLT use `swift run -c release compose-verify` (not `swift test`) and `scripts/lint.sh` with `SWIFTLINT_DISABLE_SOURCEKIT=1`.
-- `compose down` reverse-topological with compose file present; parallel fallback for explicit `-p` only (not `COMPOSE_PROJECT_NAME` or compose `name:`). `compose ps` supports `-p` without `-f`.
+- `compose down` reverse-topological with compose file present; parallel fallback for explicit `-p` only (not `COMPOSE_PROJECT_NAME` or compose `name:`).
 - Default compose discovery: `compose.yaml` → … → `docker-compose.yml` + paired `*.override.*`; `COMPOSE_FILE` when no `-f`. Project name: `-p` → `COMPOSE_PROJECT_NAME` → merged `name:` → first-file parent dir.
 - Multi-file merge: unique-key ports/volumes; env list by var name; `depends_on` append-only. Relative bind-mount paths resolve against the compose file directory, not shell CWD.
-- `.env` beside compose file hydrates `${VAR}` placeholders before YAML parse; missing `.env` is a no-op; unresolved placeholders error.
-- `compose ps` prints NAME/SERVICE/STATE/PORTS from runtime snapshots; optional service filter; empty project prints headers only (exit 0).
-- Terminal output helpers live in `ComposeCore/Terminal/` (`TableFormat`, `TerminalMode`, `ANSIPrefix`) for observability commands.
-- State tracking uses `com.docker.compose.*` labels on `ContainerRun`; discovery and `compose ps` read `snapshot.configuration.labels`.
+- Per-file substitution before YAML parse: shell environment overrides `.env` beside each compose file; supports `${VAR}`, `${VAR:-default}`, `${VAR-default}`, and `$$` escapes; unresolved `${VAR}` errors; YAML anchors/aliases resolved by Yams during decode.
+- CLI subcommands: `up`, `down`, `ps`, `logs`, `top`, `exec`, `run`; `up`/`down` accept `--progress auto|plain|none`; `up --attach` multiplexes logs after detached start; `-f`/`-p` on subcommands, not `compose` root.
+- `ComposeCore/Terminal/` is presentation-only (no Container API imports); `Runtime/` holds orchestration (`ServiceRunner` waves only, `LogStream`, `SignalForwarding`, `ExecSession`, `AttachAfterUp`, `ProjectStatus`).
+- `compose top` streams `ContainerClient.stats()` filtered by project labels (not in-container `ps`); `compose logs` multiplexes upstream file handles (merged containerLog + bootlog).
+- SIGINT during `up`/`down` orchestration leaves started containers running; `SignalForwarding` coordinates stop/teardown for attach, logs follow, top, exec, and run.
+- State tracking uses `com.docker.compose.*` labels on `ContainerRun`; discovery, `ps`, and `logs` read `snapshot.configuration.labels`.
 - Host Linux kernel must be configured (`container system kernel set`) before `container run` or `compose up` succeed.
-- `-f` and `-p` are options on `up`/`down`/`ps`, not on `compose` (e.g. `container compose up -f <file> -p <project>`).
 - Explicit missing `-f` paths throw; only absent default discovery yields nil so `-p`-only `down`/`ps` can proceed.

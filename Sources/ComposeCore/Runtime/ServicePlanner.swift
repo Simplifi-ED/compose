@@ -314,6 +314,15 @@ public enum ServicePlanner {
             resolvedHostURL = URL(fileURLWithPath: hostPath)
         } else {
             resolvedHostURL = composeDirectory.appendingPathComponent(hostPath)
+            let standardized = resolvedHostURL.standardizedFileURL.resolvingSymlinksInPath()
+            let composeRoot = composeDirectory.standardizedFileURL.resolvingSymlinksInPath()
+            guard Self.isPathContained(standardized, within: composeRoot) else {
+                throw ComposeError.invalidField(
+                    "volumes",
+                    reason: "host path '\(hostPath)' resolves outside the compose file directory. "
+                        + "Use a path within the project or an absolute host path."
+                )
+            }
         }
         let absoluteHostPath = resolvedHostURL.standardizedFileURL.path
 
@@ -322,5 +331,15 @@ public enum ServicePlanner {
         }
 
         return "\(absoluteHostPath):\(containerPath)"
+    }
+
+    private static func isPathContained(_ path: URL, within root: URL) -> Bool {
+        let resolvedPath = path.standardizedFileURL.path
+        let rootPath = root.standardizedFileURL.path
+        if resolvedPath == rootPath {
+            return true
+        }
+        let prefix = rootPath.hasSuffix("/") ? rootPath : rootPath + "/"
+        return resolvedPath.hasPrefix(prefix)
     }
 }

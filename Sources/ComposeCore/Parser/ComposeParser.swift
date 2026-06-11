@@ -2,23 +2,35 @@ import Foundation
 import Yams
 
 public enum ComposeParser {
-    public static func parse(fileURL: URL) throws -> ComposeFile {
-        try parse(fileURLs: [fileURL])
+    public static func parse(
+        fileURL: URL,
+        processEnvironment: [String: String] = ProcessInfo.processInfo.environment
+    ) throws -> ComposeFile {
+        try parse(fileURLs: [fileURL], processEnvironment: processEnvironment)
     }
 
-    public static func parse(fileURLs: [URL]) throws -> ComposeFile {
-        let composeFile = try decodeMerged(fileURLs: fileURLs)
+    public static func parse(
+        fileURLs: [URL],
+        processEnvironment: [String: String] = ProcessInfo.processInfo.environment
+    ) throws -> ComposeFile {
+        let composeFile = try decodeMerged(fileURLs: fileURLs, processEnvironment: processEnvironment)
         try validate(composeFile)
         return composeFile
     }
 
     /// Decode and validate dependency graph only — for `down` when the file may be edited after `up`.
-    public static func parseForShutdown(fileURL: URL) throws -> ComposeFile {
-        try parseForShutdown(fileURLs: [fileURL])
+    public static func parseForShutdown(
+        fileURL: URL,
+        processEnvironment: [String: String] = ProcessInfo.processInfo.environment
+    ) throws -> ComposeFile {
+        try parseForShutdown(fileURLs: [fileURL], processEnvironment: processEnvironment)
     }
 
-    public static func parseForShutdown(fileURLs: [URL]) throws -> ComposeFile {
-        let composeFile = try decodeMerged(fileURLs: fileURLs)
+    public static func parseForShutdown(
+        fileURLs: [URL],
+        processEnvironment: [String: String] = ProcessInfo.processInfo.environment
+    ) throws -> ComposeFile {
+        let composeFile = try decodeMerged(fileURLs: fileURLs, processEnvironment: processEnvironment)
         try validateShutdownGraph(composeFile)
         return composeFile
     }
@@ -35,16 +47,22 @@ public enum ComposeParser {
         return nil
     }
 
-    static func decodeMerged(fileURLs: [URL]) throws -> ComposeFile {
+    static func decodeMerged(
+        fileURLs: [URL],
+        processEnvironment: [String: String]
+    ) throws -> ComposeFile {
         guard !fileURLs.isEmpty else {
             throw ComposeError.noServices
         }
 
-        let decoded = try fileURLs.map { try decode(fileURL: $0) }
+        let decoded = try fileURLs.map { try decode(fileURL: $0, processEnvironment: processEnvironment) }
         return ComposeFileMerge.merge(decoded)
     }
 
-    static func decode(fileURL: URL) throws -> ComposeFile {
+    static func decode(
+        fileURL: URL,
+        processEnvironment: [String: String]
+    ) throws -> ComposeFile {
         let path = fileURL.path
         guard FileManager.default.fileExists(atPath: path) else {
             throw ComposeError.fileNotFound(path)
@@ -57,8 +75,11 @@ public enum ComposeParser {
             throw ComposeError.readFailed(path, underlying: error)
         }
 
-        let variables = try DotEnv.loadVariables(beside: fileURL)
-        let hydrated = try DotEnv.substitute(contents, variables: variables, composePath: path)
+        let variables = try ComposeSubstitution.resolveVariables(
+            beside: fileURL,
+            processEnvironment: processEnvironment
+        )
+        let hydrated = try ComposeSubstitution.substitute(contents, variables: variables, composePath: path)
 
         do {
             return try YAMLDecoder().decode(ComposeFile.self, from: hydrated)

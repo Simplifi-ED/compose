@@ -24,7 +24,7 @@ Maintained by [Omnivya](https://www.omnivya.fr) ([Simplifi-ED](https://github.co
 - Container labels for project tracking (`com.docker.compose.project`, `com.docker.compose.service`)
 - `container compose ps` (list project containers), `container compose top` (live CPU/memory stats stream), and `container compose run` (one-off foreground container from a service definition)
 
-Not supported yet: long-form `depends_on` with health conditions, networks, named volumes, volume drivers, read-only mounts (`:ro`), `build`, profiles, YAML `extends` / `include`.
+Not supported yet: long-form `depends_on` with health conditions, networks, named volumes, volume drivers, read-only mounts (`:ro`), `build`, profiles, YAML `extends` / `include`, `${VAR:+replacement}` / `${VAR?error}` forms, unbraced `$VAR` interpolation.
 
 ### Interrupt handling
 
@@ -143,7 +143,24 @@ COMPOSE_PROJECT_NAME=myapp container compose up
 
 Use the same `-f` flags on `down` as on `up`, or pass `-p` to tear down by project name without reading compose files.
 
-Relative bind-mount paths resolve against the **first** compose file's directory (Docker-identical). Keep overlay files beside the base file, or use absolute host paths. Each compose file loads its own `.env` from its directory during parsing. Override files cannot remove entries from an earlier file without matching the same merge key.
+Relative bind-mount paths resolve against the **first** compose file's directory (Docker-identical). Keep overlay files beside the base file, or use absolute host paths. Override files cannot remove entries from an earlier file without matching the same merge key.
+
+### Variable substitution
+
+Interpolation runs on each compose file's raw text before YAML parse (per Compose spec, only **values** should use `${…}`; keys are not expanded unless you embed placeholders there). Multi-file merge happens after per-file substitution.
+
+| Form | Behavior |
+|------|----------|
+| `${VAR}` | Required; errors if unset |
+| `${VAR:-default}` | Uses `default` when `VAR` is unset or empty |
+| `${VAR-default}` | Uses `default` only when `VAR` is unset (empty string is valid) |
+| `$$` | Literal `$` (for example `$$VAR` → `$VAR`) |
+
+**Variable sources (highest precedence first):** shell environment, then `.env` beside each compose file. Each `-f` file loads its own `.env` from its directory.
+
+YAML anchors (`&`) and aliases (`*`) are resolved during parse, including `<<:` merge keys.
+
+Relative bind-mount host paths that resolve outside the compose file directory are rejected after substitution. Absolute host paths are allowed.
 
 ### Container labels
 

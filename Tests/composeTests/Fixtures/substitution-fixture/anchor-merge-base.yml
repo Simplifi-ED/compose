@@ -1,0 +1,7 @@
+x-web: &web-defaults
+  image: docker.io/library/alpine:3.18
+  command: sleep 300
+
+services:
+  web:
+    <<: *web-defaults
