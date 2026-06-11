@@ -99,7 +99,6 @@ extension TestRunner {
                 projectName: "demo",
                 composeDirectory: fixturesDirectory,
                 activeProfiles: [],
-                scaleOverrides: [:],
                 serviceFilter: nil,
                 containers: [running]
             )
@@ -117,7 +116,6 @@ extension TestRunner {
                         projectName: "demo",
                         composeDirectory: fixturesDirectory,
                         activeProfiles: [],
-                        scaleOverrides: [:],
                         serviceFilter: nil,
                         containers: [
                             ProjectContainer(

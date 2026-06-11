@@ -44,6 +44,35 @@ package enum ContainerFileSync {
         let relativeDisplay = WatchPathValidator.relativePath(from: resolved.watchRoot, to: hostPath)
             ?? hostPath.lastPathComponent
 
+        try await preflightSyncTargets(
+            running: running,
+            resolved: resolved,
+            projectName: projectName,
+            getContainer: getContainer
+        )
+
+        let mode: UInt32 = isDir ? 0o755 : 0o644
+        for container in running {
+            fputs(
+                "Syncing \(resolved.serviceName) → \(container.name): \(relativeDisplay)\n",
+                stderr
+            )
+            try await copyIn(
+                container.name,
+                hostPath.path,
+                destinationBase,
+                mode,
+                true
+            )
+        }
+    }
+
+    private static func preflightSyncTargets(
+        running: [ProjectContainer],
+        resolved: ResolvedWatchRule,
+        projectName: String,
+        getContainer: @escaping GetContainer
+    ) async throws {
         try await withThrowingTaskGroup(of: Void.self) { group in
             for container in running {
                 group.addTask {
@@ -53,18 +82,6 @@ package enum ContainerFileSync {
                         containerName: container.name,
                         projectName: projectName,
                         serviceName: resolved.serviceName
-                    )
-                    let mode: UInt32 = isDir ? 0o755 : 0o644
-                    fputs(
-                        "Syncing \(resolved.serviceName) → \(container.name): \(relativeDisplay)\n",
-                        stderr
-                    )
-                    try await copyIn(
-                        container.name,
-                        hostPath.path,
-                        destinationBase,
-                        mode,
-                        true
                     )
                 }
             }

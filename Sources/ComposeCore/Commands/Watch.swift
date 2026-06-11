@@ -16,9 +16,6 @@ public struct Watch: AsyncParsableCommand {
     @OptionGroup
     var profileOptions: ProfileOptions
 
-    @OptionGroup
-    var scaleOptions: ScaleOptions
-
     @Argument(help: "Limit watching to these service names.")
     var services: [String] = []
 
@@ -30,7 +27,6 @@ public struct Watch: AsyncParsableCommand {
             fileURL: fileURLs[0]
         )
         let composeDirectory = fileURLs[0].deletingLastPathComponent()
-        let scaleOverrides = try scaleOptions.resolvedScaleOverrides()
 
         let serviceFilter: Set<String>? = services.isEmpty ? nil : Set(services)
         let containers = try await ContainerDiscovery.projectContainers(forProject: projectName)
@@ -40,7 +36,6 @@ public struct Watch: AsyncParsableCommand {
                 projectName: projectName,
                 composeDirectory: composeDirectory,
                 activeProfiles: profileOptions.activeProfileSet,
-                scaleOverrides: scaleOverrides,
                 serviceFilter: serviceFilter,
                 containers: containers
             )
@@ -50,7 +45,10 @@ public struct Watch: AsyncParsableCommand {
         fputs("Watching \(watchedNames). Press Ctrl+C to stop.\n", stderr)
 
         _ = try await SignalForwarding.runUntilCancelled(policy: .cancelOnly) {
-            try await WatchSession.run(configuration: configuration)
+            try await WatchSession.run(
+                configuration: configuration,
+                dependencies: WatchSession.Dependencies(projectName: projectName)
+            )
         }
     }
 }

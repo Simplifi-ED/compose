@@ -13,6 +13,7 @@ extension TestRunner {
         runWatchIgnoreTests()
         runWatchDebouncerTests()
         try runWatchRuntimeTests()
+        try runWatchResilienceTests()
     }
 
     private mutating func runWatchDecodeTests() throws {

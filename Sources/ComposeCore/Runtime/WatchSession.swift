@@ -15,51 +15,55 @@ package enum WatchSession {
     }
 
     package struct Dependencies: Sendable {
+        package let projectName: String
         package var copyIn: ContainerFileSync.CopyIn
         package var getContainer: ContainerFileSync.GetContainer
+        package var listProjectContainers: @Sendable () async throws -> [ProjectContainer]
         package var restartPlans: @Sendable ([ServicePlan]) async throws -> Void
 
         package init(
+            projectName: String,
             copyIn: @escaping ContainerFileSync.CopyIn = ContainerFileSync.defaultCopyInForInjection,
             getContainer: @escaping ContainerFileSync.GetContainer = ContainerFileSync.defaultGetContainerForInjection,
+            listProjectContainers: (@Sendable () async throws -> [ProjectContainer])? = nil,
             restartPlans: @escaping @Sendable ([ServicePlan]) async throws -> Void = { plans in
                 try await ServiceRunnerRestart.restartPlans(plans)
             }
         ) {
+            self.projectName = projectName
             self.copyIn = copyIn
             self.getContainer = getContainer
+            self.listProjectContainers = listProjectContainers ?? {
+                try await ContainerDiscovery.projectContainers(forProject: projectName)
+            }
             self.restartPlans = restartPlans
         }
     }
 
     package static func run(
         configuration: Configuration,
-        dependencies: Dependencies = Dependencies()
+        dependencies: Dependencies
     ) async throws {
         let eventBuffer = WatchEventBuffer()
-        for service in configuration.services {
-            for rule in service.rules where rule.rule.initialSync {
-                try await ContainerFileSync.initialSync(
-                    resolved: rule,
-                    containers: service.containers,
-                    projectName: configuration.projectName,
-                    copyIn: dependencies.copyIn,
-                    getContainer: dependencies.getContainer
-                )
-            }
-        }
+        let runtimes = makeRuntimes(configuration: configuration, dependencies: dependencies)
+        try await runInitialSync(
+            configuration: configuration,
+            runtimes: runtimes,
+            dependencies: dependencies
+        )
 
         let ruleLookup = Dictionary(
             uniqueKeysWithValues: configuration.services.flatMap { service in
-                service.rules.map { ($0.ruleID, (service, $0)) }
+                service.rules.map { ($0.ruleID, (service.serviceName, $0)) }
             }
         )
 
         try await withThrowingTaskGroup(of: Void.self) { group in
             group.addTask {
                 try await debounceLoop(
-                    configuration: configuration,
+                    projectName: configuration.projectName,
                     ruleLookup: ruleLookup,
+                    runtimes: runtimes,
                     dependencies: dependencies,
                     eventBuffer: eventBuffer
                 )
@@ -85,8 +89,9 @@ package enum WatchSession {
     }
 
     private static func debounceLoop(
-        configuration: Configuration,
-        ruleLookup: [String: (WatchedService, ResolvedWatchRule)],
+        projectName: String,
+        ruleLookup: [String: (String, ResolvedWatchRule)],
+        runtimes: [String: WatchServiceRuntime],
         dependencies: Dependencies,
         eventBuffer: WatchEventBuffer
     ) async throws {
@@ -97,12 +102,13 @@ package enum WatchSession {
             _ = await eventBuffer.drainInto(debouncer: &debouncer, at: now)
             let ready = debouncer.drainReady(at: now)
             for change in ready {
-                guard let (service, rule) = ruleLookup[change.ruleID] else { continue }
+                guard let (serviceName, rule) = ruleLookup[change.ruleID],
+                      let runtime = runtimes[serviceName] else { continue }
                 try await applyChange(
-                    service: service,
+                    runtime: runtime,
                     rule: rule,
                     hostPath: change.hostPath,
-                    projectName: configuration.projectName,
+                    projectName: projectName,
                     dependencies: dependencies
                 )
             }
@@ -111,33 +117,47 @@ package enum WatchSession {
     }
 
     private static func applyChange(
-        service: WatchedService,
+        runtime: WatchServiceRuntime,
         rule: ResolvedWatchRule,
         hostPath: URL,
         projectName: String,
         dependencies: Dependencies
     ) async throws {
+        try await runtime.refreshContainers()
+        let containers = await runtime.runningContainers()
+
         try await ContainerFileSync.sync(
             resolved: rule,
             hostPath: hostPath,
-            containers: service.containers,
+            containers: containers,
             projectName: projectName,
             copyIn: dependencies.copyIn,
             getContainer: dependencies.getContainer
         )
         guard rule.rule.action == .syncRestart else { return }
 
-        fputs("Restarting \(service.serviceName) after sync\n", stderr)
-        let runningNames = Set(
-            service.containers.filter { $0.status == .running }.map(\.name)
-        )
-        let plansToRestart = service.plans.filter { runningNames.contains($0.name) }
-        try await dependencies.restartPlans(plansToRestart)
+        let plansToRestart: [ServicePlan]
+        do {
+            plansToRestart = try await runtime.plansMatchingRunning()
+        } catch {
+            try? await runtime.refreshContainers()
+            throw error
+        }
+
+        fputs("Restarting \(rule.serviceName) after sync\n", stderr)
+        do {
+            try await dependencies.restartPlans(plansToRestart)
+            try await runtime.waitForRunning(containerNames: plansToRestart.map(\.name))
+        } catch {
+            try? await runtime.refreshContainers()
+            throw error
+        }
+
         // Recreate tears down the container filesystem; copy synced content back in.
         try await ContainerFileSync.sync(
             resolved: rule,
             hostPath: hostPath,
-            containers: service.containers,
+            containers: await runtime.runningContainers(),
             projectName: projectName,
             copyIn: dependencies.copyIn,
             getContainer: dependencies.getContainer

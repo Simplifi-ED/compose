@@ -6,7 +6,6 @@ extension WatchSession {
         package let projectName: String
         package let composeDirectory: URL
         package let activeProfiles: Set<String>
-        package let scaleOverrides: [String: Int]
         package let serviceFilter: Set<String>?
         package let containers: [ProjectContainer]
 
@@ -15,7 +14,6 @@ extension WatchSession {
             projectName: String,
             composeDirectory: URL,
             activeProfiles: Set<String>,
-            scaleOverrides: [String: Int],
             serviceFilter: Set<String>?,
             containers: [ProjectContainer]
         ) {
@@ -23,7 +21,6 @@ extension WatchSession {
             self.projectName = projectName
             self.composeDirectory = composeDirectory
             self.activeProfiles = activeProfiles
-            self.scaleOverrides = scaleOverrides
             self.serviceFilter = serviceFilter
             self.containers = containers
         }
@@ -38,12 +35,16 @@ extension WatchSession {
             activeServices: activeServices,
             serviceFilter: context.serviceFilter
         )
+        let scaleOverrides = scaleOverridesFromDiscovery(
+            containers: context.containers,
+            serviceNames: Set(candidateNames)
+        )
         let allPlans = try ServicePlanner.plans(
             for: context.composeFile,
             projectName: context.projectName,
             composeDirectory: context.composeDirectory,
             activeProfiles: context.activeProfiles,
-            scaleOverrides: context.scaleOverrides
+            scaleOverrides: scaleOverrides
         )
         let watched = try resolveWatchedServices(
             candidateNames: candidateNames,
@@ -118,15 +119,35 @@ extension WatchSession {
                 )
             }
 
+            let runningNames = Set(
+                serviceContainers.filter { $0.status == .running }.map(\.name)
+            )
+            let servicePlans = plansByService[serviceName, default: []]
+                .filter { runningNames.contains($0.name) }
+
             watched.append(
                 WatchedService(
                     serviceName: serviceName,
                     rules: rules,
-                    plans: plansByService[serviceName, default: []],
+                    plans: servicePlans,
                     containers: serviceContainers
                 )
             )
         }
         return watched
+    }
+
+    private static func scaleOverridesFromDiscovery(
+        containers: [ProjectContainer],
+        serviceNames: Set<String>
+    ) -> [String: Int] {
+        var counts: [String: Int] = [:]
+        for container in containers where container.status == .running {
+            guard let serviceName = container.serviceName, serviceNames.contains(serviceName) else {
+                continue
+            }
+            counts[serviceName, default: 0] += 1
+        }
+        return counts
     }
 }
