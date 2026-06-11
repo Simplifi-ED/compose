@@ -60,14 +60,16 @@ container compose down -f fixtures/minimal-compose.yml -p demo
 | `depends_on` (`service_started` / `service_healthy`) | supported | health via compose-side exec probe |
 | `healthcheck` | supported | exec/CMD probes |
 | `profiles`, `deploy.replicas`, `name:` | supported | `--scale` overrides replicas |
+- `configs` / `secrets` (local `file:` definitions, service refs, staged read-only mounts) | supported | `compose config` shows paths/targets only |
 | `-f` merge, auto-discovery, `COMPOSE_FILE`, `include:` | supported | see sections below |
-| `build`, networks, named volumes, `:ro`, `service_completed_successfully` | not supported | v1 deferred |
+| `build`, networks, named volumes, user `volumes:` `:ro`, `service_completed_successfully` | not supported | v1 deferred |
 
 ## Features (v1)
 
 - Compose files (`-f`, auto-discovery of `compose.yaml` / `docker-compose.yml` + override; `COMPOSE_FILE`; repeat `-f` to merge; YAML `include:` for modular sub-projects)
 - Project name (`-p`, `COMPOSE_PROJECT_NAME`, compose `name:`, default: parent directory of the first compose file)
-- Per service: `image`, `command`, `ports`, `volumes` (bind mounts), `environment`, `depends_on` (list or long-form with `service_started` / `service_healthy`), `healthcheck`, `profiles`, `deploy.replicas`
+- Per service: `image`, `command`, `ports`, `volumes` (bind mounts), `environment`, `depends_on` (list or long-form with `service_started` / `service_healthy`), `healthcheck`, `profiles`, `deploy.replicas`, `configs`, `secrets`
+- Root-level `configs:` / `secrets:` with `file:` paths (project-relative, symlink-safe); mounted read-only under `/run/configs/` and `/run/secrets/`
 - Service scaling: `deploy.replicas` in the compose file or `up --scale SERVICE=COUNT` (CLI wins); containers are named `{project}_{service}_{index}`
 - `container compose up` (detached) and `container compose down` (stop and remove)
 - Dependency-aware startup: topological waves with parallel starts; list-form `depends_on` is order-only; long-form `condition: service_healthy` waits for healthcheck probes (compose-side exec via `createProcess`; no native engine health status in container 1.0.0)
@@ -80,7 +82,7 @@ container compose down -f fixtures/minimal-compose.yml -p demo
 - Container labels for project tracking (`com.docker.compose.project`, `com.docker.compose.service`)
 - `container compose ps` (list project containers), `container compose top` (live CPU/memory stats stream), `container compose run` (one-off foreground container from a service definition), and `container compose config` (parse and print the resolved compose file without starting containers)
 
-Not supported yet: `depends_on` condition `service_completed_successfully`, networks, named volumes, volume drivers, read-only mounts (`:ro`), `build`, YAML `extends`, `${VAR:+replacement}` / `${VAR?error}` forms, unbraced `$VAR` interpolation, `COMPOSE_PROFILES` environment variable.
+Not supported yet: `depends_on` condition `service_completed_successfully`, networks, named volumes, volume drivers, user `volumes:` read-only suffix (`:ro`), external `configs`/`secrets` (`external: true`), `build`, YAML `extends`, `${VAR:+replacement}` / `${VAR?error}` forms, unbraced `$VAR` interpolation, `COMPOSE_PROFILES` environment variable.
 
 ### Profiles
 
@@ -142,6 +144,8 @@ container compose config --quiet    # validate only; no output on success
 | `--profile` | Output only services active under the same rules as `up` |
 | `--scale` | Writes CLI replica overrides into `deploy.replicas` in the output |
 | `--quiet` | Validate only; exit non-zero on failure without printing YAML |
+
+Root `configs:` / `secrets:` and service refs appear in the output with resolved mount targets; file contents are never printed.
 
 Substitution always runs (`.env` beside each compose file, shell environment overrides). There is no `--no-interpolate` flag in v1. Unresolved `${VAR}` placeholders fail with a file path and variable name in the error.
 

@@ -1,0 +1,13 @@
+configs:
+  first:
+    file: ./secrets/app_config.txt
+  second:
+    file: ./secrets/db_password.txt
+services:
+  app:
+    image: docker.io/library/alpine:3.20
+    configs:
+      - source: first
+        target: /run/configs/shared
+      - source: second
+        target: /run/configs/shared

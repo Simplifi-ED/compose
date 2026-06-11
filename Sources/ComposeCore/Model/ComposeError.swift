@@ -37,6 +37,10 @@ public enum ComposeError: LocalizedError, Sendable {
     case scaleServiceRequiresProfile(service: String, requiredProfiles: [String])
     case healthCheckTimeout(dependency: String, container: String)
     case serviceStartTimeout(dependency: String, container: String)
+    case unsupportedExternalResource(kind: ComposeFileMountKind)
+    case undefinedResource(name: String, kind: ComposeFileMountKind)
+    case resourceFileNotFound(path: String, kind: ComposeFileMountKind)
+    case includeResourceConflict(name: String, kind: ComposeFileMountKind, includePath: String, definedIn: String)
 
     public var errorDescription: String? {
         switch self {
@@ -135,6 +139,17 @@ public enum ComposeError: LocalizedError, Sendable {
         case .serviceStartTimeout(let dependency, let container):
             return "Service '\(dependency)' didn't start in time (container '\(container)'). "
                 + "Check logs with compose logs \(dependency)."
+        case .unsupportedExternalResource(let kind):
+            return "External \(kind.rootFieldName) aren't supported. Use a local file: path with external: false."
+        case .undefinedResource(let name, let kind):
+            return "\(kind.rootFieldName.capitalized) '\(name)' isn't defined. "
+                + "Add it under \(kind.rootFieldName): or fix the service reference."
+        case .resourceFileNotFound(let path, let kind):
+            return "\(kind.rootFieldName.capitalized) file '\(path)' doesn't exist. "
+                + "Create the file or fix the \(kind.rootFieldName) definition."
+        case .includeResourceConflict(let name, let kind, let includePath, let definedIn):
+            return "\(kind.rootFieldName.capitalized) '\(name)' is already defined in \(definedIn). "
+                + "\(includePath) also defines '\(name)'. Rename one entry or remove the duplicate include."
         }
     }
 }

@@ -26,11 +26,16 @@ extension TestRunner {
             explicitTTY: true,
             stdinIsTTY: false
         )
+        let composeFile = ComposeFile(name: nil, services: ["web": service])
+        let context = ServicePlanner.PlanningContext(
+            composeFile: composeFile,
+            projectName: "demo",
+            composeDirectory: fixturesDirectory
+        )
         let plan = try ServicePlanner.runPlan(
+            context: context,
             serviceName: "web",
             service: service,
-            projectName: "demo",
-            composeDirectory: fixturesDirectory,
             options: RunPlanOptions(
                 removeContainer: true,
                 commandOverride: ["echo", "hi"],
@@ -61,11 +66,16 @@ extension TestRunner {
             environment: nil,
             containerName: nil
         )
+        let composeFile = ComposeFile(name: nil, services: ["web": service])
+        let context = ServicePlanner.PlanningContext(
+            composeFile: composeFile,
+            projectName: "demo",
+            composeDirectory: fixturesDirectory
+        )
         let plan = try ServicePlanner.runPlan(
+            context: context,
             serviceName: "web",
             service: service,
-            projectName: "demo",
-            composeDirectory: fixturesDirectory,
             options: RunPlanOptions(
                 removeContainer: false,
                 commandOverride: nil,
@@ -88,11 +98,16 @@ extension TestRunner {
             environment: .map(["FOO": "bar"]),
             containerName: nil
         )
+        let composeFile = ComposeFile(name: nil, services: ["web": service])
+        let context = ServicePlanner.PlanningContext(
+            composeFile: composeFile,
+            projectName: "demo",
+            composeDirectory: fixturesDirectory
+        )
         let plan = try ServicePlanner.buildUpPlan(
+            context: context,
             serviceName: "web",
             service: service,
-            projectName: "demo",
-            composeDirectory: fixturesDirectory,
             replicaIndex: 1
         )
         expect(plan.name == "demo_web_1", "planner container name")
@@ -109,10 +124,9 @@ extension TestRunner {
         )
 
         let indexedPlan = try ServicePlanner.buildUpPlan(
+            context: context,
             serviceName: "web",
             service: service,
-            projectName: "demo",
-            composeDirectory: fixturesDirectory,
             replicaIndex: 2
         )
         expect(indexedPlan.name == "demo_web_2", "planner replica index in container name")
@@ -149,11 +163,16 @@ extension TestRunner {
             environment: nil,
             containerName: nil
         )
+        let volumeComposeFile = ComposeFile(name: nil, services: ["web": volumeService])
+        let volumeContext = ServicePlanner.PlanningContext(
+            composeFile: volumeComposeFile,
+            projectName: "demo",
+            composeDirectory: fixturesDirectory
+        )
         let volumePlan = try ServicePlanner.buildUpPlan(
+            context: volumeContext,
             serviceName: "web",
             service: volumeService,
-            projectName: "demo",
-            composeDirectory: fixturesDirectory,
             replicaIndex: 1
         )
         expect(volumePlan.runArguments.contains("-v"), "planner volume flag")

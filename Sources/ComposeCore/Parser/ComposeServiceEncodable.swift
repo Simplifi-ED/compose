@@ -51,6 +51,8 @@ extension ComposeService: Encodable {
         case profiles
         case deploy
         case healthcheck
+        case configs
+        case secrets
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -75,6 +77,27 @@ extension ComposeService: Encodable {
             try container.encode(deploy, forKey: .deploy)
         }
         try container.encodeIfPresent(healthcheck, forKey: .healthcheck)
+        for kind in ComposeFileMountKind.allCases {
+            let serviceMounts = mounts(for: kind)
+            if !serviceMounts.isEmpty {
+                try encodeServiceMounts(serviceMounts, kind: kind, to: &container)
+            }
+        }
+    }
+
+    private func encodeServiceMounts(
+        _ serviceMounts: [ComposeServiceMount],
+        kind: ComposeFileMountKind,
+        to container: inout KeyedEncodingContainer<CodingKeys>
+    ) throws {
+        let key: CodingKeys = switch kind {
+        case .config: .configs
+        case .secret: .secrets
+        }
+        var list = container.nestedUnkeyedContainer(forKey: key)
+        for mount in serviceMounts {
+            try list.encode(ResolvedServiceMountEncoder(mount: mount, kind: kind))
+        }
     }
 
     private func encodeDependsOn(to container: inout KeyedEncodingContainer<CodingKeys>) throws {
@@ -99,4 +122,13 @@ extension ComposeService: Encodable {
 
 private struct DependsOnConditionExport: Encodable {
     let condition: String
+}
+
+private struct ResolvedServiceMountEncoder: Encodable {
+    let mount: ComposeServiceMount
+    let kind: ComposeFileMountKind
+
+    func encode(to encoder: Encoder) throws {
+        try mount.encodeResolved(kind: kind, to: encoder)
+    }
 }

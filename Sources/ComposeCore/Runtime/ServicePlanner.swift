@@ -1,6 +1,18 @@
 import Foundation
 
 public enum ServicePlanner {
+    package struct PlanningContext: Sendable {
+        package let composeFile: ComposeFile
+        package let projectName: String
+        package let composeDirectory: URL
+
+        package init(composeFile: ComposeFile, projectName: String, composeDirectory: URL) {
+            self.composeFile = composeFile
+            self.projectName = projectName
+            self.composeDirectory = composeDirectory
+        }
+    }
+
     public static func plans(
         for composeFile: ComposeFile,
         projectName: String,
@@ -25,6 +37,10 @@ public enum ServicePlanner {
         scaleOverrides: [String: Int] = [:]
     ) throws -> [[ServicePlan]] {
         let layers = try dependencyLayers(for: composeFile, activeProfiles: activeProfiles)
+        try ComposeFileMountResolver.validate(
+            composeFile: composeFile,
+            activeServiceNames: Set(layers.flatMap { $0.map(\.serviceName) })
+        )
         try ReplicaPlanning.validateScaleTargets(
             scaleOverrides: scaleOverrides,
             services: composeFile.services,
@@ -44,10 +60,13 @@ public enum ServicePlanner {
                 )
                 return try (1...replicas).map { index in
                     try buildUpPlan(
+                        context: PlanningContext(
+                            composeFile: composeFile,
+                            projectName: projectName,
+                            composeDirectory: composeDirectory
+                        ),
                         serviceName: serviceName,
                         service: service,
-                        projectName: projectName,
-                        composeDirectory: composeDirectory,
                         replicaIndex: index
                     )
                 }
@@ -133,97 +152,6 @@ public enum ServicePlanner {
             return containerName
         }
         return "\(projectName)_\(serviceName)"
-    }
-
-    package static func runPlan(
-        serviceName: String,
-        service: ComposeService,
-        projectName: String,
-        composeDirectory: URL,
-        options: RunPlanOptions
-    ) throws -> ServicePlan {
-        guard let image = service.image, !image.isEmpty else {
-            throw ComposeError.missingImage(service: serviceName)
-        }
-
-        let baseName = runContainerBaseName(
-            serviceName: serviceName,
-            service: service,
-            projectName: projectName
-        )
-        let name = "\(baseName)_run_\(options.nameSuffix)"
-
-        var arguments: [String] = ["--name", name]
-        if options.removeContainer {
-            arguments.append("--rm")
-        }
-        if options.interactive {
-            arguments.append("-i")
-        }
-        if options.processTerminal {
-            arguments.append("-t")
-        }
-        let command = if let override = options.commandOverride, !override.isEmpty {
-            override
-        } else {
-            ServiceRunMapping.commandArguments(service.command)
-        }
-        try ServiceRunMapping.appendServiceRunConfiguration(
-            to: &arguments,
-            configuration: ServiceRunConfiguration(
-                serviceName: serviceName,
-                service: service,
-                projectName: projectName,
-                composeDirectory: service.projectDirectory(orDefault: composeDirectory),
-                image: image,
-                command: command
-            )
-        )
-
-        return ServicePlan(
-            serviceName: serviceName,
-            name: name,
-            runArguments: arguments
-        )
-    }
-
-    package static func buildUpPlan(
-        serviceName: String,
-        service: ComposeService,
-        projectName: String,
-        composeDirectory: URL,
-        replicaIndex: Int
-    ) throws -> ServicePlan {
-        guard let image = service.image, !image.isEmpty else {
-            throw ComposeError.missingImage(service: serviceName)
-        }
-
-        let name = ReplicaPlanning.indexedContainerName(
-            projectName: projectName,
-            serviceName: serviceName,
-            index: replicaIndex
-        )
-
-        var arguments = ["-d", "--name", name]
-        try ServiceRunMapping.appendServiceRunConfiguration(
-            to: &arguments,
-            configuration: ServiceRunConfiguration(
-                serviceName: serviceName,
-                service: service,
-                projectName: projectName,
-                composeDirectory: service.projectDirectory(orDefault: composeDirectory),
-                image: image,
-                command: ServiceRunMapping.commandArguments(service.command),
-                containerNumber: replicaIndex
-            )
-        )
-
-        return ServicePlan(
-            serviceName: serviceName,
-            name: name,
-            runArguments: arguments,
-            replicaIndex: replicaIndex
-        )
     }
 
     public static func publishFlag(for port: String) throws -> String? {

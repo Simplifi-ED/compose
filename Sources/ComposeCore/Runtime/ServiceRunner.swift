@@ -28,6 +28,7 @@ public enum ServiceRunner {
         healthContext: HealthWaitContext? = nil,
         execution: WaveExecutionPolicy = .unlimited
     ) async throws {
+        let allPlans = layers.flatMap { $0 }
         try await orchestrateUp(
             layers: layers,
             progress: progress,
@@ -35,12 +36,15 @@ public enum ServiceRunner {
             execution: execution,
             hooks: UpOperationHooks(
                 runContainer: { plan in
-                    try await ContainerTeardown.teardownRespectingCancellation(id: plan.name) {
-                        let command = try Application.ContainerRun.parse(plan.runArguments)
-                        try await command.run()
-                    }
+                    try await runContainerWithFileMounts(plan)
                 },
                 rollbackTeardown: { name in
+                    if let plan = allPlans.first(where: { $0.name == name }) {
+                        ComposeFileStaging.removeContainerStaging(
+                            projectName: plan.projectName,
+                            containerName: name
+                        )
+                    }
                     try await ContainerTeardown.teardown(id: name)
                 },
                 waitForDependencies: { gates, context in
@@ -66,6 +70,23 @@ public enum ServiceRunner {
         )
     }
 
+    package static func runContainerWithFileMounts(_ plan: ServicePlan) async throws {
+        try await ContainerTeardown.teardownRespectingCancellation(id: plan.name) {
+            let runArguments = try ComposeFileStaging.preparedRunArguments(for: plan)
+            let command: Application.ContainerRun
+            do {
+                command = try Application.ContainerRun.parse(runArguments)
+            } catch {
+                ComposeFileStaging.removeContainerStaging(
+                    projectName: plan.projectName,
+                    containerName: plan.name
+                )
+                throw error
+            }
+            try await command.run()
+        }
+    }
+
     package static func orchestrateUp(
         layers: [[ServicePlan]],
         progress: WaveProgressHandlers?,
@@ -87,6 +108,7 @@ public enum ServiceRunner {
                     try await hooks.runContainer(plan)
                 }
                 if result.wasInterrupted {
+                    handleInterruptedWave(result: result, startedWaves: &startedWaves, layers: layers)
                     throw CancellationError()
                 }
                 if !result.succeeded.isEmpty {
@@ -114,6 +136,7 @@ public enum ServiceRunner {
                 execution: execution,
                 teardown: hooks.rollbackTeardown
             )
+            cleanupOrphanStaging(layers: layers, startedWaves: startedWaves)
             if !rollbackFailures.isEmpty {
                 let started = startedWaves.flatMap { $0 }
                 let rollbackMessage = ComposeError.rollbackFailed(
@@ -128,12 +151,14 @@ public enum ServiceRunner {
 
     public static func down(
         containers: [DiscoveredContainer],
+        projectName: String? = nil,
         onRemoved: (@Sendable (String) -> Void)? = nil,
         progress: WaveProgressHandlers? = nil,
         execution: WaveExecutionPolicy = .unlimited
     ) async throws {
         try await down(
             layers: [containers],
+            projectName: projectName,
             onRemoved: onRemoved,
             progress: progress,
             execution: execution
@@ -142,6 +167,7 @@ public enum ServiceRunner {
 
     public static func down(
         layers: [[DiscoveredContainer]],
+        projectName: String? = nil,
         onRemoved: (@Sendable (String) -> Void)? = nil,
         progress: WaveProgressHandlers? = nil,
         execution: WaveExecutionPolicy = .unlimited
@@ -153,6 +179,12 @@ public enum ServiceRunner {
             execution: execution,
             teardown: { container in
                 try await ContainerTeardown.teardownRespectingCancellation(id: container.name)
+                if let projectName {
+                    ComposeFileStaging.removeContainerStaging(
+                        projectName: projectName,
+                        containerName: container.name
+                    )
+                }
             }
         )
     }
@@ -222,5 +254,4 @@ public enum ServiceRunner {
         }
         return failures
     }
-
 }

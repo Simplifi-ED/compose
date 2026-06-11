@@ -73,11 +73,21 @@ extension ComposeIncludeEntry: Decodable {
 struct ComposeFileDocument: Sendable, Equatable {
     let name: String?
     let services: [String: ComposeService]
+    let configs: [String: ComposeFileResource]
+    let secrets: [String: ComposeFileResource]
     let include: [ComposeIncludeEntry]
 
-    init(name: String?, services: [String: ComposeService], include: [ComposeIncludeEntry] = []) {
+    init(
+        name: String?,
+        services: [String: ComposeService],
+        configs: [String: ComposeFileResource] = [:],
+        secrets: [String: ComposeFileResource] = [:],
+        include: [ComposeIncludeEntry] = []
+    ) {
         self.name = name
         self.services = services
+        self.configs = configs
+        self.secrets = secrets
         self.include = include
     }
 }
@@ -86,6 +96,8 @@ extension ComposeFileDocument: Decodable {
     private enum CodingKeys: String, CodingKey {
         case name
         case services
+        case configs
+        case secrets
         case include
     }
 
@@ -93,6 +105,8 @@ extension ComposeFileDocument: Decodable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         name = try container.decodeIfPresent(String.self, forKey: .name)
         services = try container.decodeIfPresent([String: ComposeService].self, forKey: .services) ?? [:]
+        configs = try ComposeFileResourceDecoder.decodeMap(from: container, forKey: .configs, kind: .config)
+        secrets = try ComposeFileResourceDecoder.decodeMap(from: container, forKey: .secrets, kind: .secret)
         include = try Self.decodeInclude(from: container)
     }
 

@@ -56,10 +56,13 @@ public struct Run: AsyncParsableCommand {
         )
         let suffix = UUID().uuidString.lowercased().prefix(8)
         let plan = try ServicePlanner.runPlan(
+            context: ServicePlanner.PlanningContext(
+                composeFile: composeFile,
+                projectName: projectName,
+                composeDirectory: composeService.projectDirectory(orDefault: composeDirectory)
+            ),
             serviceName: service,
             service: composeService,
-            projectName: projectName,
-            composeDirectory: composeService.projectDirectory(orDefault: composeDirectory),
             options: RunPlanOptions(
                 removeContainer: remove,
                 commandOverride: command.isEmpty ? nil : command,
@@ -71,6 +74,7 @@ public struct Run: AsyncParsableCommand {
 
         let shutdownContext = RunShutdownContext(
             containerID: plan.name,
+            projectName: projectName,
             options: GracefulStopOptions(graceSeconds: timeout)
         )
 

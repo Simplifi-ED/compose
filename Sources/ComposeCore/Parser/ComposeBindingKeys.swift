@@ -77,11 +77,11 @@ package enum ComposeBindingKeys {
         return entry
     }
 
-    package static func mergeUniqueEntries(
-        base: [String],
-        override: [String],
-        key: (String) -> String?
-    ) -> [String] {
+    package static func mergeUniqueEntries<Element>(
+        base: [Element],
+        override: [Element],
+        key: (Element) -> String?
+    ) -> [Element] {
         var merged = base
         var indexByKey: [String: Int] = [:]
         for (index, entry) in base.enumerated() {

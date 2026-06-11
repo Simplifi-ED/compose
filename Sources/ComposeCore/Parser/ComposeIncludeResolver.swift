@@ -13,7 +13,9 @@ enum ComposeIncludeResolver {
     ) throws -> ComposeFile {
         var model = ComposeFile(
             name: document.name,
-            services: stampServices(document.services, projectDirectory: localProjectDirectory)
+            services: stampServices(document.services, projectDirectory: localProjectDirectory),
+            configs: ComposeFileResourceDecoder.stamp(document.configs, resolutionRoot: localProjectDirectory),
+            secrets: ComposeFileResourceDecoder.stamp(document.secrets, resolutionRoot: localProjectDirectory)
         )
 
         let hostDirectory = hostFileURL.deletingLastPathComponent().standardizedFileURL
@@ -153,7 +155,18 @@ enum ComposeIncludeResolver {
             }
             services[serviceName] = service
         }
-        model = ComposeFile(name: model.name, services: services)
+        try ComposeIncludeResourceMerge.merge(
+            into: &model,
+            included: included,
+            includePath: includePath,
+            definedIn: definedIn
+        )
+        model = ComposeFile(
+            name: model.name,
+            services: services,
+            configs: model.configs,
+            secrets: model.secrets
+        )
     }
 
     private static func stampServices(

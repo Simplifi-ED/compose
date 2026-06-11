@@ -1,0 +1,59 @@
+import Foundation
+
+enum ComposeIncludeResourceMerge {
+    static func merge(
+        into model: inout ComposeFile,
+        included: ComposeFile,
+        includePath: String,
+        definedIn: String
+    ) throws {
+        var configs = model.configs
+        var secrets = model.secrets
+        for kind in ComposeFileMountKind.allCases {
+            switch kind {
+            case .config:
+                try mergeResources(
+                    into: &configs,
+                    from: included.configs,
+                    kind: kind,
+                    includePath: includePath,
+                    definedIn: definedIn
+                )
+            case .secret:
+                try mergeResources(
+                    into: &secrets,
+                    from: included.secrets,
+                    kind: kind,
+                    includePath: includePath,
+                    definedIn: definedIn
+                )
+            }
+        }
+        model = ComposeFile(
+            name: model.name,
+            services: model.services,
+            configs: configs,
+            secrets: secrets
+        )
+    }
+
+    private static func mergeResources(
+        into target: inout [String: ComposeFileResource],
+        from included: [String: ComposeFileResource],
+        kind: ComposeFileMountKind,
+        includePath: String,
+        definedIn: String
+    ) throws {
+        for (name, resource) in included {
+            if target[name] != nil {
+                throw ComposeError.includeResourceConflict(
+                    name: name,
+                    kind: kind,
+                    includePath: includePath,
+                    definedIn: definedIn
+                )
+            }
+            target[name] = resource
+        }
+    }
+}

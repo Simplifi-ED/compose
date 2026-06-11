@@ -141,5 +141,39 @@ extension TestRunner {
                 _ = try ComposeParser.parse(fileURL: Self.fixtureURL("include-fixture/conflict-across-includes.yml"))
             }
         )
+
+        try runIncludeResourceConflictTests()
+    }
+
+    mutating func runIncludeResourceConflictTests() throws {
+        expectComposeError(
+            "included secret conflicts with parent secret",
+            matching: {
+                if case .includeResourceConflict(let name, .secret, _, _) = $0 {
+                    return name == "shared_secret"
+                }
+                return false
+            },
+            body: {
+                _ = try ComposeParser.parse(
+                    fileURL: Self.fixtureURL("include-fixture/resource-conflict-secret.yml")
+                )
+            }
+        )
+
+        expectComposeError(
+            "included config conflicts with parent config",
+            matching: {
+                if case .includeResourceConflict(let name, .config, _, _) = $0 {
+                    return name == "shared_config"
+                }
+                return false
+            },
+            body: {
+                _ = try ComposeParser.parse(
+                    fileURL: Self.fixtureURL("include-fixture/resource-conflict-config.yml")
+                )
+            }
+        )
     }
 }

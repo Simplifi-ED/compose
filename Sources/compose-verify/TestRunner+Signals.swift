@@ -89,6 +89,7 @@ extension TestRunner {
                 policy: .stopRunContainer(
                     RunShutdownContext(
                         containerID: "demo_web_run_test",
+                        projectName: "demo",
                         options: GracefulStopOptions()
                     )
                 ),

@@ -33,6 +33,7 @@ extension TestRunner {
                     ),
                     shutdownContext: RunShutdownContext(
                         containerID: "demo_web_run_test01",
+                        projectName: "demo",
                         options: GracefulStopOptions()
                     ),
                     runContainer: { _ in 7 }
@@ -56,6 +57,7 @@ extension TestRunner {
             let capture = Capture()
             let context = RunShutdownContext(
                 containerID: "demo_web_run_interrupt",
+                projectName: "demo",
                 options: GracefulStopOptions(graceSeconds: 25)
             )
             _ = try? await SignalForwarding.interruptedOutcome(
@@ -83,6 +85,7 @@ extension TestRunner {
                 policy: .stopRunContainer(
                     RunShutdownContext(
                         containerID: "demo_web_run_tty",
+                        projectName: "demo",
                         options: GracefulStopOptions()
                     )
                 ),
@@ -106,6 +109,7 @@ extension TestRunner {
                 policy: .stopRunContainer(
                     RunShutdownContext(
                         containerID: "demo_web_run_tty",
+                        projectName: "demo",
                         options: GracefulStopOptions()
                     )
                 ),
@@ -127,6 +131,7 @@ extension TestRunner {
                 policy: .stopRunContainer(
                     RunShutdownContext(
                         containerID: "demo_web_run_tty",
+                        projectName: "demo",
                         options: GracefulStopOptions()
                     )
                 ),
@@ -153,6 +158,7 @@ extension TestRunner {
                 policy: .stopRunContainer(
                     RunShutdownContext(
                         containerID: "demo_web_run_abcd1234",
+                        projectName: "demo",
                         options: GracefulStopOptions()
                     )
                 ),

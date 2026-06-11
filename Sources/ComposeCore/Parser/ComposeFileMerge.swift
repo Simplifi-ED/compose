@@ -18,7 +18,9 @@ enum ComposeFileMerge {
 
         return ComposeFile(
             name: override.name ?? base.name,
-            services: mergedServices
+            services: mergedServices,
+            configs: mergeResources(base: base.configs, override: override.configs),
+            secrets: mergeResources(base: base.secrets, override: override.secrets)
         )
     }
 
@@ -42,8 +44,25 @@ enum ComposeFileMerge {
             profiles: override.profiles.isEmpty ? base.profiles : override.profiles,
             deploy: merge(base: base.deploy, override: override.deploy),
             healthcheck: override.healthcheck ?? base.healthcheck,
+            configs: ComposeBindingKeys.mergeUniqueEntries(
+                base: base.configs,
+                override: override.configs,
+                key: { ComposeServiceMountDecoder.mergeKey(for: $0) }
+            ),
+            secrets: ComposeBindingKeys.mergeUniqueEntries(
+                base: base.secrets,
+                override: override.secrets,
+                key: { ComposeServiceMountDecoder.mergeKey(for: $0) }
+            ),
             projectDirectory: override.projectDirectory ?? base.projectDirectory
         )
+    }
+
+    private static func mergeResources(
+        base: [String: ComposeFileResource],
+        override: [String: ComposeFileResource]
+    ) -> [String: ComposeFileResource] {
+        base.merging(override) { _, override in override }
     }
 
     static func mergeDependsOn(
