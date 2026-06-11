@@ -23,6 +23,9 @@ public struct Down: AsyncParsableCommand {
     @OptionGroup
     var workspaceHygiene: WorkspaceHygieneOptions
 
+    @OptionGroup
+    var dryRunOptions: DryRunOptions
+
     @Flag(
         name: .shortAndLong,
         help: "Remove project-local bind-mount host paths declared in the compose file."
@@ -48,11 +51,88 @@ public struct Down: AsyncParsableCommand {
             context: context
         )
 
+        if dryRunOptions.isEnabled {
+            try await runDryRun(
+                context: context,
+                discovered: discovered,
+                containers: containers
+            )
+            return
+        }
+
         try await executeShutdown(
             context: context,
             discovered: discovered,
             containers: containers
         )
+    }
+
+    private func runDryRun(
+        context: ProjectOptions.LabelCommandContext,
+        discovered: [DiscoveredContainer],
+        containers: [DiscoveredContainer]
+    ) async throws {
+        let manifest = DryRunManifest()
+        let useOrderedShutdown = context.fileURLs != nil && !projectOptions.hasExplicitProjectName
+        let execution = WaveExecutionPolicy(maxConcurrent: parallelOptions.resolvedMaxConcurrent())
+        let orphanNames = downOrphanNames(
+            discovered: discovered,
+            selected: containers,
+            context: context
+        )
+        await manifest.setOrphanNames(orphanNames)
+
+        let layers = try DownShutdown.resolveShutdownLayers(
+            context: context,
+            containers: containers,
+            useOrderedShutdown: useOrderedShutdown
+        )
+        let teardown = await manifest.makeDownTeardown()
+        try await ServiceRunner.orchestrateDown(
+            layers: layers,
+            onRemoved: nil,
+            progress: nil,
+            execution: execution,
+            teardown: teardown,
+            beforeWave: { index in
+                await manifest.setDownWaveIndex(index)
+            }
+        )
+
+        if volumes, let volumePurgeContext = DownShutdown.volumePurgeContext(
+            context: context,
+            discovered: discovered,
+            teardownContainers: containers
+        ) {
+            let paths = DownShutdown.previewVolumePurgePaths(context: volumePurgeContext)
+            await manifest.recordPurge(paths: paths)
+        } else if volumes {
+            BindMountPurge.warnPurgeSkipped(DownShutdown.volumePurgeSkipReason(context: context))
+        }
+
+        await manifest.printLines()
+    }
+
+    private func downOrphanNames(
+        discovered: [DiscoveredContainer],
+        selected: [DiscoveredContainer],
+        context: ProjectOptions.LabelCommandContext
+    ) -> Set<String> {
+        guard workspaceHygiene.shouldRemoveOrphans,
+              let composeFile = context.composeFile
+        else {
+            return []
+        }
+        let orphans = OrphanRemoval.orphans(
+            in: discovered,
+            composeFile: composeFile,
+            policy: .duringDown(
+                profileFilterRequested: profileOptions.profileFilterRequested,
+                tearsDownAll: profileOptions.tearsDownAll,
+                activeProfiles: profileOptions.activeProfileSet
+            )
+        )
+        return Set(orphans.map(\.name))
     }
 
     private func resolvedContainers(

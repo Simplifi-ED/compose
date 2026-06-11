@@ -12,6 +12,9 @@ public struct Exec: AsyncParsableCommand {
     @OptionGroup
     var projectOptions: ProjectOptions
 
+    @OptionGroup
+    var dryRunOptions: DryRunOptions
+
     @Flag(name: .short, help: "Keep STDIN open even if not attached.")
     var interactive = false
 
@@ -47,6 +50,13 @@ public struct Exec: AsyncParsableCommand {
             serviceName: service,
             containers: containers
         )
+
+        if dryRunOptions.isEnabled {
+            let manifest = DryRunManifest()
+            await manifest.recordExec(container: target.name, command: command)
+            await manifest.printLines()
+            return
+        }
 
         let ioFlags = ExecSession.IOFlags.resolve(
             explicitInteractive: interactive,

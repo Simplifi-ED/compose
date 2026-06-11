@@ -21,4 +21,28 @@ extension ServiceRunner {
         }
         cleanupOrphanStaging(layers: layers, startedWaves: startedWaves)
     }
+
+    static func handleUpOrchestrationFailure(
+        error: Error,
+        startedWaves: [[String]],
+        layers: [[ServicePlan]],
+        execution: WaveExecutionPolicy,
+        rollbackTeardown: @Sendable @escaping (String) async throws -> Void
+    ) async throws {
+        let rollbackFailures = await rollbackStartedContainers(
+            startedWaves.reversed(),
+            execution: execution,
+            teardown: rollbackTeardown
+        )
+        cleanupOrphanStaging(layers: layers, startedWaves: startedWaves)
+        if !rollbackFailures.isEmpty {
+            let started = startedWaves.flatMap { $0 }
+            let rollbackMessage = ComposeError.rollbackFailed(
+                started: started,
+                failures: rollbackFailures
+            ).localizedDescription
+            fputs("Warning: \(rollbackMessage)\n", stderr)
+        }
+        throw error
+    }
 }

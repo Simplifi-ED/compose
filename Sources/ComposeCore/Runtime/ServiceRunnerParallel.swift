@@ -52,6 +52,7 @@ extension ServiceRunner {
         progress: WaveProgressHandlers?,
         failFast: Bool,
         execution: WaveExecutionPolicy = .unlimited,
+        beforeWave: (@Sendable (Int) async -> Void)? = nil,
         work: @escaping @Sendable (DiscoveredContainer) async throws -> Void,
         onWaveComplete: @escaping @Sendable ([DiscoveredContainer]) async -> Void
     ) async throws -> [(name: String, error: Error)] {
@@ -59,6 +60,7 @@ extension ServiceRunner {
 
         for (index, layer) in layers.enumerated() {
             try Task.checkCancellation()
+            await beforeWave?(index)
             await progress?.onWaveStart?(index + 1, layers.count, layer.map(\.name))
             let result = await parallelRun(
                 layer.map { ParallelRunItem(label: $0.name, collectOnSuccess: nil, value: $0) },

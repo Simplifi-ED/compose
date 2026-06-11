@@ -101,6 +101,41 @@ public enum BindMountPurge {
         return PurgeResult(removed: removed, skipped: skipped)
     }
 
+    /// Paths that would be targeted for removal, excluding structural skips (not filesystem checks).
+    public static func plannablePurgePaths(
+        paths: [String],
+        composeDirectories: [URL],
+        protectedPaths: Set<String> = [],
+        pathsInUseByRunningServices: Set<String> = []
+    ) -> [String] {
+        let composeRoots = Set(composeDirectories.map {
+            $0.standardizedFileURL.resolvingSymlinksInPath().path
+        })
+        var planned: [String] = []
+
+        for path in paths {
+            let standardized = URL(fileURLWithPath: path).standardizedFileURL.resolvingSymlinksInPath()
+            let standardizedPath = standardized.path
+
+            if pathsInUseByRunningServices.contains(standardizedPath) {
+                continue
+            }
+            if protectedPaths.contains(standardizedPath) {
+                continue
+            }
+            if composeRoots.contains(standardizedPath) {
+                continue
+            }
+            let isContained = composeDirectories.contains {
+                BindMountPathResolver.isPathContained(standardized, within: $0)
+            }
+            guard isContained else { continue }
+            planned.append(standardizedPath)
+        }
+
+        return planned.sorted()
+    }
+
     public static func protectedComposePaths(fileURLs: [URL]) -> Set<String> {
         Set(fileURLs.map { $0.standardizedFileURL.resolvingSymlinksInPath().path })
     }

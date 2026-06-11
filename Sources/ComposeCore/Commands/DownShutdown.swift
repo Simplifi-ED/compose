@@ -2,10 +2,22 @@ import Foundation
 
 package enum DownShutdown {
     package struct VolumePurgeContext: Sendable {
-        let composeFile: ComposeFile
-        let fileURLs: [URL]
-        let teardownServiceNames: Set<String>
-        let runningServiceNames: Set<String>
+        package let composeFile: ComposeFile
+        package let fileURLs: [URL]
+        package let teardownServiceNames: Set<String>
+        package let runningServiceNames: Set<String>
+
+        package init(
+            composeFile: ComposeFile,
+            fileURLs: [URL],
+            teardownServiceNames: Set<String>,
+            runningServiceNames: Set<String>
+        ) {
+            self.composeFile = composeFile
+            self.fileURLs = fileURLs
+            self.teardownServiceNames = teardownServiceNames
+            self.runningServiceNames = runningServiceNames
+        }
     }
 
     static func filteredContainers(
@@ -62,15 +74,11 @@ package enum DownShutdown {
     }
 
     static func purgeVolumes(context: VolumePurgeContext) {
+        let paths = collectVolumePurgePaths(context: context)
         let composeDirectory = context.fileURLs[0].deletingLastPathComponent()
         let composeDirectories = context.composeFile.projectRoots(
             for: context.teardownServiceNames.union(context.runningServiceNames),
             defaultDirectory: composeDirectory
-        )
-        let paths = BindMountPurge.collectPurgeablePaths(
-            composeFile: context.composeFile,
-            composeDirectory: composeDirectory,
-            serviceNames: context.teardownServiceNames
         )
         let runningPaths = BindMountPurge.collectPurgeablePaths(
             composeFile: context.composeFile,
@@ -90,6 +98,50 @@ package enum DownShutdown {
         BindMountPurge.printPurgeSummary(removed: result.removed)
     }
 
+    package static func collectVolumePurgePaths(context: VolumePurgeContext) -> [String] {
+        let composeDirectory = context.fileURLs[0].deletingLastPathComponent()
+        return BindMountPurge.collectPurgeablePaths(
+            composeFile: context.composeFile,
+            composeDirectory: composeDirectory,
+            serviceNames: context.teardownServiceNames
+        )
+    }
+
+    package static func previewVolumePurgePaths(context: VolumePurgeContext) -> [String] {
+        let composeDirectory = context.fileURLs[0].deletingLastPathComponent()
+        let composeDirectories = context.composeFile.projectRoots(
+            for: context.teardownServiceNames.union(context.runningServiceNames),
+            defaultDirectory: composeDirectory
+        )
+        let paths = collectVolumePurgePaths(context: context)
+        let runningPaths = BindMountPurge.collectPurgeablePaths(
+            composeFile: context.composeFile,
+            composeDirectory: composeDirectory,
+            serviceNames: context.runningServiceNames
+        )
+        let protected = BindMountPurge.protectedComposePaths(fileURLs: context.fileURLs)
+        return BindMountPurge.plannablePurgePaths(
+            paths: paths,
+            composeDirectories: composeDirectories,
+            protectedPaths: protected,
+            pathsInUseByRunningServices: Set(runningPaths)
+        )
+    }
+
+    package static func resolveShutdownLayers(
+        context: ProjectOptions.LabelCommandContext,
+        containers: [DiscoveredContainer],
+        useOrderedShutdown: Bool
+    ) throws -> [[DiscoveredContainer]] {
+        if useOrderedShutdown, let composeFile = context.composeFile {
+            return try ServicePlanner.shutdownContainerLayers(
+                for: composeFile,
+                containers: containers
+            )
+        }
+        return [containers]
+    }
+
     static func tearDownContainers(
         context: ProjectOptions.LabelCommandContext,
         containers: [DiscoveredContainer],
@@ -97,22 +149,13 @@ package enum DownShutdown {
         progress: WaveProgressHandlers?,
         execution: WaveExecutionPolicy = .unlimited
     ) async throws {
-        if useOrderedShutdown, let composeFile = context.composeFile {
-            let layers = try ServicePlanner.shutdownContainerLayers(
-                for: composeFile,
-                containers: containers
-            )
-            try await ServiceRunner.down(
-                layers: layers,
-                projectName: context.projectName,
-                onRemoved: { print($0) },
-                progress: progress,
-                execution: execution
-            )
-            return
-        }
-        try await ServiceRunner.down(
+        let layers = try resolveShutdownLayers(
+            context: context,
             containers: containers,
+            useOrderedShutdown: useOrderedShutdown
+        )
+        try await ServiceRunner.down(
+            layers: layers,
             projectName: context.projectName,
             onRemoved: { print($0) },
             progress: progress,
