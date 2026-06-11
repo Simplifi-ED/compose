@@ -29,6 +29,9 @@ public struct Up: AsyncParsableCommand {
     @OptionGroup
     var workspaceHygiene: WorkspaceHygieneOptions
 
+    @OptionGroup
+    var dryRunOptions: DryRunOptions
+
     @Flag(
         name: .long,
         help: "After startup, follow service logs in the foreground until services exit or you interrupt."
@@ -60,6 +63,16 @@ public struct Up: AsyncParsableCommand {
             scaleOverrides: scaleOverrides
         )
 
+        if dryRunOptions.isEnabled {
+            try await runDryRun(
+                projectName: projectName,
+                composeFile: composeFile,
+                layers: layers,
+                healthContext: healthContext
+            )
+            return
+        }
+
         try await orchestrateStartup(
             projectName: projectName,
             composeFile: composeFile,
@@ -73,6 +86,62 @@ public struct Up: AsyncParsableCommand {
             composeFile: composeFile,
             fileURLs: fileURLs
         )
+    }
+
+    private func runDryRun(
+        projectName: String,
+        composeFile: ComposeFile,
+        layers: [[ServicePlan]],
+        healthContext: HealthWaitContext
+    ) async throws {
+        let manifest = DryRunManifest()
+        let execution = WaveExecutionPolicy(maxConcurrent: parallelOptions.resolvedMaxConcurrent())
+
+        if workspaceHygiene.shouldRemoveOrphans {
+            try await recordOrphanTeardowns(
+                manifest: manifest,
+                projectName: projectName,
+                composeFile: composeFile
+            )
+        }
+
+        let hooks = await manifest.makeUpHooks()
+        try await ServiceRunner.up(
+            layers: layers,
+            healthContext: healthContext,
+            hooks: hooks,
+            execution: execution,
+            beforeWave: { index in
+                await manifest.setUpWaveIndex(index)
+            }
+        )
+        await manifest.printLines()
+    }
+
+    private func recordOrphanTeardowns(
+        manifest: DryRunManifest,
+        projectName: String,
+        composeFile: ComposeFile
+    ) async throws {
+        let discovered: [DiscoveredContainer]
+        do {
+            discovered = try await ContainerDiscovery.containers(forProject: projectName)
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            WorkspaceHygieneOutput.warnOrphanRemovalSkipped(
+                WorkspaceHygieneOutput.listContainersFailureMessage(error)
+            )
+            return
+        }
+        let orphans = OrphanRemoval.orphans(
+            in: discovered,
+            composeFile: composeFile,
+            policy: .beforeUp(activeProfiles: profileOptions.activeProfileSet)
+        )
+        for orphan in orphans {
+            await manifest.recordTeardown(orphan.name, reason: .orphan)
+        }
     }
 
     private func orchestrateStartup(

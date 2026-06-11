@@ -12,6 +12,9 @@ public struct Run: AsyncParsableCommand {
     @OptionGroup
     var projectOptions: ProjectOptions
 
+    @OptionGroup
+    var dryRunOptions: DryRunOptions
+
     @Flag(name: .long, help: "Remove the container after it exits.")
     var remove = false
 
@@ -54,7 +57,9 @@ public struct Run: AsyncParsableCommand {
             explicitTTY: tty,
             stdinIsTTY: isatty(STDIN_FILENO) == 1
         )
-        let suffix = UUID().uuidString.lowercased().prefix(8)
+        let suffix = dryRunOptions.isEnabled
+            ? "dryrun"
+            : String(UUID().uuidString.lowercased().prefix(8))
         let plan = try ServicePlanner.runPlan(
             context: ServicePlanner.PlanningContext(
                 composeFile: composeFile,
@@ -71,6 +76,13 @@ public struct Run: AsyncParsableCommand {
                 nameSuffix: String(suffix)
             )
         )
+
+        if dryRunOptions.isEnabled {
+            let manifest = DryRunManifest()
+            await manifest.recordCreate(plan)
+            await manifest.printLines()
+            return
+        }
 
         let shutdownContext = RunShutdownContext(
             containerID: plan.name,

@@ -152,6 +152,33 @@ Substitution always runs (`.env` beside each compose file, shell environment ove
 
 Validation covers structural parsing, dependency graph checks, missing `image`, and the same planning rules as `up` for active services (for example `container_name` with scale, static host ports with multiple replicas). JSON Schema validation against the upstream compose-spec is deferred.
 
+### Dry-run preview
+
+`--dry-run` on `up`, `down`, `run`, and `exec` prints the container operations compose would perform without changing system state. Use it to preview startup waves, shutdown order, one-off runs, and exec target resolution before running live commands.
+
+```bash
+container compose up --dry-run -f docker-compose.yml
+container compose up --dry-run --scale web=3 --remove-orphans
+container compose down --dry-run -v
+container compose run --dry-run web echo hello
+container compose exec --dry-run web sh -c "echo hi"
+```
+
+| Command | Dry-run output |
+|---------|----------------|
+| `up` | Orphan removals (with `--remove-orphans`), per-wave creates, inter-wave health waits |
+| `down` | Reverse-topological stop+delete targets; bind-mount purge paths with `-v` |
+| `run` | Planned one-off container create (uses placeholder suffix `dryrun` for stable output) |
+| `exec` | Resolved target container and command |
+
+Output is plain text on stdout (`[DRY-RUN] …` lines), sorted deterministically for CI. Progress lines are suppressed. Validation errors use the same exit codes as live commands.
+
+Read-only commands (`ps`, `logs`, `top`, `config`) do not accept `--dry-run`. Use `compose config` to preview resolved YAML. `watch` is out of scope.
+
+`down` dry-run lists project containers via discovery; no stop, delete, or purge is performed.
+
+`exec --dry-run` requires a **running** target container: it uses live discovery and the same resolver as `compose exec`, so it cannot preview exec when the service is stopped or no matching container is running. No exec is performed.
+
 ### Workspace hygiene
 
 ```bash

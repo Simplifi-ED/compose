@@ -54,19 +54,21 @@ public enum ServiceRunner {
         )
     }
 
-    /// compose-verify entry point for orchestration with injected health waits.
+    /// Injected orchestration for compose-verify and dry-run.
     package static func up(
         layers: [[ServicePlan]],
         healthContext: HealthWaitContext?,
         hooks: UpOperationHooks,
-        execution: WaveExecutionPolicy = .unlimited
+        execution: WaveExecutionPolicy = .unlimited,
+        beforeWave: (@Sendable (Int) async -> Void)? = nil
     ) async throws {
         try await orchestrateUp(
             layers: layers,
             progress: nil,
             healthContext: healthContext,
             execution: execution,
-            hooks: hooks
+            hooks: hooks,
+            beforeWave: beforeWave
         )
     }
 
@@ -92,12 +94,14 @@ public enum ServiceRunner {
         progress: WaveProgressHandlers?,
         healthContext: HealthWaitContext?,
         execution: WaveExecutionPolicy = .unlimited,
-        hooks: UpOperationHooks
+        hooks: UpOperationHooks,
+        beforeWave: (@Sendable (Int) async -> Void)? = nil
     ) async throws {
         var startedWaves: [[String]] = []
         do {
             for (index, layer) in layers.enumerated() {
                 try Task.checkCancellation()
+                await beforeWave?(index)
                 // Progress keys on container names so replicas of one service stay distinct.
                 await progress?.onWaveStart?(index + 1, layers.count, layer.map(\.name))
                 let result = await parallelRun(
@@ -130,22 +134,13 @@ public enum ServiceRunner {
         } catch is CancellationError {
             throw CancellationError()
         } catch {
-            // Roll back in reverse startup order; parallel within each wave.
-            let rollbackFailures = await rollbackStartedContainers(
-                startedWaves.reversed(),
+            try await handleUpOrchestrationFailure(
+                error: error,
+                startedWaves: startedWaves,
+                layers: layers,
                 execution: execution,
-                teardown: hooks.rollbackTeardown
+                rollbackTeardown: hooks.rollbackTeardown
             )
-            cleanupOrphanStaging(layers: layers, startedWaves: startedWaves)
-            if !rollbackFailures.isEmpty {
-                let started = startedWaves.flatMap { $0 }
-                let rollbackMessage = ComposeError.rollbackFailed(
-                    started: started,
-                    failures: rollbackFailures
-                ).localizedDescription
-                fputs("Warning: \(rollbackMessage)\n", stderr)
-            }
-            throw error
         }
     }
 
@@ -194,13 +189,15 @@ public enum ServiceRunner {
         onRemoved: (@Sendable (String) -> Void)?,
         progress: WaveProgressHandlers?,
         execution: WaveExecutionPolicy = .unlimited,
-        teardown: @escaping @Sendable (DiscoveredContainer) async throws -> Void
+        teardown: @escaping @Sendable (DiscoveredContainer) async throws -> Void,
+        beforeWave: (@Sendable (Int) async -> Void)? = nil
     ) async throws {
         _ = try await runContainerWaves(
             layers: layers,
             progress: progress,
             failFast: true,
-            execution: execution
+            execution: execution,
+            beforeWave: beforeWave
         ) { container in
             try await teardown(container)
         } onWaveComplete: { layer in
