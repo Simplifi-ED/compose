@@ -94,7 +94,8 @@ package enum DownShutdown {
         context: ProjectOptions.LabelCommandContext,
         containers: [DiscoveredContainer],
         useOrderedShutdown: Bool,
-        progress: WaveProgressHandlers?
+        progress: WaveProgressHandlers?,
+        execution: WaveExecutionPolicy = .unlimited
     ) async throws {
         if useOrderedShutdown, let composeFile = context.composeFile {
             let layers = try ServicePlanner.shutdownContainerLayers(
@@ -104,14 +105,16 @@ package enum DownShutdown {
             try await ServiceRunner.down(
                 layers: layers,
                 onRemoved: { print($0) },
-                progress: progress
+                progress: progress,
+                execution: execution
             )
             return
         }
         try await ServiceRunner.down(
             containers: containers,
             onRemoved: { print($0) },
-            progress: progress
+            progress: progress,
+            execution: execution
         )
     }
 

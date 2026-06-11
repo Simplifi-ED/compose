@@ -18,6 +18,9 @@ public struct Down: AsyncParsableCommand {
     var profileOptions: ProfileOptions
 
     @OptionGroup
+    var parallelOptions: ParallelOptions
+
+    @OptionGroup
     var workspaceHygiene: WorkspaceHygieneOptions
 
     @Flag(
@@ -27,6 +30,7 @@ public struct Down: AsyncParsableCommand {
     var volumes = false
 
     public func run() async throws {
+        try parallelOptions.validate()
         let context = try projectOptions.resolvedLabelCommandContext(
             profileFilterRequested: profileOptions.profileFilterRequested
         )
@@ -93,6 +97,7 @@ public struct Down: AsyncParsableCommand {
         )
 
         let shouldPurgeVolumes = volumes
+        let execution = WaveExecutionPolicy(maxConcurrent: parallelOptions.resolvedMaxConcurrent())
         try await runOrchestrationCommand(
             lines: orchestration.lines,
             interruptedMessage: "Shutdown interrupted. Some containers may still be running."
@@ -101,7 +106,8 @@ public struct Down: AsyncParsableCommand {
                 context: context,
                 containers: containers,
                 useOrderedShutdown: useOrderedShutdown,
-                progress: orchestration.handlers
+                progress: orchestration.handlers,
+                execution: execution
             )
             if shouldPurgeVolumes, let volumePurgeContext {
                 DownShutdown.purgeVolumes(context: volumePurgeContext)

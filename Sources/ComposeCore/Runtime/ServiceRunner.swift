@@ -25,12 +25,14 @@ public enum ServiceRunner {
     public static func up(
         layers: [[ServicePlan]],
         progress: WaveProgressHandlers? = nil,
-        healthContext: HealthWaitContext? = nil
+        healthContext: HealthWaitContext? = nil,
+        execution: WaveExecutionPolicy = .unlimited
     ) async throws {
         try await orchestrateUp(
             layers: layers,
             progress: progress,
             healthContext: healthContext,
+            execution: execution,
             hooks: UpOperationHooks(
                 runContainer: { plan in
                     try await ContainerTeardown.teardownRespectingCancellation(id: plan.name) {
@@ -52,12 +54,14 @@ public enum ServiceRunner {
     package static func up(
         layers: [[ServicePlan]],
         healthContext: HealthWaitContext?,
-        hooks: UpOperationHooks
+        hooks: UpOperationHooks,
+        execution: WaveExecutionPolicy = .unlimited
     ) async throws {
         try await orchestrateUp(
             layers: layers,
             progress: nil,
             healthContext: healthContext,
+            execution: execution,
             hooks: hooks
         )
     }
@@ -66,6 +70,7 @@ public enum ServiceRunner {
         layers: [[ServicePlan]],
         progress: WaveProgressHandlers?,
         healthContext: HealthWaitContext?,
+        execution: WaveExecutionPolicy = .unlimited,
         hooks: UpOperationHooks
     ) async throws {
         var startedWaves: [[String]] = []
@@ -76,6 +81,7 @@ public enum ServiceRunner {
                 await progress?.onWaveStart?(index + 1, layers.count, layer.map(\.name))
                 let result = await parallelRun(
                     layer.map { ParallelRunItem(label: $0.name, collectOnSuccess: $0.name, value: $0) },
+                    maxConcurrent: execution.maxConcurrent,
                     onCompletion: progress?.onServiceComplete
                 ) { plan in
                     try await hooks.runContainer(plan)
@@ -105,6 +111,7 @@ public enum ServiceRunner {
             // Roll back in reverse startup order; parallel within each wave.
             let rollbackFailures = await rollbackStartedContainers(
                 startedWaves.reversed(),
+                execution: execution,
                 teardown: hooks.rollbackTeardown
             )
             if !rollbackFailures.isEmpty {
@@ -122,20 +129,28 @@ public enum ServiceRunner {
     public static func down(
         containers: [DiscoveredContainer],
         onRemoved: (@Sendable (String) -> Void)? = nil,
-        progress: WaveProgressHandlers? = nil
+        progress: WaveProgressHandlers? = nil,
+        execution: WaveExecutionPolicy = .unlimited
     ) async throws {
-        try await down(layers: [containers], onRemoved: onRemoved, progress: progress)
+        try await down(
+            layers: [containers],
+            onRemoved: onRemoved,
+            progress: progress,
+            execution: execution
+        )
     }
 
     public static func down(
         layers: [[DiscoveredContainer]],
         onRemoved: (@Sendable (String) -> Void)? = nil,
-        progress: WaveProgressHandlers? = nil
+        progress: WaveProgressHandlers? = nil,
+        execution: WaveExecutionPolicy = .unlimited
     ) async throws {
         try await orchestrateDown(
             layers: layers,
             onRemoved: onRemoved,
             progress: progress,
+            execution: execution,
             teardown: { container in
                 try await ContainerTeardown.teardownRespectingCancellation(id: container.name)
             }
@@ -146,12 +161,14 @@ public enum ServiceRunner {
         layers: [[DiscoveredContainer]],
         onRemoved: (@Sendable (String) -> Void)?,
         progress: WaveProgressHandlers?,
+        execution: WaveExecutionPolicy = .unlimited,
         teardown: @escaping @Sendable (DiscoveredContainer) async throws -> Void
     ) async throws {
         _ = try await runContainerWaves(
             layers: layers,
             progress: progress,
-            failFast: true
+            failFast: true,
+            execution: execution
         ) { container in
             try await teardown(container)
         } onWaveComplete: { layer in
@@ -179,6 +196,7 @@ public enum ServiceRunner {
 
     public static func rollbackStartedContainers(
         _ waves: [[String]],
+        execution: WaveExecutionPolicy = .unlimited,
         teardown: @escaping @Sendable (String) async throws -> Void = { name in
             try await ContainerTeardown.teardown(id: name)
         }
@@ -190,7 +208,8 @@ public enum ServiceRunner {
             }
             guard !wave.isEmpty else { continue }
             let result = await parallelRun(
-                wave.map { ParallelRunItem(label: $0, collectOnSuccess: nil, value: $0) }
+                wave.map { ParallelRunItem(label: $0, collectOnSuccess: nil, value: $0) },
+                maxConcurrent: execution.maxConcurrent
             ) { name in
                 try await ContainerTeardown.teardownRespectingCancellation(id: name) {
                     try await teardown(name)

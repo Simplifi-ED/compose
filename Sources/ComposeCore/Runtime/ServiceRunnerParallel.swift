@@ -51,6 +51,7 @@ extension ServiceRunner {
         layers: [[DiscoveredContainer]],
         progress: WaveProgressHandlers?,
         failFast: Bool,
+        execution: WaveExecutionPolicy = .unlimited,
         work: @escaping @Sendable (DiscoveredContainer) async throws -> Void,
         onWaveComplete: @escaping @Sendable ([DiscoveredContainer]) async -> Void
     ) async throws -> [(name: String, error: Error)] {
@@ -61,6 +62,7 @@ extension ServiceRunner {
             await progress?.onWaveStart?(index + 1, layers.count, layer.map(\.name))
             let result = await parallelRun(
                 layer.map { ParallelRunItem(label: $0.name, collectOnSuccess: nil, value: $0) },
+                maxConcurrent: execution.maxConcurrent,
                 onCompletion: progress?.onServiceComplete
             ) { container in
                 try await work(container)
@@ -95,8 +97,36 @@ extension ServiceRunner {
         return collectedFailures
     }
 
+    private static func runParallelItem<T: Sendable>(
+        _ item: ParallelRunItem<T>,
+        work: @escaping @Sendable (T) async throws -> Void
+    ) async -> ParallelTaskResult {
+        do {
+            try Task.checkCancellation()
+            try await work(item.value)
+            return ParallelTaskResult(
+                label: item.label,
+                collectOnSuccess: item.collectOnSuccess,
+                error: nil
+            )
+        } catch is CancellationError {
+            return ParallelTaskResult(
+                label: item.label,
+                collectOnSuccess: item.collectOnSuccess,
+                error: CancellationError()
+            )
+        } catch {
+            return ParallelTaskResult(
+                label: item.label,
+                collectOnSuccess: item.collectOnSuccess,
+                error: error
+            )
+        }
+    }
+
     package static func parallelRun<T: Sendable>(
         _ items: [ParallelRunItem<T>],
+        maxConcurrent: Int? = nil,
         onCompletion: (@Sendable (String, Bool) async -> Void)? = nil,
         work: @escaping @Sendable (T) async throws -> Void
     ) async -> ParallelRunResult {
@@ -109,41 +139,45 @@ extension ServiceRunner {
         }
 
         var accumulator = ParallelRunAccumulator()
+        let limit: Int = if let maxConcurrent, maxConcurrent > 0 {
+            maxConcurrent
+        } else {
+            items.count
+        }
 
         await withTaskGroup(of: ParallelTaskResult.self) { group in
-            for item in items {
+            var nextIndex = 0
+            var stopEnqueueing = false
+
+            func addWork(for item: ParallelRunItem<T>) {
+                group.addTask {
+                    await runParallelItem(item, work: work)
+                }
+            }
+
+            let seedCount = min(limit, items.count)
+            for _ in 0..<seedCount {
                 if Task.isCancelled {
                     accumulator.wasInterrupted = true
+                    stopEnqueueing = true
                     group.cancelAll()
                     break
                 }
-                group.addTask {
-                    do {
-                        try Task.checkCancellation()
-                        try await work(item.value)
-                        return ParallelTaskResult(
-                            label: item.label,
-                            collectOnSuccess: item.collectOnSuccess,
-                            error: nil
-                        )
-                    } catch is CancellationError {
-                        return ParallelTaskResult(
-                            label: item.label,
-                            collectOnSuccess: item.collectOnSuccess,
-                            error: CancellationError()
-                        )
-                    } catch {
-                        return ParallelTaskResult(
-                            label: item.label,
-                            collectOnSuccess: item.collectOnSuccess,
-                            error: error
-                        )
-                    }
-                }
+                addWork(for: items[nextIndex])
+                nextIndex += 1
             }
 
             for await result in group {
                 await accumulator.record(result, onCompletion: onCompletion)
+                if Task.isCancelled {
+                    accumulator.wasInterrupted = true
+                    stopEnqueueing = true
+                    group.cancelAll()
+                }
+                if !stopEnqueueing, nextIndex < items.count {
+                    addWork(for: items[nextIndex])
+                    nextIndex += 1
+                }
             }
         }
 
