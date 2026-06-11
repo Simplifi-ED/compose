@@ -72,9 +72,17 @@ public enum ServiceRunner {
 
     package static func runContainerWithFileMounts(_ plan: ServicePlan) async throws {
         try await ContainerTeardown.teardownRespectingCancellation(id: plan.name) {
-            let command = try Application.ContainerRun.parse(
-                ComposeFileStaging.preparedRunArguments(for: plan)
-            )
+            let runArguments = try ComposeFileStaging.preparedRunArguments(for: plan)
+            let command: Application.ContainerRun
+            do {
+                command = try Application.ContainerRun.parse(runArguments)
+            } catch {
+                ComposeFileStaging.removeContainerStaging(
+                    projectName: plan.projectName,
+                    containerName: plan.name
+                )
+                throw error
+            }
             try await command.run()
         }
     }
@@ -143,12 +151,14 @@ public enum ServiceRunner {
 
     public static func down(
         containers: [DiscoveredContainer],
+        projectName: String? = nil,
         onRemoved: (@Sendable (String) -> Void)? = nil,
         progress: WaveProgressHandlers? = nil,
         execution: WaveExecutionPolicy = .unlimited
     ) async throws {
         try await down(
             layers: [containers],
+            projectName: projectName,
             onRemoved: onRemoved,
             progress: progress,
             execution: execution
@@ -157,6 +167,7 @@ public enum ServiceRunner {
 
     public static func down(
         layers: [[DiscoveredContainer]],
+        projectName: String? = nil,
         onRemoved: (@Sendable (String) -> Void)? = nil,
         progress: WaveProgressHandlers? = nil,
         execution: WaveExecutionPolicy = .unlimited
@@ -168,6 +179,12 @@ public enum ServiceRunner {
             execution: execution,
             teardown: { container in
                 try await ContainerTeardown.teardownRespectingCancellation(id: container.name)
+                if let projectName {
+                    ComposeFileStaging.removeContainerStaging(
+                        projectName: projectName,
+                        containerName: container.name
+                    )
+                }
             }
         )
     }
@@ -237,26 +254,4 @@ public enum ServiceRunner {
         }
         return failures
     }
-
-    package static func cleanupOrphanStaging(layers: [[ServicePlan]], startedWaves: [[String]]) {
-        let started = Set(startedWaves.flatMap { $0 })
-        for plan in layers.flatMap({ $0 }) where !started.contains(plan.name) {
-            ComposeFileStaging.removeContainerStaging(
-                projectName: plan.projectName,
-                containerName: plan.name
-            )
-        }
-    }
-
-    private static func handleInterruptedWave(
-        result: ParallelRunResult,
-        startedWaves: inout [[String]],
-        layers: [[ServicePlan]]
-    ) {
-        if !result.succeeded.isEmpty {
-            startedWaves.append(result.succeeded)
-        }
-        cleanupOrphanStaging(layers: layers, startedWaves: startedWaves)
-    }
-
 }

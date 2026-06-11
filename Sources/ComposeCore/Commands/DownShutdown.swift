@@ -104,6 +104,7 @@ package enum DownShutdown {
             )
             try await ServiceRunner.down(
                 layers: layers,
+                projectName: context.projectName,
                 onRemoved: { print($0) },
                 progress: progress,
                 execution: execution
@@ -112,6 +113,7 @@ package enum DownShutdown {
         }
         try await ServiceRunner.down(
             containers: containers,
+            projectName: context.projectName,
             onRemoved: { print($0) },
             progress: progress,
             execution: execution

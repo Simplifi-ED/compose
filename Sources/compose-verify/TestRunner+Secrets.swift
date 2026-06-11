@@ -13,6 +13,8 @@ extension TestRunner {
         try runSecretsConfigExportTests()
         try runSecretsMergeTests()
         try runSecretsStagingTests()
+        try runRunStagingCleanupTests()
+        try runDownPartialStagingTests()
     }
 
     mutating func runSecretsSpikeTests() throws {

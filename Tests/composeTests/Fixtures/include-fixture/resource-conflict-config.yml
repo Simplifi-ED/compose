@@ -1,0 +1,5 @@
+include: resource-conflict-config-child.yml
+
+configs:
+  shared_config:
+    file: ./parent-config.txt

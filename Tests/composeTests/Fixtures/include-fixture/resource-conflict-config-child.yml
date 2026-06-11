@@ -1,0 +1,3 @@
+configs:
+  shared_config:
+    file: ./child-config.txt

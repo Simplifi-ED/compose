@@ -7,24 +7,33 @@ enum ComposeIncludeResourceMerge {
         includePath: String,
         definedIn: String
     ) throws {
-        var resourceMaps: [ComposeFileMountKind: [String: ComposeFileResource]] = [
-            .config: model.configs,
-            .secret: model.secrets
-        ]
+        var configs = model.configs
+        var secrets = model.secrets
         for kind in ComposeFileMountKind.allCases {
-            try mergeResources(
-                into: &resourceMaps[kind]!,
-                from: included.resources(for: kind),
-                kind: kind,
-                includePath: includePath,
-                definedIn: definedIn
-            )
+            switch kind {
+            case .config:
+                try mergeResources(
+                    into: &configs,
+                    from: included.configs,
+                    kind: kind,
+                    includePath: includePath,
+                    definedIn: definedIn
+                )
+            case .secret:
+                try mergeResources(
+                    into: &secrets,
+                    from: included.secrets,
+                    kind: kind,
+                    includePath: includePath,
+                    definedIn: definedIn
+                )
+            }
         }
         model = ComposeFile(
             name: model.name,
             services: model.services,
-            configs: resourceMaps[.config]!,
-            secrets: resourceMaps[.secret]!
+            configs: configs,
+            secrets: secrets
         )
     }
 

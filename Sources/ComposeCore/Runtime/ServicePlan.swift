@@ -9,6 +9,8 @@ public struct ServicePlan: Sendable, Equatable {
     public let fileMounts: [PlannedFileMount]
     /// 1-based replica index within the service; one-off `run` plans stay at 1.
     public let replicaIndex: Int
+    /// When true, remove staged config/secret copies after a successful foreground `run`.
+    public let removeContainerAfterExit: Bool
 
     public init(
         serviceName: String,
@@ -17,7 +19,8 @@ public struct ServicePlan: Sendable, Equatable {
         image: String = "",
         runArguments: [String],
         fileMounts: [PlannedFileMount] = [],
-        replicaIndex: Int = 1
+        replicaIndex: Int = 1,
+        removeContainerAfterExit: Bool = false
     ) {
         self.serviceName = serviceName
         self.name = name
@@ -26,6 +29,7 @@ public struct ServicePlan: Sendable, Equatable {
         self.runArguments = runArguments
         self.fileMounts = fileMounts
         self.replicaIndex = replicaIndex
+        self.removeContainerAfterExit = removeContainerAfterExit
     }
 }
 

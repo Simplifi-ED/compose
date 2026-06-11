@@ -42,7 +42,8 @@ extension ServicePlanner {
                 name: name,
                 image: image,
                 runArguments: arguments,
-                command: command
+                command: command,
+                removeContainerAfterExit: options.removeContainer
             )
         )
     }
@@ -88,6 +89,7 @@ extension ServicePlanner {
         let command: [String]
         var containerNumber: Int = 1
         var replicaIndex: Int = 1
+        var removeContainerAfterExit: Bool = false
     }
 
     private static func assemblePlan(_ assembly: PlanAssembly) throws -> ServicePlan {
@@ -119,7 +121,8 @@ extension ServicePlanner {
             image: assembly.image,
             runArguments: arguments,
             fileMounts: fileMounts,
-            replicaIndex: assembly.replicaIndex
+            replicaIndex: assembly.replicaIndex,
+            removeContainerAfterExit: assembly.removeContainerAfterExit
         )
     }
 }

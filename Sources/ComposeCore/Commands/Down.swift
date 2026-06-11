@@ -102,7 +102,6 @@ public struct Down: AsyncParsableCommand {
             lines: orchestration.lines,
             interruptedMessage: "Shutdown interrupted. Some containers may still be running."
         ) {
-            defer { ComposeFileStaging.removeProjectStaging(projectName: context.projectName) }
             try await DownShutdown.tearDownContainers(
                 context: context,
                 containers: containers,
@@ -115,6 +114,7 @@ public struct Down: AsyncParsableCommand {
             } else if shouldPurgeVolumes {
                 BindMountPurge.warnPurgeSkipped(DownShutdown.volumePurgeSkipReason(context: context))
             }
+            ComposeFileStaging.removeProjectStaging(projectName: context.projectName)
         }
     }
 

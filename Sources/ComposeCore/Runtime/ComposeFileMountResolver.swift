@@ -18,12 +18,8 @@ package enum ComposeFileMountResolver {
                     definitions: definitions,
                     kind: kind
                 )
-                try validateUniqueTargets(
-                    serviceName: serviceName,
-                    mounts: mounts,
-                    kind: kind
-                )
             }
+            try validateUniqueTargets(serviceName: serviceName, service: service)
         }
         for kind in ComposeFileMountKind.allCases {
             for definition in composeFile.resources(for: kind).values {
@@ -59,17 +55,18 @@ package enum ComposeFileMountResolver {
 
     private static func validateUniqueTargets(
         serviceName: String,
-        mounts: [ComposeServiceMount],
-        kind: ComposeFileMountKind
+        service: ComposeService
     ) throws {
         var seenTargets: Set<String> = []
-        for mount in mounts {
-            let target = mount.resolvedTarget(kind: kind)
-            guard seenTargets.insert(target).inserted else {
-                throw ComposeError.invalidField(
-                    kind.rootFieldName,
-                    reason: "service '\(serviceName)' maps multiple \(kind.rootFieldName) to '\(target)'"
-                )
+        for kind in ComposeFileMountKind.allCases {
+            for mount in service.mounts(for: kind) {
+                let target = mount.resolvedTarget(kind: kind)
+                guard seenTargets.insert(target).inserted else {
+                    throw ComposeError.invalidField(
+                        kind.rootFieldName,
+                        reason: "service '\(serviceName)' maps multiple configs/secrets to '\(target)'"
+                    )
+                }
             }
         }
     }

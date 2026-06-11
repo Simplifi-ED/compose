@@ -29,7 +29,11 @@ extension TestRunner {
                 return false
             },
             body: {
-                _ = try ComposeParser.parse(fileURL: Self.fixtureURL("missing-config-compose.yml"))
+                _ = try ComposeConfigResolver.resolve(
+                    fileURLs: [Self.fixtureURL("missing-config-compose.yml")],
+                    activeProfiles: [],
+                    scaleOverrides: [:]
+                )
             }
         )
 
@@ -58,6 +62,22 @@ extension TestRunner {
         for kind in ComposeFileMountKind.allCases {
             try runFileMountHardeningTests(for: kind)
         }
+        try runCrossKindDuplicateTargetTest()
+    }
+
+    private mutating func runCrossKindDuplicateTargetTest() throws {
+        expectComposeError(
+            "cross-kind duplicate target",
+            matching: {
+                if case .invalidField("secrets", let reason) = $0 {
+                    return reason.contains("maps multiple configs/secrets to '/run/shared/mount'")
+                }
+                return false
+            },
+            body: {
+                _ = try ComposeParser.parse(fileURL: Self.fixtureURL("cross-kind-target-compose.yml"))
+            }
+        )
     }
 
     mutating func runStartupLayersMountValidationTests() throws {
@@ -107,7 +127,7 @@ extension TestRunner {
         expectInvalidResourceField(
             "duplicate \(prefix) target",
             field: prefix,
-            reasonContains: "maps multiple \(prefix) to '\(sharedTarget)'",
+            reasonContains: "maps multiple configs/secrets to '\(sharedTarget)'",
             fixture: "duplicate-\(kind == .secret ? "secret" : "config")-target-compose.yml"
         )
     }
