@@ -60,6 +60,7 @@ container compose down -f fixtures/minimal-compose.yml -p demo
 | `depends_on` (`service_started` / `service_healthy`) | supported | health via compose-side exec probe |
 | `healthcheck` | supported | exec/CMD probes |
 | `profiles`, `deploy.replicas`, `name:` | supported | `--scale` overrides replicas |
+| `develop.watch` (`sync`, `sync+restart`) | supported | `compose watch` after `up`; macOS FSEvents |
 - `configs` / `secrets` (local `file:` definitions, service refs, staged read-only mounts) | supported | `compose config` shows paths/targets only |
 | `-f` merge, auto-discovery, `COMPOSE_FILE`, `include:` | supported | see sections below |
 | `build`, networks, named volumes, user `volumes:` `:ro`, `service_completed_successfully` | not supported | v1 deferred |
@@ -80,7 +81,7 @@ container compose down -f fixtures/minimal-compose.yml -p demo
 - Opt-in `--remove-orphans` on `up` and `down` removes project containers whose service is missing from the compose file or not in the active profile set
 - `down -v` / `down --volumes` removes project-local bind-mount host paths declared in the compose file (see [Workspace hygiene](#workspace-hygiene))
 - Container labels for project tracking (`com.docker.compose.project`, `com.docker.compose.service`)
-- `container compose ps` (list project containers), `container compose top` (live CPU/memory stats stream), `container compose run` (one-off foreground container from a service definition), and `container compose config` (parse and print the resolved compose file without starting containers)
+- `container compose ps` (list project containers), `container compose top` (live CPU/memory stats stream), `container compose run` (one-off foreground container from a service definition), `container compose config` (parse and print the resolved compose file without starting containers), and `container compose watch` (sync local file changes into running containers)
 
 Not supported yet: `depends_on` condition `service_completed_successfully`, networks, named volumes, volume drivers, user `volumes:` read-only suffix (`:ro`), external `configs`/`secrets` (`external: true`), `build`, YAML `extends`, `${VAR:+replacement}` / `${VAR?error}` forms, unbraced `$VAR` interpolation, `COMPOSE_PROFILES` environment variable.
 
@@ -215,6 +216,38 @@ container compose up --scale web=3 --parallel 2   # 3 web replicas, two-at-a-tim
 
 - `compose logs` and `up --attach` prefix each replica with its container name when multiple replicas share a service; single-replica services keep the service name prefix.
 
+### Develop watch
+
+`develop.watch` rules sync host file changes into running containers (FSEvents on macOS). Run `compose up` first, then `compose watch` in another terminal.
+
+```yaml
+services:
+  web:
+    image: docker.io/library/nginx:1.27.3
+    develop:
+      watch:
+        - action: sync
+          path: ./html
+          target: /usr/share/nginx/html
+          initial_sync: true
+          ignore:
+            - node_modules/
+        - action: sync+restart
+          path: ./conf/default.conf
+          target: /etc/nginx/conf.d/default.conf
+```
+
+```bash
+container compose up -f docker-compose.yml -p demo
+container compose watch -f docker-compose.yml -p demo          # all profile-active watched services
+container compose watch -f docker-compose.yml -p demo web      # one service
+```
+
+- **Actions:** `sync` copies changed files via `ContainerClient.copyIn`; `sync+restart` syncs then recreates only that service's containers (all replicas). `rebuild` errors (`build:` out of scope).
+- **Path sandbox:** relative watch paths must stay under the compose file directory; absolute paths are allowed when explicitly listed (same as bind mounts).
+- **Replicas:** changes sync to every running replica of the service.
+- **Interrupt:** Ctrl+C stops watching; containers keep running (same as `logs -f`).
+
 ### Interrupt handling
 
 Ctrl+C (SIGINT) or SIGTERM during long-running commands is handled gracefully:
@@ -222,6 +255,7 @@ Ctrl+C (SIGINT) or SIGTERM during long-running commands is handled gracefully:
 | Command | Behavior |
 |---------|----------|
 | `logs -f` | Stops following logs; containers keep running |
+| `watch` | Stops file monitors; containers keep running |
 | `up` (mid-wave) | Stops scheduling new waves; already-started containers keep running (no rollback) |
 | `up --attach` | SIGTERM project containers, wait `-t` seconds (default 10), then SIGKILL |
 | `exec` | SIGTERM project containers, wait `--timeout` seconds (default 10), then SIGKILL |

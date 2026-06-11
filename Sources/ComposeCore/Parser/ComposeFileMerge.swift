@@ -54,6 +54,7 @@ enum ComposeFileMerge {
                 override: override.secrets,
                 key: { ComposeServiceMountDecoder.mergeKey(for: $0) }
             ),
+            develop: override.develop ?? base.develop,
             projectDirectory: override.projectDirectory ?? base.projectDirectory
         )
     }

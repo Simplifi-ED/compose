@@ -14,6 +14,7 @@ extension ComposeService: Decodable {
         case healthcheck
         case configs
         case secrets
+        case develop
     }
 
     public init(from decoder: Decoder) throws {
@@ -30,7 +31,21 @@ extension ComposeService: Decodable {
         healthcheck = try Self.decodeHealthcheck(from: container)
         configs = try Self.decodeServiceMounts(from: container, key: .configs, kind: .config)
         secrets = try Self.decodeServiceMounts(from: container, key: .secrets, kind: .secret)
+        develop = try Self.decodeDevelop(from: container)
         projectDirectory = nil
+    }
+
+    private static func decodeDevelop(
+        from container: KeyedDecodingContainer<CodingKeys>
+    ) throws -> ComposeDevelop? {
+        guard container.contains(.develop) else { return nil }
+        do {
+            return try container.decode(ComposeDevelop.self, forKey: .develop)
+        } catch let error as ComposeError {
+            throw error
+        } catch {
+            throw ComposeError.invalidField("develop", reason: "expected a map with a watch list")
+        }
     }
 
     private static func decodeServiceMounts(

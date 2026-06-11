@@ -53,6 +53,7 @@ extension ComposeService: Encodable {
         case healthcheck
         case configs
         case secrets
+        case develop
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -77,6 +78,9 @@ extension ComposeService: Encodable {
             try container.encode(deploy, forKey: .deploy)
         }
         try container.encodeIfPresent(healthcheck, forKey: .healthcheck)
+        if let develop, !develop.watch.isEmpty {
+            try container.encode(develop, forKey: .develop)
+        }
         for kind in ComposeFileMountKind.allCases {
             let serviceMounts = mounts(for: kind)
             if !serviceMounts.isEmpty {

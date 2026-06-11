@@ -1,0 +1,7 @@
+services:
+  web:
+    image: docker.io/library/nginx:1.27.3
+    develop:
+      watch:
+        - action: rebuild
+          path: ./src

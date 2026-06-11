@@ -1,0 +1,7 @@
+services:
+  web:
+    develop:
+      watch:
+        - action: sync+restart
+          path: ./override-html
+          target: /app/html
