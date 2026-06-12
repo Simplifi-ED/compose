@@ -22,7 +22,7 @@ dist:
 smoke:
 	./scripts/smoke-test.sh
 
-smoke-volumes:
+smoke-volumes: ## install plugin + live :ro/:z bind-mount runtime checks
 	bash ./scripts/install.sh
 	bash ./scripts/smoke-volume-mounts.sh
 

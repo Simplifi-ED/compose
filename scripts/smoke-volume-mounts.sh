@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Live runtime smoke for bind-mount volume options (:ro, :z, :ro,z).
+# Exercises container run -v passthrough and compose up/exec with fixtures/volume-mount-smoke/.
+# Invoked by make smoke-volumes and scripts/smoke-test.sh (after plugin install).
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
