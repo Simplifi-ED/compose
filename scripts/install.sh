@@ -21,10 +21,16 @@ resolve_install_root() {
   fi
 
   if command -v brew >/dev/null 2>&1; then
-    local brew_container_prefix
+    local brew_container_prefix brew_container_bin
     if brew_container_prefix="$(brew --prefix container 2>/dev/null)"; then
-      printf '%s/opt/container' "$brew_container_prefix"
-      return
+      brew_container_bin="${brew_container_prefix}/bin/container"
+      # Homebrew formula sets CONTAINER_INSTALL_ROOT to opt/container; only use
+      # that layout when the active `container` binary is the Homebrew one.
+      if [[ "$CONTAINER_PATH" == "$brew_container_bin" ]] \
+        || [[ "$CONTAINER_PATH" == "${brew_container_prefix}"* ]]; then
+        printf '%s/opt/container' "$brew_container_prefix"
+        return
+      fi
     fi
   fi
 

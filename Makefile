@@ -3,7 +3,7 @@ WARNINGS_AS_ERRORS ?= true
 SWIFT ?= /usr/bin/swift
 SWIFT_FLAGS := $(if $(filter-out false,$(WARNINGS_AS_ERRORS)),-Xswiftc -warnings-as-errors)
 
-.PHONY: build lint test dist smoke clean
+.PHONY: build lint test dist smoke smoke-volumes clean
 
 build:
 	$(SWIFT) build -c $(BUILD_CONFIGURATION) $(SWIFT_FLAGS)
@@ -21,6 +21,10 @@ dist:
 
 smoke:
 	./scripts/smoke-test.sh
+
+smoke-volumes:
+	bash ./scripts/install.sh
+	bash ./scripts/smoke-volume-mounts.sh
 
 clean:
 	@rm -rf .build dist

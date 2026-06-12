@@ -167,11 +167,11 @@ public enum BindMountPurge {
     }
 
     private static func purgeableHostPath(for volume: String, relativeTo composeDirectory: URL) throws -> String? {
-        let (hostPath, _) = try BindMountPathResolver.parseVolumeSpec(volume)
-        guard !hostPath.hasPrefix("/") else {
+        let spec = try ComposeBindingKeys.parseVolumeSpec(volume)
+        guard !spec.hostPath.hasPrefix("/") else {
             return nil
         }
-        switch try BindMountPathResolver.resolveHostPath(hostPath, relativeTo: composeDirectory) {
+        switch try BindMountPathResolver.resolveHostPath(spec.hostPath, relativeTo: composeDirectory) {
         case .projectRelative(let url):
             return url.path
         case .absoluteExternal:

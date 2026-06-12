@@ -6,38 +6,6 @@ package enum BindMountPathResolver {
         case absoluteExternal(URL)
     }
 
-    static func parseVolumeSpec(_ volume: String) throws -> (hostPath: String, containerPath: String) {
-        let trimmed = volume.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else {
-            throw ComposeError.unsupportedVolume(volume)
-        }
-
-        let parts = trimmed.split(separator: ":", omittingEmptySubsequences: false)
-        if parts.count == 3 {
-            throw ComposeError.unsupportedVolumeOption(volume)
-        }
-        guard parts.count == 2 else {
-            throw ComposeError.unsupportedVolume(volume)
-        }
-
-        let hostPath = String(parts[0])
-        let containerPath = String(parts[1])
-
-        guard !hostPath.isEmpty, !containerPath.isEmpty else {
-            throw ComposeError.unsupportedVolume(volume)
-        }
-        guard containerPath.hasPrefix("/") else {
-            throw ComposeError.unsupportedVolume(volume)
-        }
-
-        let isBindMountSource = hostPath.contains("/") || hostPath == "." || hostPath == ".."
-        guard isBindMountSource else {
-            throw ComposeError.unsupportedNamedVolume(volume)
-        }
-
-        return (hostPath, containerPath)
-    }
-
     package static func resolveHostPath(
         _ hostPath: String,
         relativeTo composeDirectory: URL,

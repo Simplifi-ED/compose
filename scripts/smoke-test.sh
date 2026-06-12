@@ -49,6 +49,9 @@ if [[ "${SKIP_KERNEL_CHECK:-0}" != "1" ]]; then
   fi
 fi
 
+echo "==> Volume mount option runtime smoke (:ro, :z, :ro,z)..."
+bash "$ROOT_DIR/scripts/smoke-volume-mounts.sh"
+
 echo "==> Starting compose project..."
 container compose up -f "$COMPOSE_FILE" -p "$PROJECT_NAME"
 

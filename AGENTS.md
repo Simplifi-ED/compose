@@ -15,7 +15,7 @@ You are building a **Minimal Real Compose Plugin**—NOT a generic orchestration
 - Project naming: `-p`, `COMPOSE_PROJECT_NAME`, compose `name:`, first-file parent directory [1].
 - Instantiating and mapping configuration directly into Apple's programmatic `ContainerCommands` API [1].
 - Basic container lifecycles: Starting (via `ContainerRun`) and Stopping (via `ContainerStop`) [1].
-- Attributes to map: `image`, `command`, `environment`, standard host-to-container `ports`, short-syntax bind-mount `volumes` (`host:container`), short-form `depends_on` (list of service names), long-form `depends_on` with `condition: service_started` / `service_healthy`, `healthcheck` (`test`, `interval`, `timeout`, `retries`, `start_period`), `profiles`, and `deploy.replicas` [1].
+- Attributes to map: `image`, `command`, `environment`, standard host-to-container `ports`, short-syntax bind-mount `volumes` (`host:container`, `host:container:ro`, comma options such as `host:container:ro,z`), short-form `depends_on` (list of service names), long-form `depends_on` with `condition: service_started` / `service_healthy`, `healthcheck` (`test`, `interval`, `timeout`, `retries`, `start_period`), `profiles`, and `deploy.replicas` [1].
 - Health-gated startup: between topological waves, wait for `service_started` (runtime `running`) or `service_healthy` (compose-side probe via `createProcess` — container 1.0.0 has no native per-container health on `ContainerSnapshot`) [1].
 - Service scaling: `deploy.replicas` and `up --scale SERVICE=COUNT` (CLI wins) with uniform `{project}_{service}_{index}` container naming [1].
 - Dependency-aware startup ordering: topological sort with parallel waves via structured concurrency [1].
@@ -33,7 +33,7 @@ You are building a **Minimal Real Compose Plugin**—NOT a generic orchestration
 ### **Out of Scope (DO NOT CODE):**
 
 - Custom bridging networks, overlay networks, or advanced routing [1].
-- Named volume declarations, volume drivers, user `volumes:` `:ro` suffixes, and root-level `volumes:` blocks [1].
+- Named volume declarations, volume drivers, and root-level `volumes:` blocks [1].
 - External secret/config managers (`external: true`, Vault, cloud SM) [1].
 - `depends_on` condition `service_completed_successfully`, restart policies, and HTTP health checks beyond exec/CMD probes [1].
 - Cross-arch `build.platform` without native translation; multi-stage cache export to remote registries; `develop.watch` `rebuild` action [1].

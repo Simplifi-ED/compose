@@ -422,7 +422,7 @@ Exit codes: `0` = all services stopped cleanly · `130` = SIGINT · `143` = SIGT
 | Field | Status |
 |-------|--------|
 | `image`, `command`, `ports`, `environment` | ✅ |
-| `volumes` (bind mounts) | ✅ |
+| `volumes` (bind mounts, including `:ro` and `:ro,z`) | ✅ |
 | `depends_on` (list and `service_healthy`) | ✅ |
 | `healthcheck` | ✅ |
 | `profiles`, `deploy.replicas` | ✅ |
@@ -431,7 +431,7 @@ Exit codes: `0` = all services stopped cleanly · `130` = SIGINT · `143` = SIGT
 | `-f` merge, `include:`, `COMPOSE_FILE` | ✅ |
 | `build` (`context`, `dockerfile`, `args`, `target`) | ✅ |
 | networks, named volumes | ❌ v1 deferred |
-| `volumes:` `:ro`, `service_completed_successfully` | ❌ v1 deferred |
+| `service_completed_successfully` | ❌ v1 deferred |
 | `COMPOSE_PROFILES` env var | ❌ v1 deferred |
 
 ---

@@ -1,0 +1,6 @@
+services:
+  web:
+    image: docker.io/library/alpine:3.18
+    command: sleep 300
+    volumes:
+      - "./config:/mnt/config:ro"
