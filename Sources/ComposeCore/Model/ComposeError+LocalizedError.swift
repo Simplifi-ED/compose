@@ -124,6 +124,15 @@ extension ComposeError {
         case .serviceStartTimeout(let dependency, let container):
             return "Service '\(dependency)' didn't start in time (container '\(container)'). "
                 + "Check logs with compose logs \(dependency)."
+        case .serviceCompletedUnsuccessfully(let dependency, let container, let exitCode):
+            return "Service '\(dependency)' exited with code \(exitCode) (container '\(container)'). "
+                + "Check logs with compose logs \(dependency)."
+        case .serviceCompletionNeverAppeared(let dependency, let container):
+            return "Service '\(dependency)' never started (container '\(container)'). "
+                + "service_completed_successfully requires the dependency to run and exit."
+        case .serviceCompletionExitTimeout(let dependency, let container):
+            return "Service '\(dependency)' didn't finish exiting in time (container '\(container)'). "
+                + "Check logs with compose logs \(dependency)."
         case .unsupportedExternalResource(let kind):
             return "External \(kind.rootFieldName) aren't supported. Use a local file: path with external: false."
         case .undefinedResource(let name, let kind):

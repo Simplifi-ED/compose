@@ -48,6 +48,55 @@ extension TestRunner {
         expect(rollback.isEmpty, "successful health orchestration does not roll back")
 
         runHealthOrchestrationRollbackTests(dbPlan: dbPlan, webPlan: webPlan, context: context)
+        runCompletedDependsOrchestrationRollbackTests()
+    }
+
+    mutating func runCompletedDependsOrchestrationRollbackTests() {
+        let migratePlan = ServicePlan(serviceName: "migrate", name: "demo_migrate_1", runArguments: [])
+        let appPlan = ServicePlan(serviceName: "app", name: "demo_app_1", runArguments: [])
+        let context = Self.completedDependsContext()
+        let rollbackRecorder = HealthOrchestrationRecorder()
+        let hooks = Self.completedDependsFailureHooks(recorder: rollbackRecorder)
+
+        let completionFailed = blockingAwait {
+            do {
+                try await ServiceRunner.up(
+                    layers: [[migratePlan], [appPlan]],
+                    healthContext: context,
+                    hooks: hooks
+                )
+                return false
+            } catch ComposeError.serviceCompletedUnsuccessfully {
+                return true
+            } catch {
+                return false
+            }
+        }
+        let rolledBack = blockingAwait { await rollbackRecorder.rollbackSnapshot() }
+        expect(completionFailed, "completion failure fails orchestration")
+        expect(rolledBack == ["demo_migrate_1"], "completion failure rolls back prior wave")
+    }
+
+    private static func completedDependsFailureHooks(
+        recorder: HealthOrchestrationRecorder
+    ) -> ServiceRunner.UpOperationHooks {
+        ServiceRunner.UpOperationHooks(
+            runContainer: { plan in
+                await recorder.recordStarted(plan.name)
+            },
+            rollbackTeardown: { name in
+                await recorder.recordRollback(name)
+            },
+            waitForDependencies: { gates, waitContext in
+                try await HealthWait.waitForDependencies(
+                    gates: gates,
+                    context: waitContext,
+                    status: { _ in .running },
+                    runProcess: { _, _, _ in 0 },
+                    waitForExit: { _ in 1 }
+                )
+            }
+        )
     }
 
     private mutating func runHealthOrchestrationRollbackTests(

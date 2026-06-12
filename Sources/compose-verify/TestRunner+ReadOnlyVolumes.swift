@@ -24,7 +24,7 @@ extension TestRunner {
         expect(readOnlyVolume == "\(expectedDataPath):/mnt/data:ro", "volume flag read-only bind mount")
 
         let readOnlyService = ComposeService(
-            image: "docker.io/library/alpine:3.20",
+            image: "docker.io/library/alpine:3.24",
             command: .string("sleep 300"),
             ports: [],
             volumes: ["./data:/mnt/data:ro"],
@@ -189,7 +189,7 @@ extension TestRunner {
             reversedVolume == "\(expectedDataPath):/mnt/data:z,ro",
             "volume flag preserves comma option order"
         )
-        _ = try Application.ContainerRun.parse(["-v", commaVolume, "docker.io/library/alpine:3.20"])
+        _ = try Application.ContainerRun.parse(["-v", commaVolume, "docker.io/library/alpine:3.24"])
 
         expectComposeError(
             "unsupported comma volume option",

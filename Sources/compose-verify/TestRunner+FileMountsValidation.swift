@@ -88,7 +88,7 @@ extension TestRunner {
     mutating func runStartupLayersMountValidationTests() throws {
         let fixturesDirectory = Self.fixtureURL("file-mounts-compose.yml").deletingLastPathComponent()
         let service = ComposeService(
-            image: "docker.io/library/alpine:3.20",
+            image: "docker.io/library/alpine:3.24",
             command: nil,
             ports: [],
             environment: nil,

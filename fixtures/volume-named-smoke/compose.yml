@@ -3,7 +3,7 @@ volumes:
 
 services:
   app:
-    image: docker.io/library/alpine:3.20
+    image: docker.io/library/alpine:3.24
     command: sleep 300
     volumes:
       - appdata:/data

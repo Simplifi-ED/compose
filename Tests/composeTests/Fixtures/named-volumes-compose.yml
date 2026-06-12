@@ -4,12 +4,12 @@ volumes:
 
 services:
   client:
-    image: docker.io/library/alpine:3.20
+    image: docker.io/library/alpine:3.24
     command: sleep 300
     volumes:
       - mydata:/app/data
   server:
-    image: docker.io/library/alpine:3.20
+    image: docker.io/library/alpine:3.24
     command: sleep 300
     volumes:
       - mydata:/var/data

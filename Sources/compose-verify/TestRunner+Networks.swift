@@ -102,7 +102,7 @@ extension TestRunner {
         expect(flags == ["--network", "demo_backend"], "network flags for member service")
 
         let detached = ComposeService(
-            image: "docker.io/library/alpine:3.20",
+            image: "docker.io/library/alpine:3.24",
             command: nil,
             ports: [],
             environment: nil,

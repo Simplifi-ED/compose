@@ -116,7 +116,7 @@ extension TestRunner {
 
 private func watchResilienceSnapshot(project: String, service: String) -> ContainerSnapshot {
     let image = ImageDescription(
-        reference: "docker.io/library/alpine:3.20",
+        reference: "docker.io/library/alpine:3.24",
         descriptor: Descriptor(
             mediaType: "application/vnd.oci.image.manifest.v1+json",
             digest: "sha256:" + String(repeating: "0", count: 64),

@@ -7,7 +7,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 COMPOSE_FILE="$ROOT_DIR/fixtures/volume-mount-smoke/compose.yml"
 PROJECT_NAME="volume-mount-smoke"
-IMAGE="docker.io/library/alpine:3.20"
+IMAGE="docker.io/library/alpine:3.24"
 DATA_DIR="$(mktemp -d)"
 
 cleanup() {

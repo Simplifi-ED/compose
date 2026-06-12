@@ -3,5 +3,5 @@ configs:
     file: ./secrets/missing-config.txt
 services:
   app:
-    image: docker.io/library/alpine:3.20
+    image: docker.io/library/alpine:3.24
     configs: [app_config]

@@ -7,6 +7,7 @@ import Foundation
 package enum HealthWait {
     package typealias StatusProvider = @Sendable (String) async throws -> RuntimeStatus?
     package typealias ProcessRunner = @Sendable (String, ProcessConfiguration, Duration) async throws -> Int32
+    package typealias ExitCodeProvider = InitExitWait.ExitCodeProvider
 
     private static let defaultStartedTimeout: Duration = .seconds(60)
     private static let statusPollInterval: Duration = .milliseconds(250)
@@ -23,10 +24,22 @@ package enum HealthWait {
         context: HealthWaitContext,
         machineContext: MachineContext = .applicationSandbox,
         status: StatusProvider? = nil,
-        runProcess: ProcessRunner? = nil
+        runProcess: ProcessRunner? = nil,
+        waitForExit: ExitCodeProvider? = nil,
+        completionGateTimeout: Duration? = nil
     ) async throws {
+        let completionGateTimeout = completionGateTimeout ?? defaultStartedTimeout
         let status = status ?? HealthProbe.statusProvider(machineContext: machineContext)
         let runProcess = runProcess ?? HealthProbe.processRunner(machineContext: machineContext)
+        let waitForExit = waitForExit ?? InitExitWait.exitCodeProvider(
+            machineContext: machineContext,
+            timeout: completionGateTimeout
+        )
+        let options = DependencyWaitOptions(
+            runProcess: runProcess,
+            waitForExit: waitForExit,
+            completionGateTimeout: completionGateTimeout
+        )
         guard !gates.isEmpty else { return }
 
         let gatesByService = Dictionary(grouping: gates, by: \.dependencyService)
@@ -41,7 +54,7 @@ package enum HealthWait {
                             gate,
                             context: context,
                             status: status,
-                            runProcess: runProcess
+                            options: options
                         )
                     }
                 }
@@ -50,11 +63,17 @@ package enum HealthWait {
         }
     }
 
+    private struct DependencyWaitOptions: Sendable {
+        let runProcess: ProcessRunner
+        let waitForExit: InitExitWait.ExitCodeProvider
+        let completionGateTimeout: Duration
+    }
+
     private static func waitForGate(
         _ gate: HealthGate,
         context: HealthWaitContext,
         status: @escaping StatusProvider,
-        runProcess: @escaping ProcessRunner
+        options: DependencyWaitOptions
     ) async throws {
         for containerName in gate.containerNames {
             switch gate.condition {
@@ -76,7 +95,15 @@ package enum HealthWait {
                     dependencyService: gate.dependencyService,
                     healthcheck: healthcheck,
                     status: status,
-                    runProcess: runProcess
+                    runProcess: options.runProcess
+                )
+            case .serviceCompletedSuccessfully:
+                try await waitForCompletedSuccessfully(
+                    containerName: containerName,
+                    dependencyService: gate.dependencyService,
+                    status: status,
+                    waitForExit: options.waitForExit,
+                    completionGateTimeout: options.completionGateTimeout
                 )
             case .orderingOnly:
                 continue
@@ -100,6 +127,47 @@ package enum HealthWait {
         }
 
         throw ComposeError.serviceStartTimeout(dependency: dependencyService, container: containerName)
+    }
+
+    private static func waitForCompletedSuccessfully(
+        containerName: String,
+        dependencyService: String,
+        status: @escaping StatusProvider,
+        waitForExit: @escaping InitExitWait.ExitCodeProvider,
+        completionGateTimeout: Duration
+    ) async throws {
+        let deadline = ContinuousClock.now + completionGateTimeout
+
+        while ContinuousClock.now < deadline {
+            try Task.checkCancellation()
+            switch try await status(containerName) {
+            case .running, .stopped:
+                do {
+                    let exitCode = try await waitForExit(containerName)
+                    if exitCode == 0 {
+                        return
+                    }
+                    throw ComposeError.serviceCompletedUnsuccessfully(
+                        dependency: dependencyService,
+                        container: containerName,
+                        exitCode: exitCode
+                    )
+                } catch is InitExitWait.TimedOut {
+                    throw ComposeError.serviceCompletionExitTimeout(
+                        dependency: dependencyService,
+                        container: containerName
+                    )
+                }
+            case .stopping, .unknown, nil:
+                break
+            }
+            try await Task.sleep(for: statusPollInterval)
+        }
+
+        throw ComposeError.serviceCompletionNeverAppeared(
+            dependency: dependencyService,
+            container: containerName
+        )
     }
 
     private static func waitForHealthy(

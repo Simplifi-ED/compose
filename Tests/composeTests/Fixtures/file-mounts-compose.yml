@@ -3,7 +3,7 @@ secrets:
     file: ./secrets/db_password.txt
 services:
   app:
-    image: docker.io/library/alpine:3.20
+    image: docker.io/library/alpine:3.24
     command: ["cat", "/run/secrets/db_password"]
     secrets:
       - db_password

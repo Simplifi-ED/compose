@@ -16,6 +16,10 @@ extension Up {
     func resolveStartupPlan(machineName: String?) throws -> StartupPlan {
         let fileURLs = try projectOptions.resolvedFileURLs()
         let composeFile = try ComposeParser.parse(fileURLs: fileURLs)
+        try DependencyValidation.validateMachineMode(
+            services: composeFile.services,
+            machineName: machineName
+        )
         let projectName = try projectOptions.resolvedProjectName(
             composeFile: composeFile,
             fileURL: fileURLs[0]
@@ -36,16 +40,10 @@ extension Up {
             machineName: machineName
         )
         let plans = layers.flatMap { $0 }
-        let activeServiceNames = Set(plans.map(\.serviceName))
-        let networkPlans = try NetworkPlanning.plans(
+        let (networkPlans, volumePlans) = try resourcePlans(
             composeFile: composeFile,
             projectName: projectName,
-            activeServiceNames: activeServiceNames
-        )
-        let volumePlans = try VolumePlanning.plans(
-            composeFile: composeFile,
-            projectName: projectName,
-            activeServiceNames: activeServiceNames
+            activeServiceNames: Set(plans.map(\.serviceName))
         )
         let healthContext = HealthWaitContext(
             services: composeFile.services,
@@ -63,5 +61,23 @@ extension Up {
             plans: plans,
             healthContext: healthContext
         )
+    }
+
+    private func resourcePlans(
+        composeFile: ComposeFile,
+        projectName: String,
+        activeServiceNames: Set<String>
+    ) throws -> (networkPlans: [NetworkPlanning.Plan], volumePlans: [VolumePlanning.Plan]) {
+        let networkPlans = try NetworkPlanning.plans(
+            composeFile: composeFile,
+            projectName: projectName,
+            activeServiceNames: activeServiceNames
+        )
+        let volumePlans = try VolumePlanning.plans(
+            composeFile: composeFile,
+            projectName: projectName,
+            activeServiceNames: activeServiceNames
+        )
+        return (networkPlans, volumePlans)
     }
 }
