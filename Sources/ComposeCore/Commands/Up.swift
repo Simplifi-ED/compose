@@ -55,6 +55,7 @@ public struct Up: AsyncParsableCommand {
                     healthContext: startup.healthContext,
                     buildPlans: startup.buildPlans,
                     networkPlans: startup.networkPlans,
+                    volumePlans: startup.volumePlans,
                     machineContext: machineContext
                 )
             )
@@ -66,6 +67,7 @@ public struct Up: AsyncParsableCommand {
             LiveInput(
                 buildPlans: startup.buildPlans,
                 networkPlans: startup.networkPlans,
+                volumePlans: startup.volumePlans,
                 projectName: startup.projectName,
                 composeFile: startup.composeFile,
                 fileURLs: startup.fileURLs,

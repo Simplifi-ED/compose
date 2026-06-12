@@ -1,0 +1,7 @@
+volumes:
+  cache: {}
+
+services:
+  web:
+    volumes:
+      - cache:/mnt/cache

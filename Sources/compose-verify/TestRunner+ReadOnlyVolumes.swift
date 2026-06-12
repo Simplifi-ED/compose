@@ -18,7 +18,8 @@ extension TestRunner {
         let expectedDataPath = fixturesDirectory.appendingPathComponent("data").standardizedFileURL.path
         let readOnlyVolume = try ServicePlanner.volumeFlag(
             for: "./data:/mnt/data:ro",
-            relativeTo: fixturesDirectory
+            relativeTo: fixturesDirectory,
+            projectName: "demo"
         )
         expect(readOnlyVolume == "\(expectedDataPath):/mnt/data:ro", "volume flag read-only bind mount")
 
@@ -171,7 +172,8 @@ extension TestRunner {
         let expectedDataPath = fixturesDirectory.appendingPathComponent("data").standardizedFileURL.path
         let commaVolume = try ServicePlanner.volumeFlag(
             for: "./data:/mnt/data:ro,z",
-            relativeTo: fixturesDirectory
+            relativeTo: fixturesDirectory,
+            projectName: "demo"
         )
         expect(
             commaVolume == "\(expectedDataPath):/mnt/data:ro,z",
@@ -180,7 +182,8 @@ extension TestRunner {
 
         let reversedVolume = try ServicePlanner.volumeFlag(
             for: "./data:/mnt/data:z,ro",
-            relativeTo: fixturesDirectory
+            relativeTo: fixturesDirectory,
+            projectName: "demo"
         )
         expect(
             reversedVolume == "\(expectedDataPath):/mnt/data:z,ro",
@@ -194,7 +197,8 @@ extension TestRunner {
             body: {
                 _ = try ServicePlanner.volumeFlag(
                     for: "./data:/mnt/data:ro,invalid",
-                    relativeTo: fixturesDirectory
+                    relativeTo: fixturesDirectory,
+                    projectName: "demo"
                 )
             }
         )

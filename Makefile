@@ -3,7 +3,7 @@ WARNINGS_AS_ERRORS ?= true
 SWIFT ?= /usr/bin/swift
 SWIFT_FLAGS := $(if $(filter-out false,$(WARNINGS_AS_ERRORS)),-Xswiftc -warnings-as-errors)
 
-.PHONY: build lint test dist smoke smoke-volumes smoke-networks clean
+.PHONY: build lint test dist smoke smoke-volumes smoke-volumes-named smoke-networks clean
 
 build:
 	$(SWIFT) build -c $(BUILD_CONFIGURATION) $(SWIFT_FLAGS)
@@ -29,6 +29,10 @@ smoke-volumes: ## install plugin + live :ro/:z bind-mount runtime checks
 smoke-networks: ## install plugin + live compose networks runtime checks (macOS 26+)
 	bash ./scripts/install.sh
 	bash ./scripts/smoke-networks.sh
+
+smoke-volumes-named: ## install plugin + live compose named volume runtime checks
+	bash ./scripts/install.sh
+	bash ./scripts/smoke-named-volumes.sh
 
 clean:
 	@rm -rf .build dist

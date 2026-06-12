@@ -191,7 +191,8 @@ extension TestRunner {
             body: {
                 _ = try ServicePlanner.volumeFlag(
                     for: "../../outside:/mnt/outside",
-                    relativeTo: fixturesDirectory
+                    relativeTo: fixturesDirectory,
+                    projectName: "demo"
                 )
             }
         )
@@ -203,7 +204,8 @@ extension TestRunner {
         )
         let absoluteVolume = try ServicePlanner.volumeFlag(
             for: "\(hostPath):/mnt/data",
-            relativeTo: fixturesDirectory
+            relativeTo: fixturesDirectory,
+            projectName: "demo"
         )
         expect(absoluteVolume == "/tmp:/mnt/data", "substitution-expanded absolute volume allowed")
     }

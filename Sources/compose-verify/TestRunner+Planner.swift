@@ -141,16 +141,25 @@ extension TestRunner {
     }
 
     mutating func runPlannerVolumeTests(fixturesDirectory: URL) throws {
-        let absoluteVolume = try ServicePlanner.volumeFlag(for: "/tmp:/mnt/tmp", relativeTo: fixturesDirectory)
+        let absoluteVolume = try ServicePlanner.volumeFlag(
+            for: "/tmp:/mnt/tmp",
+            relativeTo: fixturesDirectory,
+            projectName: "demo"
+        )
         expect(absoluteVolume == "/tmp:/mnt/tmp", "volume flag absolute host path")
 
-        let relativeVolume = try ServicePlanner.volumeFlag(for: "./data:/mnt/data", relativeTo: fixturesDirectory)
+        let relativeVolume = try ServicePlanner.volumeFlag(
+            for: "./data:/mnt/data",
+            relativeTo: fixturesDirectory,
+            projectName: "demo"
+        )
         let expectedDataPath = fixturesDirectory.appendingPathComponent("data").standardizedFileURL.path
         expect(relativeVolume == "\(expectedDataPath):/mnt/data", "volume flag relative host path")
 
         let fileVolume = try ServicePlanner.volumeFlag(
             for: "./data/sample.txt:/mnt/sample.txt",
-            relativeTo: fixturesDirectory
+            relativeTo: fixturesDirectory,
+            projectName: "demo"
         )
         let expectedFilePath = fixturesDirectory.appendingPathComponent("data/sample.txt").standardizedFileURL.path
         expect(fileVolume == "\(expectedFilePath):/mnt/sample.txt", "volume flag file bind mount")
@@ -178,6 +187,13 @@ extension TestRunner {
         expect(volumePlan.runArguments.contains("-v"), "planner volume flag")
         expect(volumePlan.runArguments.contains("\(expectedDataPath):/mnt/data"), "planner resolved volume")
         _ = try Application.ContainerRun.parse(volumePlan.runArguments)
+
+        let namedVolume = try ServicePlanner.volumeFlag(
+            for: "mydata:/app/data",
+            relativeTo: fixturesDirectory,
+            projectName: "demo"
+        )
+        expect(namedVolume == "demo_mydata:/app/data", "named volume maps to project-scoped runtime name")
     }
 
     mutating func runPlannerVolumeErrorTests(fixturesDirectory: URL) throws {
@@ -185,28 +201,33 @@ extension TestRunner {
             "invalid volume syntax",
             matching: { if case .unsupportedVolume = $0 { true } else { false } },
             body: {
-                _ = try ServicePlanner.volumeFlag(for: "foo", relativeTo: fixturesDirectory)
-            }
-        )
-        expectComposeError(
-            "named volume",
-            matching: { if case .unsupportedNamedVolume = $0 { true } else { false } },
-            body: {
-                _ = try ServicePlanner.volumeFlag(for: "mydata:/app", relativeTo: fixturesDirectory)
+                _ = try ServicePlanner.volumeFlag(
+                    for: "foo",
+                    relativeTo: fixturesDirectory,
+                    projectName: "demo"
+                )
             }
         )
         expectComposeError(
             "volume rw suffix",
             matching: { if case .unsupportedVolumeOption = $0 { true } else { false } },
             body: {
-                _ = try ServicePlanner.volumeFlag(for: "./data:/app:rw", relativeTo: fixturesDirectory)
+                _ = try ServicePlanner.volumeFlag(
+                    for: "./data:/app:rw",
+                    relativeTo: fixturesDirectory,
+                    projectName: "demo"
+                )
             }
         )
         expectComposeError(
             "missing host path",
             matching: { if case .volumeHostPathNotFound = $0 { true } else { false } },
             body: {
-                _ = try ServicePlanner.volumeFlag(for: "./missing-dir:/mnt", relativeTo: fixturesDirectory)
+                _ = try ServicePlanner.volumeFlag(
+                    for: "./missing-dir:/mnt",
+                    relativeTo: fixturesDirectory,
+                    projectName: "demo"
+                )
             }
         )
     }

@@ -6,19 +6,22 @@ public struct ComposeFile: Sendable, Equatable {
     public let configs: [String: ComposeFileResource]
     public let secrets: [String: ComposeFileResource]
     public let networks: [String: ComposeNetwork]
+    public let volumes: [String: ComposeVolume]
 
     public init(
         name: String?,
         services: [String: ComposeService],
         configs: [String: ComposeFileResource] = [:],
         secrets: [String: ComposeFileResource] = [:],
-        networks: [String: ComposeNetwork] = [:]
+        networks: [String: ComposeNetwork] = [:],
+        volumes: [String: ComposeVolume] = [:]
     ) {
         self.name = name
         self.services = services
         self.configs = configs
         self.secrets = secrets
         self.networks = networks
+        self.volumes = volumes
     }
 
     /// Distinct project directories for the given services (include `defaultDirectory` as fallback root).
@@ -45,6 +48,7 @@ extension ComposeFile: Decodable {
         case configs
         case secrets
         case networks
+        case volumes
     }
 
     public init(from decoder: Decoder) throws {
@@ -54,5 +58,6 @@ extension ComposeFile: Decodable {
         configs = try ComposeFileResourceDecoder.decodeMap(from: container, forKey: .configs, kind: .config)
         secrets = try ComposeFileResourceDecoder.decodeMap(from: container, forKey: .secrets, kind: .secret)
         networks = try ComposeNetworkDecoder.decodeMap(from: container, forKey: .networks)
+        volumes = try ComposeVolumeDecoder.decodeMap(from: container, forKey: .volumes)
     }
 }

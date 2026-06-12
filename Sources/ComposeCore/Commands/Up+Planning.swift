@@ -7,6 +7,7 @@ extension Up {
         let projectName: String
         let buildPlans: [BuildRunner.Plan]
         let networkPlans: [NetworkPlanning.Plan]
+        let volumePlans: [VolumePlanning.Plan]
         let layers: [[ServicePlan]]
         let plans: [ServicePlan]
         let healthContext: HealthWaitContext
@@ -35,10 +36,16 @@ extension Up {
             machineName: machineName
         )
         let plans = layers.flatMap { $0 }
+        let activeServiceNames = Set(plans.map(\.serviceName))
         let networkPlans = try NetworkPlanning.plans(
             composeFile: composeFile,
             projectName: projectName,
-            activeServiceNames: Set(plans.map(\.serviceName))
+            activeServiceNames: activeServiceNames
+        )
+        let volumePlans = try VolumePlanning.plans(
+            composeFile: composeFile,
+            projectName: projectName,
+            activeServiceNames: activeServiceNames
         )
         let healthContext = HealthWaitContext(
             services: composeFile.services,
@@ -51,6 +58,7 @@ extension Up {
             projectName: projectName,
             buildPlans: buildPlans,
             networkPlans: networkPlans,
+            volumePlans: volumePlans,
             layers: layers,
             plans: plans,
             healthContext: healthContext

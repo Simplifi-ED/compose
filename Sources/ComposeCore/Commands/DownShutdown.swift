@@ -128,34 +128,42 @@ package enum DownShutdown {
         )
     }
 
-    /// Project networks safe to remove after teardown: networks referenced by
-    /// torn-down or still-running services, minus those still needed by running
-    /// containers. Empty without a compose file — `-p`-only down can't name
-    /// project networks. Uses the same teardown/running service scope as volume purge.
-    package static func networkRemovalPlans(
-        context: ProjectOptions.LabelCommandContext,
-        discovered: [DiscoveredContainer],
-        teardownContainers: [DiscoveredContainer]
-    ) throws -> [NetworkPlanning.Plan] {
-        guard let composeFile = context.composeFile else { return [] }
+    package struct FinishTeardownInput: Sendable {
+        package let context: ProjectOptions.LabelCommandContext
+        package let discovered: [DiscoveredContainer]
+        package let teardownContainers: [DiscoveredContainer]
+        package let shouldPurgeVolumes: Bool
+        package let bindPurgeContext: VolumePurgeContext?
+        package let machineContext: MachineContext
+    }
 
-        let teardownNames = Set(teardownContainers.map(\.name))
-        let stillRunning = discovered.filter { !teardownNames.contains($0.name) }
-        let teardownServiceNames = Set(teardownContainers.compactMap(\.serviceName))
-        let runningServiceNames = Set(stillRunning.compactMap(\.serviceName))
-        let scopedServiceNames = teardownServiceNames.union(runningServiceNames)
-
-        let allPlans = try NetworkPlanning.plans(
-            composeFile: composeFile,
-            projectName: context.projectName,
-            activeServiceNames: scopedServiceNames
+    package static func finishProjectTeardown(_ input: FinishTeardownInput) async throws {
+        if input.shouldPurgeVolumes {
+            if let bindPurgeContext = input.bindPurgeContext {
+                purgeVolumes(context: bindPurgeContext)
+            } else {
+                BindMountPurge.warnPurgeSkipped(volumePurgeSkipReason(context: input.context))
+            }
+            await VolumeRunner.removeProjectVolumes(
+                try volumeRemovalPlans(
+                    context: input.context,
+                    discovered: input.discovered,
+                    teardownContainers: input.teardownContainers
+                ),
+                projectName: input.context.projectName,
+                machineContext: input.machineContext
+            )
+        }
+        await NetworkRunner.removeProjectNetworks(
+            try networkRemovalPlans(
+                context: input.context,
+                discovered: input.discovered,
+                teardownContainers: input.teardownContainers
+            ),
+            projectName: input.context.projectName,
+            machineContext: input.machineContext
         )
-        let runningNetworkNames = Set(
-            stillRunning
-                .compactMap(\.serviceName)
-                .flatMap { composeFile.services[$0]?.networks ?? [] }
-        )
-        return allPlans.filter { !runningNetworkNames.contains($0.logicalName) }
+        ComposeFileStaging.removeProjectStaging(projectName: input.context.projectName)
     }
 
     package static func resolveShutdownLayers(

@@ -87,7 +87,8 @@ extension TestRunner {
 
         let volumeFlag = try ServicePlanner.volumeFlag(
             for: worker.volumes[0],
-            relativeTo: worker.projectDirectory(orDefault: rootURL.deletingLastPathComponent())
+            relativeTo: worker.projectDirectory(orDefault: rootURL.deletingLastPathComponent()),
+            projectName: "demo"
         )
         let expectedData = childDirectory.appendingPathComponent("data").standardizedFileURL.path
         expect(volumeFlag == "\(expectedData):/mnt/data", "relative volume resolves against included project_directory")

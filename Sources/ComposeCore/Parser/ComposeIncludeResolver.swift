@@ -16,7 +16,8 @@ enum ComposeIncludeResolver {
             services: stampServices(document.services, projectDirectory: localProjectDirectory),
             configs: ComposeFileResourceDecoder.stamp(document.configs, resolutionRoot: localProjectDirectory),
             secrets: ComposeFileResourceDecoder.stamp(document.secrets, resolutionRoot: localProjectDirectory),
-            networks: document.networks
+            networks: document.networks,
+            volumes: document.volumes
         )
 
         let hostDirectory = hostFileURL.deletingLastPathComponent().standardizedFileURL
@@ -167,7 +168,8 @@ enum ComposeIncludeResolver {
             services: services,
             configs: model.configs,
             secrets: model.secrets,
-            networks: model.networks
+            networks: model.networks,
+            volumes: model.volumes
         )
     }
 

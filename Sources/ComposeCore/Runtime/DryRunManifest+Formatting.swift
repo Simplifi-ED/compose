@@ -50,6 +50,14 @@ package enum DryRunManifestFormatting {
         "[DRY-RUN] create network \"\(name)\""
     }
 
+    package static func formatVolumeCreate(name: String) -> String {
+        "[DRY-RUN] create volume \"\(name)\""
+    }
+
+    package static func formatVolumeRemove(name: String) -> String {
+        "[DRY-RUN] remove volume \"\(name)\""
+    }
+
     package static func formatNetworkRemove(name: String) -> String {
         "[DRY-RUN] remove network \"\(name)\""
     }

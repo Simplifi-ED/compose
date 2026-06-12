@@ -31,7 +31,11 @@ enum ServiceRunMapping {
         for volume in configuration.service.volumes {
             arguments.append(contentsOf: [
                 "-v",
-                try volumeFlag(for: volume, relativeTo: configuration.composeDirectory)
+                try volumeFlag(
+                    for: volume,
+                    relativeTo: configuration.composeDirectory,
+                    projectName: configuration.projectName
+                )
             ])
         }
         arguments.append(contentsOf: try NetworkPlanning.networkFlags(
@@ -78,19 +82,32 @@ enum ServiceRunMapping {
         return "127.0.0.1:\(hostPort):\(spec.containerPort)\(spec.protocolSuffix)"
     }
 
-    static func volumeFlag(for volume: String, relativeTo composeDirectory: URL) throws -> String {
+    static func volumeFlag(
+        for volume: String,
+        relativeTo composeDirectory: URL,
+        projectName: String
+    ) throws -> String {
         let spec = try ComposeBindingKeys.parseVolumeSpec(volume)
-        let resolvedHostURL: URL
-        switch try BindMountPathResolver.resolveHostPath(spec.hostPath, relativeTo: composeDirectory) {
-        case .projectRelative(let url), .absoluteExternal(let url):
-            resolvedHostURL = url
-        }
-        let absoluteHostPath = resolvedHostURL.path
+        switch spec.source {
+        case .named(let logicalName):
+            let runtimeName = try VolumePlanning.runtimeVolumeName(
+                projectName: projectName,
+                volumeName: logicalName
+            )
+            return spec.formattedMount(mountSource: runtimeName)
+        case .bindMount(let hostPath):
+            let resolvedHostURL: URL
+            switch try BindMountPathResolver.resolveHostPath(hostPath, relativeTo: composeDirectory) {
+            case .projectRelative(let url), .absoluteExternal(let url):
+                resolvedHostURL = url
+            }
+            let absoluteHostPath = resolvedHostURL.path
 
-        guard FileManager.default.fileExists(atPath: absoluteHostPath) else {
-            throw ComposeError.volumeHostPathNotFound(path: absoluteHostPath)
-        }
+            guard FileManager.default.fileExists(atPath: absoluteHostPath) else {
+                throw ComposeError.volumeHostPathNotFound(path: absoluteHostPath)
+            }
 
-        return spec.formattedMount(resolvedHostPath: absoluteHostPath)
+            return spec.formattedMount(mountSource: absoluteHostPath)
+        }
     }
 }

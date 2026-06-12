@@ -21,7 +21,8 @@ enum ComposeFileMerge {
             services: mergedServices,
             configs: mergeResources(base: base.configs, override: override.configs),
             secrets: mergeResources(base: base.secrets, override: override.secrets),
-            networks: base.networks.merging(override.networks) { _, override in override }
+            networks: base.networks.merging(override.networks) { _, override in override },
+            volumes: base.volumes.merging(override.volumes) { _, override in override }
         )
     }
 
