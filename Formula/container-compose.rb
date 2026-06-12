@@ -26,19 +26,26 @@ class ContainerCompose < Formula
 
   def caveats
     <<~EOS
-      If plugin discovery did not succeed automatically, create a symlink manually:
+      Install with: brew install simplifi-ed/compose/container-compose
+      (Homebrew core ships a different formula also named container-compose.)
+
+      If plugin discovery did not succeed automatically, create a symlink manually.
+      Remove any existing plugin directory first — ln -sf into a directory nests
+      the symlink and leaves a stale plugin loaded:
 
       Cask or PKG install (container under /usr/local):
+        sudo rm -rf /usr/local/libexec/container-plugins/compose
         sudo mkdir -p /usr/local/libexec/container-plugins
         sudo ln -sf #{opt_libexec} /usr/local/libexec/container-plugins/compose
 
       Homebrew formula install (experimental brew install container):
+        rm -rf #{HOMEBREW_PREFIX}/opt/container/libexec/container-plugins/compose
         mkdir -p #{HOMEBREW_PREFIX}/opt/container/libexec/container-plugins
         ln -sf #{opt_libexec} #{HOMEBREW_PREFIX}/opt/container/libexec/container-plugins/compose
 
       Verify discovery with:
         container system start
-        container --help
+        container compose --help
     EOS
   end
 
@@ -74,7 +81,8 @@ class ContainerCompose < Formula
   def manual_symlink_caveats
     opoo <<~EOS
       Automatic plugin linking failed (likely a root-owned /usr/local install).
-      Run the manual symlink command shown in `brew info container-compose` with sudo.
+      Run the manual symlink commands shown in `brew info simplifi-ed/compose/container-compose`
+      with sudo. Remove /usr/local/libexec/container-plugins/compose first if it is a directory.
     EOS
   end
 end

@@ -18,18 +18,31 @@ Maintained by [Omnivya](https://www.omnivya.fr) · [Simplifi-ED](https://github.
 
 **Homebrew (recommended)**
 
+`container-compose` also exists in Homebrew core (a different project). Install from this tap using the **fully qualified** formula name:
+
 ```bash
 brew tap Simplifi-ED/compose
-brew install container-compose
-container system start
+brew trust --formula simplifi-ed/compose/container-compose
+brew install simplifi-ed/compose/container-compose
 ```
 
-Verify the plugin is registered:
+If `container` was installed via Apple's PKG/Cask to `/usr/local`, link the plugin manually. **Remove any existing plugin directory first** — `ln -sf` into an existing directory nests the symlink instead of replacing it:
+
 ```bash
+sudo rm -rf /usr/local/libexec/container-plugins/compose
+sudo mkdir -p /usr/local/libexec/container-plugins
+sudo ln -sf "$(brew --prefix container-compose)/libexec" /usr/local/libexec/container-plugins/compose
+```
+
+If `container` was installed via Homebrew (`brew install container`), use the path from `brew info container-compose` under **Caveats** instead.
+
+Start the runtime and verify the plugin (you should see `ps`, `logs`, `exec`, `config`, `watch`, etc. — not only `up`/`down`):
+
+```bash
+container system start
+container compose --help
 container --help | grep -A2 PLUGINS
 ```
-
-> If `container` was installed via a root-owned PKG to `/usr/local`, the post-install symlink may fail. Run the `sudo` symlink command shown in `brew info container-compose`.
 
 **Pre-built binary**
 
@@ -389,6 +402,8 @@ Exit codes: `0` = all services stopped cleanly · `130` = SIGINT · `143` = SIGT
 | Gatekeeper blocks the binary | `xattr -d com.apple.quarantine dist/compose/bin/compose` |
 | `compose` not listed under PLUGINS | `container system start` — then verify the symlink exists at `{INSTALL_ROOT}/libexec/container-plugins/compose` |
 | Permission denied on `/usr/local` | Use `sudo`, or use the Homebrew symlink path from `brew info container-compose` |
+| `container compose` only shows `up`/`down` | Stale plugin dir at `/usr/local/libexec/container-plugins/compose`. Run `sudo rm -rf` that path, then recreate the symlink (see Install). Confirm with `container compose --help`. |
+| `brew install container-compose` installs the wrong package | Core has a different formula. Use `brew install simplifi-ed/compose/container-compose`. |
 | Kernel / runtime error on `up` | `container system kernel set --url <kernel-tarball-url>` |
 | Build fails / builder unreachable | `container system start` — BuildKit (`buildkit`) must be running |
 | Port already in use | Change the host port in the compose file, or `container compose down -p <project>` |
