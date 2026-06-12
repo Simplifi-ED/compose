@@ -198,6 +198,18 @@ extension ComposeError {
             return "Machine mode doesn't support \(operation) yet."
         case .machineCommandFailed(let machine, let command, let exitCode):
             return "Command failed in container machine '\(machine)' (exit \(exitCode)): \(command)"
+        case .imageNotFoundLocally(let service, let reference):
+            return "Image '\(reference)' for service '\(service)' isn't in the local image store. "
+                + "Run compose up or container build to create it, then try save again."
+        case .archiveInvalid(let reason):
+            return "Invalid compose archive: \(reason)"
+        case .archiveUnsupportedVersion(let found, let supported):
+            return "Unsupported archive format version \(found). "
+                + "This compose plugin supports version \(supported). Update compose and try again."
+        case .archiveWriteFailed(let path, let underlying):
+            return "Couldn't write archive '\(path)': \(underlying.localizedDescription)"
+        case .archiveReadFailed(let path, let underlying):
+            return "Couldn't read archive '\(path)': \(underlying.localizedDescription)"
         }
     }
 
