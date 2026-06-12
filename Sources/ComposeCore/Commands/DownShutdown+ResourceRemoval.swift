@@ -1,17 +1,6 @@
 import Foundation
 
 extension DownShutdown {
-    private static func teardownScope(
-        discovered: [DiscoveredContainer],
-        teardownContainers: [DiscoveredContainer]
-    ) -> (stillRunning: [DiscoveredContainer], scopedServiceNames: Set<String>) {
-        let teardownNames = Set(teardownContainers.map(\.name))
-        let stillRunning = discovered.filter { !teardownNames.contains($0.name) }
-        let teardownServiceNames = Set(teardownContainers.compactMap(\.serviceName))
-        let runningServiceNames = Set(stillRunning.compactMap(\.serviceName))
-        return (stillRunning, teardownServiceNames.union(runningServiceNames))
-    }
-
     private struct ResourceRemovalParameters<Plan> {
         let makePlans: (ComposeFile, String, Set<String>) throws -> [Plan]
         let logicalName: (Plan) -> String
@@ -26,13 +15,17 @@ extension DownShutdown {
     ) throws -> [Plan] {
         guard let composeFile = context.composeFile else { return [] }
 
-        let (stillRunning, scopedServiceNames) = teardownScope(
+        let scope = DownShutdown.teardownScope(
             discovered: discovered,
             teardownContainers: teardownContainers
         )
-        let allPlans = try parameters.makePlans(composeFile, context.projectName, scopedServiceNames)
+        let allPlans = try parameters.makePlans(
+            composeFile,
+            context.projectName,
+            scope.scopedServiceNames
+        )
         let stillInUse = Set(
-            stillRunning
+            scope.stillRunning
                 .compactMap(\.serviceName)
                 .flatMap { composeFile.services[$0].map(parameters.referencedByService) ?? [] }
         )

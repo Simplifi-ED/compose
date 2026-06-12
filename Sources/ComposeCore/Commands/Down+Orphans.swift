@@ -1,65 +1,39 @@
 import Foundation
 
 extension Down {
-    func downOrphanNames(
+    struct ContainerResolution: Sendable {
+        let containers: [DiscoveredContainer]
+        let orphanNames: Set<String>
+    }
+
+    func resolveContainersForShutdown(
         discovered: [DiscoveredContainer],
         selected: [DiscoveredContainer],
         context: ProjectOptions.LabelCommandContext
-    ) -> Set<String> {
-        guard workspaceHygiene.shouldRemoveOrphans,
-              let composeFile = context.composeFile
-        else {
-            return []
-        }
-        let orphans = OrphanRemoval.orphans(
-            in: discovered,
-            composeFile: composeFile,
-            policy: .duringDown(
+    ) throws -> ContainerResolution {
+        if workspaceHygiene.shouldRemoveOrphans {
+            guard let composeFile = context.composeFile else {
+                WorkspaceHygieneOutput.warnOrphanRemovalSkipped("compose file required")
+                return ContainerResolution(containers: selected, orphanNames: [])
+            }
+            let policy = OrphanRemoval.Policy.duringDown(
                 profileFilterRequested: profileOptions.profileFilterRequested,
                 tearsDownAll: profileOptions.tearsDownAll,
                 activeProfiles: profileOptions.activeProfileSet
             )
-        )
-        return Set(orphans.map(\.name))
-    }
-
-    func resolvedContainers(
-        discovered: [DiscoveredContainer],
-        selected: [DiscoveredContainer],
-        context: ProjectOptions.LabelCommandContext
-    ) throws -> [DiscoveredContainer] {
-        if workspaceHygiene.shouldRemoveOrphans {
-            return try expandedContainersForOrphanRemoval(
-                discovered: discovered,
-                selected: selected,
-                context: context
+            let orphans = OrphanRemoval.orphans(
+                in: discovered,
+                composeFile: composeFile,
+                policy: policy
+            )
+            return ContainerResolution(
+                containers: OrphanRemoval.mergingContainers(selected, with: orphans),
+                orphanNames: Set(orphans.map(\.name))
             )
         }
         if let composeFile = context.composeFile {
             DownShutdown.warnUnmappedContainers(in: selected, composeFile: composeFile)
         }
-        return selected
-    }
-
-    func expandedContainersForOrphanRemoval(
-        discovered: [DiscoveredContainer],
-        selected: [DiscoveredContainer],
-        context: ProjectOptions.LabelCommandContext
-    ) throws -> [DiscoveredContainer] {
-        guard let composeFile = context.composeFile else {
-            WorkspaceHygieneOutput.warnOrphanRemovalSkipped("compose file required")
-            return selected
-        }
-
-        let orphans = OrphanRemoval.orphans(
-            in: discovered,
-            composeFile: composeFile,
-            policy: .duringDown(
-                profileFilterRequested: profileOptions.profileFilterRequested,
-                tearsDownAll: profileOptions.tearsDownAll,
-                activeProfiles: profileOptions.activeProfileSet
-            )
-        )
-        return OrphanRemoval.mergingContainers(selected, with: orphans)
+        return ContainerResolution(containers: selected, orphanNames: [])
     }
 }

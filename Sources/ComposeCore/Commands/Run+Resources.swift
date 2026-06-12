@@ -65,7 +65,8 @@ extension Run {
         buildPlans: [BuildRunner.Plan],
         networkPlans: [NetworkPlanning.Plan],
         volumePlans: [VolumePlanning.Plan],
-        projectName: String
+        projectName: String,
+        machineContext: MachineContext = .applicationSandbox
     ) async throws {
         if !buildPlans.isEmpty {
             try await BuildRunner.buildAll(
@@ -74,7 +75,15 @@ extension Run {
                 dryRunManifest: nil
             )
         }
-        try await NetworkRunner.createAll(networkPlans, projectName: projectName)
-        try await VolumeRunner.createAll(volumePlans, projectName: projectName)
+        try await NetworkRunner.createAll(
+            networkPlans,
+            projectName: projectName,
+            machineContext: machineContext
+        )
+        try await VolumeRunner.createAll(
+            volumePlans,
+            projectName: projectName,
+            machineContext: machineContext
+        )
     }
 }

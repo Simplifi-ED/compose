@@ -5,16 +5,12 @@ extension Down {
         context: ProjectOptions.LabelCommandContext,
         discovered: [DiscoveredContainer],
         containers: [DiscoveredContainer],
+        orphanNames: Set<String>,
         machineContext: MachineContext
     ) async throws {
         let manifest = DryRunManifest(machineName: machineContext.machineName)
         let useOrderedShutdown = context.fileURLs != nil && !projectOptions.hasExplicitProjectName
         let execution = WaveExecutionPolicy(maxConcurrent: parallelOptions.resolvedMaxConcurrent())
-        let orphanNames = downOrphanNames(
-            discovered: discovered,
-            selected: containers,
-            context: context
-        )
         await manifest.setOrphanNames(orphanNames)
 
         let layers = try DownShutdown.resolveShutdownLayers(

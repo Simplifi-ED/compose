@@ -92,6 +92,13 @@ extension TestRunner {
             _ = try Application.ContainerRun.parse(plan.runArguments)
         }
 
+        let readOnlyMount = try ServicePlanner.volumeFlag(
+            for: "mydata:/app/data:ro",
+            relativeTo: fixtureURL.deletingLastPathComponent(),
+            projectName: "demo"
+        )
+        expect(readOnlyMount == "demo_mydata:/app/data:ro", "named volume mount preserves :ro")
+
         let undefinedURL = Self.fixtureURL("volumes-undefined-compose.yml")
         let undefined = try ComposeParser.parse(fileURL: undefinedURL)
         expectComposeError(

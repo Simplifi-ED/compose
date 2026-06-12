@@ -176,5 +176,20 @@ extension TestRunner {
                 )
             }
         )
+
+        expectComposeError(
+            "included volume conflicts with parent volume",
+            matching: {
+                if case .includeVolumeConflict(let name, _, _) = $0 {
+                    return name == "shared_volume"
+                }
+                return false
+            },
+            body: {
+                _ = try ComposeParser.parse(
+                    fileURL: Self.fixtureURL("include-fixture/resource-conflict-volume.yml")
+                )
+            }
+        )
     }
 }

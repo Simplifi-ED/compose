@@ -49,14 +49,14 @@ public struct Down: AsyncParsableCommand {
             forProject: context.projectName,
             machineContext: machineContext
         )
-        var containers = try DownShutdown.filteredContainers(
+        let containers = try DownShutdown.filteredContainers(
             discovered: discovered,
             context: context,
             profileFilterRequested: profileOptions.profileFilterRequested,
             activeProfiles: profileOptions.activeProfileSet,
             tearsDownAll: profileOptions.tearsDownAll
         )
-        containers = try resolvedContainers(
+        let resolution = try resolveContainersForShutdown(
             discovered: discovered,
             selected: containers,
             context: context
@@ -66,7 +66,8 @@ public struct Down: AsyncParsableCommand {
             try await runDryRun(
                 context: context,
                 discovered: discovered,
-                containers: containers,
+                containers: resolution.containers,
+                orphanNames: resolution.orphanNames,
                 machineContext: machineContext
             )
             return
@@ -75,7 +76,7 @@ public struct Down: AsyncParsableCommand {
         try await executeShutdown(
             context: context,
             discovered: discovered,
-            containers: containers,
+            containers: resolution.containers,
             machineContext: machineContext
         )
     }

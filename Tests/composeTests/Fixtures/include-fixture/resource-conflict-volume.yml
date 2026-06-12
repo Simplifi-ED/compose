@@ -1,0 +1,4 @@
+include: resource-conflict-volume-child.yml
+
+volumes:
+  shared_volume: {}

@@ -141,11 +141,17 @@ package enum VolumeRunner {
             return
         }
         for plan in plans {
-            let configuration = try? await machineVolumeConfiguration(
-                snapshot: booted.snapshot,
-                name: plan.runtimeName
-            )
-            guard shouldRemoveInMachine(configuration: configuration, projectName: projectName) else {
+            let configuration: VolumeConfiguration?
+            do {
+                configuration = try await machineVolumeConfiguration(
+                    snapshot: booted.snapshot,
+                    name: plan.runtimeName
+                )
+            } catch {
+                warnRemoveFailed(names: [plan.runtimeName], error: error)
+                continue
+            }
+            guard let configuration, isProjectVolume(configuration, projectName: projectName) else {
                 continue
             }
             do {

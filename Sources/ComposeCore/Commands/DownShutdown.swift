@@ -1,6 +1,29 @@
 import Foundation
 
 package enum DownShutdown {
+    package struct TeardownScope: Sendable {
+        package let stillRunning: [DiscoveredContainer]
+        package let teardownServiceNames: Set<String>
+        package let runningServiceNames: Set<String>
+
+        package var scopedServiceNames: Set<String> {
+            teardownServiceNames.union(runningServiceNames)
+        }
+    }
+
+    package static func teardownScope(
+        discovered: [DiscoveredContainer],
+        teardownContainers: [DiscoveredContainer]
+    ) -> TeardownScope {
+        let teardownNames = Set(teardownContainers.map(\.name))
+        let stillRunning = discovered.filter { !teardownNames.contains($0.name) }
+        return TeardownScope(
+            stillRunning: stillRunning,
+            teardownServiceNames: Set(teardownContainers.compactMap(\.serviceName)),
+            runningServiceNames: Set(stillRunning.compactMap(\.serviceName))
+        )
+    }
+
     package struct VolumePurgeContext: Sendable {
         package let composeFile: ComposeFile
         package let fileURLs: [URL]
@@ -60,16 +83,12 @@ package enum DownShutdown {
             return nil
         }
 
-        let teardownNames = Set(teardownContainers.map(\.name))
-        let stillRunning = discovered.filter { !teardownNames.contains($0.name) }
-        let teardownServiceNames = Set(teardownContainers.compactMap(\.serviceName))
-        let runningServiceNames = Set(stillRunning.compactMap(\.serviceName))
-
+        let scope = teardownScope(discovered: discovered, teardownContainers: teardownContainers)
         return VolumePurgeContext(
             composeFile: composeFile,
             fileURLs: fileURLs,
-            teardownServiceNames: teardownServiceNames,
-            runningServiceNames: runningServiceNames
+            teardownServiceNames: scope.teardownServiceNames,
+            runningServiceNames: scope.runningServiceNames
         )
     }
 

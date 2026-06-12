@@ -84,5 +84,20 @@ extension TestRunner {
             teardownContainers: [client]
         )
         expect(noComposeFile.isEmpty, "no volume removal without compose file")
+
+        let fullVolumePlans = try DownShutdown.volumeRemovalPlans(
+            context: context,
+            discovered: [client, server],
+            teardownContainers: [client, server]
+        )
+        let downDryRunLines = blockingAwait {
+            let manifest = DryRunManifest()
+            await manifest.recordVolumeRemovals(names: fullVolumePlans.map(\.runtimeName))
+            return await manifest.sortedLines()
+        }
+        expect(
+            downDryRunLines.contains("[DRY-RUN] remove volume \"demo_mydata\""),
+            "down dry-run records named volume removal"
+        )
     }
 }
