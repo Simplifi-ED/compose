@@ -206,6 +206,8 @@ package enum DryRunManifestFormatting {
             return "service_started"
         case .serviceHealthy:
             return "service_healthy"
+        case .serviceCompletedSuccessfully:
+            return "service_completed_successfully"
         }
     }
 

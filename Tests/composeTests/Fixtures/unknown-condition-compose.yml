@@ -7,4 +7,4 @@ services:
     command: sleep 300
     depends_on:
       db:
-        condition: service_completed_successfully
+        condition: service_ready

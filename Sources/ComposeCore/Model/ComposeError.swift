@@ -45,6 +45,8 @@ public enum ComposeError: LocalizedError, Sendable {
     case scaleServiceRequiresProfile(service: String, requiredProfiles: [String])
     case healthCheckTimeout(dependency: String, container: String)
     case serviceStartTimeout(dependency: String, container: String)
+    case serviceCompletedUnsuccessfully(dependency: String, container: String, exitCode: Int32)
+    case serviceCompletionTimeout(dependency: String, container: String)
     case unsupportedExternalResource(kind: ComposeFileMountKind)
     case undefinedResource(name: String, kind: ComposeFileMountKind)
     case resourceFileNotFound(path: String, kind: ComposeFileMountKind)

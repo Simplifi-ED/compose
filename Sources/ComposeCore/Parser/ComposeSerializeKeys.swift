@@ -7,6 +7,8 @@ enum ComposeSerializeKeys {
             return DependsOnCondition.serviceStarted.rawValue
         case .serviceHealthy:
             return DependsOnCondition.serviceHealthy.rawValue
+        case .serviceCompletedSuccessfully:
+            return DependsOnCondition.serviceCompletedSuccessfully.rawValue
         }
     }
 }

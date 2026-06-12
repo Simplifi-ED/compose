@@ -138,6 +138,7 @@ Services start in **dependency waves** — all services in a wave start in paral
 
 - `depends_on` (list form) → ordering only; no health check required
 - `depends_on` with `condition: service_healthy` → waits for the healthcheck probe to pass before starting dependents
+- `depends_on` with `condition: service_completed_successfully` → waits for a one-shot dependency to exit with code 0 (init/migration services); long-running daemons time out
 - If a wave fails, containers from earlier waves are rolled back automatically
 
 ```yaml
@@ -521,7 +522,7 @@ Exit codes: `0` = all services stopped cleanly · `130` = SIGINT · `143` = SIGT
 |-------|--------|
 | `image`, `command`, `ports`, `environment` | ✅ |
 | `volumes` (bind mounts; `:ro`, `:z`, `:ro,z`) | ✅ |
-| `depends_on` (list and `service_healthy`) | ✅ |
+| `depends_on` (list, `service_healthy`, `service_completed_successfully`) | ✅ |
 | `healthcheck` | ✅ |
 | `profiles`, `deploy.replicas` | ✅ |
 | `configs`, `secrets` (local `file:`) | ✅ |
@@ -531,7 +532,7 @@ Exit codes: `0` = all services stopped cleanly · `130` = SIGINT · `143` = SIGT
 | `networks` (project-scoped subnets; container-name DNS) | ✅ |
 | named volumes | ❌ v1 deferred |
 | long-form `read_only: true`, explicit `:rw` | ❌ v1 deferred |
-| `service_completed_successfully` | ❌ v1 deferred |
+| `service_completed_successfully` | ✅ (host sandbox; not with `--machine`) |
 | `COMPOSE_PROFILES` env var | ✅ (process env; `.env` file deferred) |
 
 ---

@@ -10,6 +10,7 @@ extension TestRunner {
         runHealthWaitProbeTests()
         runHealthWaitStartedTests()
         runHealthWaitGateOrderTests()
+        try runCompletedDependsTests()
         runHealthOrchestrationTests()
     }
 
@@ -172,7 +173,12 @@ extension TestRunner {
         let orderRecorder = GateOrderRecorder()
         let startedThenHealthy = [
             HealthGate(dependencyService: "db", condition: .serviceStarted, containerNames: ["demo_db_1"]),
-            HealthGate(dependencyService: "db", condition: .serviceHealthy, containerNames: ["demo_db_1"])
+            HealthGate(dependencyService: "db", condition: .serviceHealthy, containerNames: ["demo_db_1"]),
+            HealthGate(
+                dependencyService: "db",
+                condition: .serviceCompletedSuccessfully,
+                containerNames: ["demo_db_1"]
+            )
         ]
         let orderedOk = blockingAwait {
             do {
@@ -184,6 +190,7 @@ extension TestRunner {
                         await orderRecorder.recordProbe()
                         return 0
                     },
+                    waitForExit: { _ in 0 },
                     onGate: { gate in
                         await orderRecorder.recordGate(gate.condition)
                     }
@@ -196,7 +203,10 @@ extension TestRunner {
         let gateOrder = blockingAwait { await orderRecorder.gateOrderSnapshot() }
         let probeCount = blockingAwait { await orderRecorder.probeCount() }
         expect(orderedOk, "parallel gate conditions complete")
-        expect(gateOrder == [.serviceStarted, .serviceHealthy], "service_started runs before service_healthy")
+        expect(
+            gateOrder == [.serviceStarted, .serviceHealthy, .serviceCompletedSuccessfully],
+            "readiness gates run in sort order"
+        )
         expect(probeCount == 1, "healthy probe runs once after started gate")
     }
 
@@ -298,6 +308,7 @@ extension HealthWait {
         context: HealthWaitContext,
         status: @escaping StatusProvider,
         runProcess: @escaping ProcessRunner,
+        waitForExit: @escaping ExitCodeProvider = { _ in 0 },
         onGate: @escaping @Sendable (HealthGate) async -> Void
     ) async throws {
         let gatesByService = Dictionary(grouping: gates, by: \.dependencyService)
@@ -313,7 +324,8 @@ extension HealthWait {
                             gates: [gate],
                             context: context,
                             status: status,
-                            runProcess: runProcess
+                            runProcess: runProcess,
+                            waitForExit: waitForExit
                         )
                     }
                 }

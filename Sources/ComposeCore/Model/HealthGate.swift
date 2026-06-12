@@ -26,6 +26,8 @@ extension DependsOnCondition {
             return 1
         case .serviceHealthy:
             return 2
+        case .serviceCompletedSuccessfully:
+            return 3
         }
     }
 }
