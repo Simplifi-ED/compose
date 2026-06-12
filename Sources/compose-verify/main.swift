@@ -202,6 +202,7 @@ do {
     try runner.runShutdownLayerTests()
     try runner.runOrphanTests()
     try runner.runVolumePurgeTests()
+    try runner.runReadOnlyVolumeTests()
     try runner.runDryRunTests()
     try runner.runBuildTests()
     runner.runLabelTests()

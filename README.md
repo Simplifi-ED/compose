@@ -59,6 +59,8 @@ git clone https://github.com/Simplifi-ED/compose.git && cd compose
 ./scripts/install.sh
 ```
 
+`scripts/install.sh` installs next to the `container` binary on your PATH — Homebrew's `opt/container` layout when `container` comes from `brew install container`, otherwise the parent of `bin/container` (for example `/usr/local` for PKG/Cask installs). Set `CONTAINER_INSTALL_ROOT` to override.
+
 ---
 
 ## Quick start
@@ -123,7 +125,7 @@ Compose prints the active context on stderr once per command (`Execution context
 
 **Volumes and bind mounts**
 
-- Machine home mount (`home-mount` on the machine) maps your macOS `$HOME` into the VM at the same path. Compose-relative bind mounts still resolve against the compose file directory on the host; those paths must be visible inside the machine at the same absolute path when home is mounted.
+- Machine home mount (`home-mount` on the machine) maps your macOS `$HOME` into the VM at the same path. Compose-relative bind mounts still resolve against the compose file directory on the host; those paths must be visible inside the machine at the same absolute path when home is mounted. Short-syntax options (`:ro`, `:z`, `:ro,z`) apply the same way as in the application sandbox.
 - Image builds (`build:`) run inside the machine during `compose up --machine` via the in-VM `container build` CLI. Build context paths must be visible inside the machine (typically under `$HOME`).
 - Staged `configs:` / `secrets:` files are written under `~/.config/container-compose/<project>/`, which is inside the mounted home directory.
 - A project runs entirely in one context (sandbox or one machine); mixed mode is not supported.
@@ -373,6 +375,32 @@ container compose down -v
 
 ---
 
+## Bind mounts
+
+Short-syntax host bind mounts map to `container run -v`. Relative host paths resolve against the **compose file directory**, not your shell CWD.
+
+```yaml
+services:
+  web:
+    volumes:
+      - "./config:/etc/app:ro"       # read-only
+      - "./cache:/var/cache:z"         # :z passthrough
+      - "./data:/var/data:ro,z"        # comma-separated options
+```
+
+| Suffix | Behavior |
+|--------|----------|
+| *(none)* | Read-write bind mount |
+| `:ro` | Read-only at runtime |
+| `:z` | Accepted and passed through to the runtime (macOS has no SELinux relabeling; compose does not enforce extra semantics) |
+| `:ro,z` / `:z,ro` | Comma-separated; order normalized |
+
+**Not supported:** named volumes, root-level `volumes:` blocks, long-form `read_only: true`, explicit `:rw`.
+
+Multi-file `-f` merge replaces bind mounts by host+container path key — an override can change options (for example writable → `:ro`).
+
+---
+
 ## cp — copy files
 
 Copy files to or from a **running** service container without a bind mount:
@@ -430,7 +458,7 @@ Exit codes: `0` = all services stopped cleanly · `130` = SIGINT · `143` = SIGT
 | Field | Status |
 |-------|--------|
 | `image`, `command`, `ports`, `environment` | ✅ |
-| `volumes` (bind mounts) | ✅ |
+| `volumes` (bind mounts; `:ro`, `:z`, `:ro,z`) | ✅ |
 | `depends_on` (list and `service_healthy`) | ✅ |
 | `healthcheck` | ✅ |
 | `profiles`, `deploy.replicas` | ✅ |
@@ -439,7 +467,8 @@ Exit codes: `0` = all services stopped cleanly · `130` = SIGINT · `143` = SIGT
 | `-f` merge, `include:`, `COMPOSE_FILE` | ✅ |
 | `build` (`context`, `dockerfile`, `args`, `target`) | ✅ |
 | networks, named volumes | ❌ v1 deferred |
-| `volumes:` `:ro`, `service_completed_successfully` | ❌ v1 deferred |
+| long-form `read_only: true`, explicit `:rw` | ❌ v1 deferred |
+| `service_completed_successfully` | ❌ v1 deferred |
 | `COMPOSE_PROFILES` env var | ✅ (process env; `.env` file deferred) |
 
 ---
@@ -452,6 +481,7 @@ Exit codes: `0` = all services stopped cleanly · `130` = SIGINT · `143` = SIGT
 | `compose` not listed under PLUGINS | `container system start` — then verify the symlink exists at `{INSTALL_ROOT}/libexec/container-plugins/compose` |
 | Permission denied on `/usr/local` | Use `sudo`, or use the Homebrew symlink path from `brew info container-compose` |
 | `container compose` only shows `up`/`down` | Stale plugin dir at `/usr/local/libexec/container-plugins/compose`. Run `sudo rm -rf` that path, then recreate the symlink (see Install). Confirm with `container compose --help`. |
+| Plugin installed but `compose up` rejects `:ro` | Plugin landed under Homebrew while `which container` is `/usr/local/bin/container`. Re-run `./scripts/install.sh` (it follows the active `container` binary) or set `CONTAINER_INSTALL_ROOT`. |
 | `brew install container-compose` installs the wrong package | Core has a different formula. Use `brew install simplifi-ed/compose/container-compose`. |
 | Kernel / runtime error on `up` | `container system kernel set --url <kernel-tarball-url>` |
 | Build fails / builder unreachable | `container system start` — BuildKit (`buildkit`) must be running |
@@ -467,8 +497,9 @@ Exit codes: `0` = all services stopped cleanly · `130` = SIGINT · `143` = SIGT
 make build
 make lint
 make test    # runs compose-verify
-make smoke   # end-to-end: install → up → curl → down (requires runtime)
-make dist    # produces dist/compose/, compose-plugin.tar.gz, and .zip
+make smoke          # end-to-end: install → up → curl → down (requires runtime)
+make smoke-volumes  # install + live :ro/:z bind-mount runtime checks
+make dist           # produces dist/compose/, compose-plugin.tar.gz, and .zip
 ```
 
 Without Make:

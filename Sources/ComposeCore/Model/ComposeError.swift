@@ -96,9 +96,12 @@ public enum ComposeError: LocalizedError, Sendable {
             return "Unsupported port mapping '\(port)'. Use host:container, host:container/tcp, "
                 + "or a container-only port like '80'."
         case .unsupportedVolume(let volume):
-            return "Unsupported volume mapping '\(volume)'. Use host:container (for example ./data:/app/data)."
+            return "Unsupported volume mapping '\(volume)'. Use host:container "
+                + "(for example ./data:/app/data) or host:container:ro for read-only bind mounts "
+                + "(comma options like :ro,z are supported)."
         case .unsupportedVolumeOption(let volume):
-            return "Volume options aren't supported yet. Use host:container without a suffix (got '\(volume)')."
+            return "Unsupported bind-mount option in '\(volume)'. "
+                + "Use ':ro', ':z', or comma-separated options like ':ro,z'."
         case .unsupportedNamedVolume(let volume):
             return "Named volumes aren't supported. Use a host path like ./data:/app/data (got '\(volume)')."
         case .volumeHostPathNotFound(let path):

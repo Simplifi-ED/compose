@@ -75,9 +75,9 @@ enum ServiceRunMapping {
     }
 
     static func volumeFlag(for volume: String, relativeTo composeDirectory: URL) throws -> String {
-        let (hostPath, containerPath) = try BindMountPathResolver.parseVolumeSpec(volume)
+        let spec = try ComposeBindingKeys.parseVolumeSpec(volume)
         let resolvedHostURL: URL
-        switch try BindMountPathResolver.resolveHostPath(hostPath, relativeTo: composeDirectory) {
+        switch try BindMountPathResolver.resolveHostPath(spec.hostPath, relativeTo: composeDirectory) {
         case .projectRelative(let url), .absoluteExternal(let url):
             resolvedHostURL = url
         }
@@ -87,6 +87,6 @@ enum ServiceRunMapping {
             throw ComposeError.volumeHostPathNotFound(path: absoluteHostPath)
         }
 
-        return "\(absoluteHostPath):\(containerPath)"
+        return spec.formattedMount(resolvedHostPath: absoluteHostPath)
     }
 }

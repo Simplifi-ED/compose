@@ -67,8 +67,8 @@ package enum ComposeFileStaging {
         stagedMounts.flatMap { staged in
             [
                 "-v",
-                readOnlyVolumeFlag(
-                    hostPath: staged.hostPath,
+                ComposeBindingKeys.VolumeSpec.readOnlyMount(
+                    resolvedHostPath: staged.hostPath,
                     containerPath: staged.containerTarget
                 )
             ]
@@ -109,10 +109,6 @@ package enum ComposeFileStaging {
         case .secret:
             "secret-\(mount.definitionName)"
         }
-    }
-
-    package static func readOnlyVolumeFlag(hostPath: String, containerPath: String) -> String {
-        "\(hostPath):\(containerPath):ro"
     }
 
     private static func copySource(mount: PlannedFileMount, to destination: URL) throws {

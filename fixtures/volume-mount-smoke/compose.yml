@@ -1,0 +1,7 @@
+# Live smoke: comma-separated bind-mount options (:ro,z) through compose up.
+services:
+  web:
+    image: docker.io/library/alpine:3.20
+    command: sleep 300
+    volumes:
+      - "./data:/mnt/data:ro,z"

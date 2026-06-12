@@ -177,7 +177,6 @@ extension TestRunner {
         )
         expect(volumePlan.runArguments.contains("-v"), "planner volume flag")
         expect(volumePlan.runArguments.contains("\(expectedDataPath):/mnt/data"), "planner resolved volume")
-
         _ = try Application.ContainerRun.parse(volumePlan.runArguments)
     }
 
@@ -197,10 +196,10 @@ extension TestRunner {
             }
         )
         expectComposeError(
-            "volume option suffix",
+            "volume rw suffix",
             matching: { if case .unsupportedVolumeOption = $0 { true } else { false } },
             body: {
-                _ = try ServicePlanner.volumeFlag(for: "./data:/app:ro", relativeTo: fixturesDirectory)
+                _ = try ServicePlanner.volumeFlag(for: "./data:/app:rw", relativeTo: fixturesDirectory)
             }
         )
         expectComposeError(

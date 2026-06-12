@@ -1,0 +1,4 @@
+services:
+  web:
+    volumes:
+      - "./other:/mnt/config:ro"

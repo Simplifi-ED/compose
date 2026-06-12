@@ -28,8 +28,8 @@ extension TestRunner {
 
         let args = [
             "-v",
-            ComposeFileStaging.readOnlyVolumeFlag(
-                hostPath: secretFile.path,
+            ComposeBindingKeys.VolumeSpec.readOnlyMount(
+                resolvedHostPath: secretFile.path,
                 containerPath: "/run/secrets/x"
             ),
             "docker.io/library/alpine:3.20"

@@ -167,7 +167,12 @@ package enum DryRunManifestFormatting {
     ) {
         for mount in mounts {
             let source = mount.sourceRelativePath
-            volumes.append("\(source):\(mount.containerTarget):ro")
+            volumes.append(
+                ComposeBindingKeys.VolumeSpec.readOnlyMount(
+                    resolvedHostPath: source,
+                    containerPath: mount.containerTarget
+                )
+            )
         }
     }
 
