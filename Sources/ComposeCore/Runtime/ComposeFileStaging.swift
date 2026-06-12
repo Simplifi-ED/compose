@@ -2,10 +2,16 @@ import Foundation
 
 package enum ComposeFileStaging {
     private static let rootFolderName = "container-compose"
+    private static let configFolderName = ".config"
+
+    package static func stagingRoot() -> URL {
+        FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(configFolderName, isDirectory: true)
+            .appendingPathComponent(rootFolderName, isDirectory: true)
+    }
 
     package static func projectRoot(projectName: String) -> URL {
-        URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
-            .appendingPathComponent(rootFolderName, isDirectory: true)
+        stagingRoot()
             .appendingPathComponent(projectName, isDirectory: true)
     }
 
@@ -134,9 +140,8 @@ package enum ComposeFileStaging {
 
     private static func pruneEmptyParents(startingAt url: URL) {
         var current = url
-        let tmpRoot = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
-            .appendingPathComponent(rootFolderName, isDirectory: true)
-        while current.path.hasPrefix(tmpRoot.path) {
+        let stagingRootPath = stagingRoot().path
+        while current.path.hasPrefix(stagingRootPath) {
             guard let contents = try? FileManager.default.contentsOfDirectory(atPath: current.path),
                   contents.isEmpty
             else {

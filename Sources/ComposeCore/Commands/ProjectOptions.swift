@@ -58,21 +58,34 @@ public struct ProjectOptions: ParsableArguments {
         package let projectName: String
         package let composeFile: ComposeFile?
         package let fileURLs: [URL]?
+        package let machineContext: MachineContext
 
-        package init(projectName: String, composeFile: ComposeFile?, fileURLs: [URL]?) {
+        package init(
+            projectName: String,
+            composeFile: ComposeFile?,
+            fileURLs: [URL]?,
+            machineContext: MachineContext = .applicationSandbox
+        ) {
             self.projectName = projectName
             self.composeFile = composeFile
             self.fileURLs = fileURLs
+            self.machineContext = machineContext
         }
     }
 
     package func resolvedLabelCommandContext(
         skipComposeFileOnExplicitProject: Bool = false,
-        profileFilterRequested: Bool = false
+        profileFilterRequested: Bool = false,
+        machineContext: MachineContext = .applicationSandbox
     ) throws -> LabelCommandContext {
         if skipComposeFileOnExplicitProject, hasExplicitProjectName, !profileFilterRequested {
             let projectName = try resolvedProjectName()
-            return LabelCommandContext(projectName: projectName, composeFile: nil, fileURLs: nil)
+            return LabelCommandContext(
+                projectName: projectName,
+                composeFile: nil,
+                fileURLs: nil,
+                machineContext: machineContext
+            )
         }
 
         let fileURLs = try resolvedFileURLsIfPresent()
@@ -86,7 +99,8 @@ public struct ProjectOptions: ParsableArguments {
         return LabelCommandContext(
             projectName: projectName,
             composeFile: composeFile,
-            fileURLs: fileURLs
+            fileURLs: fileURLs,
+            machineContext: machineContext
         )
     }
 

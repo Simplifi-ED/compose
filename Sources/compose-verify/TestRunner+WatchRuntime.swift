@@ -14,47 +14,20 @@ extension TestRunner {
 
     private mutating func runWatchSyncTests() throws {
         let fixturesDirectory = Self.fixtureURL("develop-watch-compose.yml").deletingLastPathComponent()
-        let rules = try WatchPathValidator.validateRules(
-            serviceName: "web",
-            develop: try ComposeParser.parse(fileURL: Self.fixtureURL("develop-watch-compose.yml"))
-                .services["web"]?.develop,
-            composeDirectory: fixturesDirectory
-        )
-        let resolved = rules[0]
+        let resolved = try watchSyncResolvedRule(fixturesDirectory: fixturesDirectory)
         let hostFile = fixturesDirectory.appendingPathComponent("html/index.html")
-
-        let containers = [
-            ProjectContainer(name: "demo_web_1", serviceName: "web", status: .running, publishedPorts: []),
-            ProjectContainer(name: "demo_web_2", serviceName: "web", status: .running, publishedPorts: [])
-        ]
-
+        let containers = watchSyncReplicaContainers()
         let snapshot = makeWatchRunningSnapshot(project: "demo", service: "web")
-        let expectedHostPath = hostFile.path
-        let expectedDestination = "/usr/share/nginx/html/index.html"
-
+        let syncInput = WatchSyncInput(
+            resolved: resolved,
+            hostFile: hostFile,
+            containers: containers,
+            snapshot: snapshot,
+            expectedHostPath: hostFile.path,
+            expectedDestination: "/usr/share/nginx/html/index.html"
+        )
         let (syncResult, captured) = StandardStreamCapture.captureStandardError {
-            blockingAwait { () -> WatchSyncTestRecorder.Snapshot? in
-                let recorder = WatchSyncTestRecorder(
-                    expectedSource: expectedHostPath,
-                    expectedDestination: expectedDestination
-                )
-                do {
-                    try await ContainerFileSync.sync(
-                        resolved: resolved,
-                        hostPath: hostFile,
-                        containers: containers,
-                        projectName: "demo",
-                        copyIn: { container, source, destination, _, _ in
-                            recorder.record(container: container, source: source, destination: destination)
-                        },
-                        getContainer: { _ in snapshot }
-                    )
-                    return recorder.snapshot()
-                } catch {
-                    fputs("FAIL: sync test threw: \(error)\n", stderr)
-                    return nil
-                }
-            }
+            blockingAwait { await watchSyncRecorderSnapshot(syncInput) }
         }
 
         expect(syncResult != nil, "sync completes without error")
@@ -166,6 +139,55 @@ extension TestRunner {
             status: .running,
             networks: []
         )
+    }
+}
+
+private func watchSyncResolvedRule(fixturesDirectory: URL) throws -> ResolvedWatchRule {
+    let develop = try ComposeParser.parse(fileURL: TestRunner.fixtureURL("develop-watch-compose.yml"))
+        .services["web"]?.develop
+    return try WatchPathValidator.validateRules(
+        serviceName: "web",
+        develop: develop,
+        composeDirectory: fixturesDirectory
+    )[0]
+}
+
+private func watchSyncReplicaContainers() -> [ProjectContainer] {
+    [
+        ProjectContainer(name: "demo_web_1", serviceName: "web", status: .running, publishedPorts: []),
+        ProjectContainer(name: "demo_web_2", serviceName: "web", status: .running, publishedPorts: [])
+    ]
+}
+
+private struct WatchSyncInput: Sendable {
+    let resolved: ResolvedWatchRule
+    let hostFile: URL
+    let containers: [ProjectContainer]
+    let snapshot: ContainerSnapshot
+    let expectedHostPath: String
+    let expectedDestination: String
+}
+
+private func watchSyncRecorderSnapshot(_ input: WatchSyncInput) async -> WatchSyncTestRecorder.Snapshot? {
+    let recorder = WatchSyncTestRecorder(
+        expectedSource: input.expectedHostPath,
+        expectedDestination: input.expectedDestination
+    )
+    do {
+        try await ContainerFileSync.sync(
+            resolved: input.resolved,
+            hostPath: input.hostFile,
+            containers: input.containers,
+            projectName: "demo",
+            copyIn: { container, source, destination, _, _ in
+                recorder.record(container: container, source: source, destination: destination)
+            },
+            getContainer: { _ in input.snapshot }
+        )
+        return recorder.snapshot()
+    } catch {
+        fputs("FAIL: sync test threw: \(error)\n", stderr)
+        return nil
     }
 }
 

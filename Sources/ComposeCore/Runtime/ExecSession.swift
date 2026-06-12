@@ -50,25 +50,42 @@ package enum ExecSession {
     package static func run(
         configuration: Configuration,
         shutdownContext: ProjectShutdownContext,
-        getContainer: @escaping @Sendable (String) async throws -> ContainerSnapshot = ContainerCopyAPI.get,
-        createProcess: @escaping @Sendable (
+        machineContext: MachineContext = .applicationSandbox,
+        getContainer: (@Sendable (String) async throws -> ContainerSnapshot)? = nil,
+        createProcess: (@Sendable (
             String,
             String,
             ProcessConfiguration,
             [FileHandle?]
-        ) async throws -> any ClientProcess = { containerId, processId, config, stdio in
-            try await ContainerClient().createProcess(
-                containerId: containerId,
-                processId: processId,
-                configuration: config,
-                stdio: stdio
-            )
-        },
+        ) async throws -> any ClientProcess)? = nil,
         execBody: @escaping ExecBody = runExecBody,
         stopProject: @escaping @Sendable (ProjectShutdownContext) async throws -> Void = {
             try await ProjectShutdown.stop(context: $0)
         }
     ) async throws {
+        let resolvedGetContainer: @Sendable (String) async throws -> ContainerSnapshot = { id in
+            if let getContainer {
+                return try await getContainer(id)
+            }
+            return try await ContainerCopyAPI.get(id: id, machineContext: machineContext)
+        }
+        let resolvedCreateProcess: @Sendable (
+            String,
+            String,
+            ProcessConfiguration,
+            [FileHandle?]
+        ) async throws -> any ClientProcess = { containerId, processId, config, stdio in
+            if let createProcess {
+                return try await createProcess(containerId, processId, config, stdio)
+            }
+            return try await ComposeContainerGateway.createProcess(
+                containerId: containerId,
+                processId: processId,
+                configuration: config,
+                stdio: stdio,
+                machineContext: machineContext
+            )
+        }
         let holder = IOHolder()
         try await InteractiveSession.runUntilExit(
             policy: .stopProject(shutdownContext),
@@ -77,11 +94,19 @@ package enum ExecSession {
             },
             stopProject: stopProject,
             body: {
-                try await execBody(
+                if machineContext.isMachineMode {
+                    return try await runMachineExecBody(
+                        configuration: configuration,
+                        holder: holder,
+                        machineContext: machineContext,
+                        getContainer: resolvedGetContainer
+                    )
+                }
+                return try await execBody(
                     configuration,
                     holder,
-                    getContainer,
-                    createProcess
+                    resolvedGetContainer,
+                    resolvedCreateProcess
                 )
             }
         )
@@ -141,6 +166,46 @@ package enum ExecSession {
             projectName: configuration.projectName,
             serviceName: configuration.serviceName,
             fieldName: "exec"
+        )
+    }
+
+    private static func runMachineExecBody(
+        configuration: Configuration,
+        holder: IOHolder,
+        machineContext: MachineContext,
+        getContainer: @Sendable (String) async throws -> ContainerSnapshot
+    ) async throws -> Int32 {
+        let snapshot = try await getContainer(configuration.containerName)
+        try verifyExecTarget(snapshot: snapshot, configuration: configuration)
+
+        let processIO = try InteractiveSession.createProcessIO(
+            interactive: configuration.interactive,
+            useInteractivePTY: configuration.useInteractivePTY
+        )
+        holder.processIO = processIO
+        defer {
+            try? processIO.close()
+        }
+
+        var args = ["exec"]
+        if configuration.interactive {
+            args.append("-i")
+        }
+        if configuration.processTerminal {
+            args.append("-t")
+        }
+        args.append(configuration.containerName)
+        args.append(configuration.executable)
+        args.append(contentsOf: configuration.arguments)
+
+        let machineSnapshot = try machineContext.bootedContext().snapshot
+        let log = Logger(label: "compose.exec")
+        return try await MachineInVMRunner.runInteractive(
+            snapshot: machineSnapshot,
+            containerArguments: args,
+            processIO: processIO,
+            useInteractivePTY: configuration.useInteractivePTY,
+            log: log
         )
     }
 }

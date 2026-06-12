@@ -16,8 +16,11 @@ public actor DryRunManifest {
     private var groupOrder = 0
     private var currentGroup = 0
     private var orphanNames: Set<String> = []
+    private let machineName: String?
 
-    public init() {}
+    public init(machineName: String? = nil) {
+        self.machineName = machineName
+    }
 
     public func setUpWaveIndex(_ index: Int) {
         groupOrder += 1
@@ -134,8 +137,11 @@ public actor DryRunManifest {
         }
     }
 
-    package func makeUpHooks() -> ServiceRunner.UpOperationHooks {
-        ServiceRunner.UpOperationHooks(
+    package func makeUpHooks(
+        machineContext: MachineContext = .applicationSandbox
+    ) -> ServiceRunner.UpOperationHooks {
+        _ = machineContext
+        return ServiceRunner.UpOperationHooks(
             runContainer: { plan in
                 await self.recordCreate(plan)
             },
@@ -167,6 +173,15 @@ public actor DryRunManifest {
     }
 
     private func append(group: Int, sortKey: String, line: String) {
-        entries.append(Entry(group: group, sortKey: sortKey, line: line))
+        let prefixed: String
+        if let machineName {
+            prefixed = line.replacingOccurrences(
+                of: "[DRY-RUN] ",
+                with: "[DRY-RUN] machine=\(machineName) "
+            )
+        } else {
+            prefixed = line
+        }
+        entries.append(Entry(group: group, sortKey: sortKey, line: prefixed))
     }
 }

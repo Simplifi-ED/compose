@@ -6,24 +6,30 @@ package struct ProjectShutdownContext: Sendable {
     package let composeFile: ComposeFile?
     package let fileURLs: [URL]?
     package let options: GracefulStopOptions
+    package let machineContext: MachineContext
 
     package init(
         projectName: String,
         composeFile: ComposeFile?,
         fileURLs: [URL]?,
-        options: GracefulStopOptions
+        options: GracefulStopOptions,
+        machineContext: MachineContext = .applicationSandbox
     ) {
         self.projectName = projectName
         self.composeFile = composeFile
         self.fileURLs = fileURLs
         self.options = options
+        self.machineContext = machineContext
     }
 }
 
 /// Stops all containers for a compose project with SIGTERM grace, then SIGKILL.
 package enum ProjectShutdown {
     package static func stop(context: ProjectShutdownContext) async throws {
-        let containers = try await ContainerDiscovery.containers(forProject: context.projectName)
+        let containers = try await ContainerDiscovery.containers(
+            forProject: context.projectName,
+            machineContext: context.machineContext
+        )
         guard !containers.isEmpty else { return }
 
         fputs("Stopping project containers…\n", stderr)
@@ -34,7 +40,8 @@ package enum ProjectShutdown {
         )
         let failures = try await ServiceRunner.stopGracefully(
             layers: layers,
-            options: context.options
+            options: context.options,
+            machineContext: context.machineContext
         )
 
         for failure in failures {

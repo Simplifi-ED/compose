@@ -14,15 +14,26 @@ public struct Ps: AsyncParsableCommand {
     @OptionGroup
     var profileOptions: ProfileOptions
 
+    @OptionGroup
+    var machineOptions: MachineOptions
+
     @Argument(help: "Limit output to these service names.")
     var services: [String] = []
 
     public func run() async throws {
+        guard let machineContext = try await machineOptions
+            .resolveContext(stopped: .gracefulExit)
+            .machineContextIfReady
+        else { return }
         let context = try projectOptions.resolvedLabelCommandContext(
             skipComposeFileOnExplicitProject: true,
-            profileFilterRequested: profileOptions.profileFilterRequested
+            profileFilterRequested: profileOptions.profileFilterRequested,
+            machineContext: machineContext
         )
-        let containers = try await ContainerDiscovery.projectContainers(forProject: context.projectName)
+        let containers = try await ContainerDiscovery.projectContainers(
+            forProject: context.projectName,
+            machineContext: machineContext
+        )
         let filter = try projectOptions.resolvedQueryServiceFilter(
             context: context,
             profileOptions: profileOptions,

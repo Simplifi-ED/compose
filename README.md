@@ -8,7 +8,7 @@ Maintained by [Omnivya](https://www.omnivya.fr) · [Simplifi-ED](https://github.
 
 ## Requirements
 
-- macOS 15+ on Apple Silicon
+- macOS 15+ on Apple Silicon (macOS 26+ for container machines / `--machine`)
 - [`container`](https://github.com/apple/container) CLI 1.0.0+
 - Swift 6.2+ — only needed if building from source
 
@@ -86,6 +86,47 @@ container compose down -f fixtures/minimal-compose.yml -p demo
 | `top` | Live CPU/memory stats for all project containers. |
 | `watch` | Sync local file changes into running containers. |
 | `config` | Print the resolved compose config without starting anything. |
+
+Supported on `up`, `down`, `ps`, `logs`, `exec`, and `cp`:
+
+```bash
+container compose up --machine dev -f compose.yaml
+```
+
+`watch`, `run`, `top`, and `config` reject `--machine`.
+
+---
+
+## Container machines (`--machine`)
+
+Run a project inside an existing [container machine](https://github.com/apple/container/blob/main/Documentation/Container-Machines.md) instead of the application sandbox.
+
+**Prerequisites**
+
+1. macOS 26+ with container machines enabled.
+2. Create and name a machine outside compose: `container machine create --name dev` (see `container machine --help`).
+3. The machine must already exist; `compose up` boots it when stopped. Read-only commands (`ps`, `logs`, `--dry-run`) do not boot a stopped machine.
+
+**Examples**
+
+```bash
+container machine list
+container compose up --machine dev -f compose.yaml -p demo
+container compose ps --machine dev -p demo
+container compose logs --machine dev -p demo
+container compose exec --machine dev -p demo web sh
+container compose cp --machine dev -p demo ./local.txt web:/tmp/local.txt
+container compose down --machine dev -p demo
+```
+
+Compose prints the active context on stderr once per command (`Execution context: application sandbox` or `Execution context: container machine 'dev'`).
+
+**Volumes and bind mounts**
+
+- Machine home mount (`home-mount` on the machine) maps your macOS `$HOME` into the VM at the same path. Compose-relative bind mounts still resolve against the compose file directory on the host; those paths must be visible inside the machine at the same absolute path when home is mounted.
+- Image builds (`build:`) run inside the machine during `compose up --machine` via the in-VM `container build` CLI. Build context paths must be visible inside the machine (typically under `$HOME`).
+- Staged `configs:` / `secrets:` files are written under `~/.config/container-compose/<project>/`, which is inside the mounted home directory.
+- A project runs entirely in one context (sandbox or one machine); mixed mode is not supported.
 
 ---
 

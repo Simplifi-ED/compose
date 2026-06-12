@@ -5,13 +5,27 @@ package enum ContainerFileSync {
     package typealias CopyIn = ContainerCopyAPI.CopyIn
     package typealias GetContainer = ContainerCopyAPI.GetContainer
 
+    private static let defaultCopyIn: CopyIn = { id, source, destination, mode, createParents in
+        try await ContainerCopyAPI.copyIn(
+            id: id,
+            source: source,
+            destination: destination,
+            mode: mode,
+            createParents: createParents
+        )
+    }
+
+    private static let defaultGetContainer: GetContainer = { id in
+        try await ContainerCopyAPI.get(id: id)
+    }
+
     package static func sync(
         resolved: ResolvedWatchRule,
         hostPath: URL,
         containers: [ProjectContainer],
         projectName: String,
-        copyIn: @escaping CopyIn = ContainerCopyAPI.copyIn,
-        getContainer: @escaping GetContainer = ContainerCopyAPI.get
+        copyIn: @escaping CopyIn = defaultCopyIn,
+        getContainer: @escaping GetContainer = defaultGetContainer
     ) async throws {
         let running = containers.filter { $0.status == .running }
         guard !running.isEmpty else {
@@ -85,8 +99,8 @@ package enum ContainerFileSync {
         resolved: ResolvedWatchRule,
         containers: [ProjectContainer],
         projectName: String,
-        copyIn: @escaping CopyIn = ContainerCopyAPI.copyIn,
-        getContainer: @escaping GetContainer = ContainerCopyAPI.get
+        copyIn: @escaping CopyIn = defaultCopyIn,
+        getContainer: @escaping GetContainer = defaultGetContainer
     ) async throws {
         let files = try WatchPathValidator.enumerateSyncableFiles(
             at: resolved.watchRoot,

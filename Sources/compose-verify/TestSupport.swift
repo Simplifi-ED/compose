@@ -13,17 +13,22 @@ enum StandardStreamCapture {
         guard originalFD >= 0 else {
             return (try body(), "")
         }
-        defer {
+        dup2(pipe.fileHandleForWriting.fileDescriptor, STDERR_FILENO)
+        var restored = false
+        func restore() {
+            guard !restored else { return }
             fflush(stderr)
             dup2(originalFD, STDERR_FILENO)
             close(originalFD)
+            try? pipe.fileHandleForWriting.close()
+            restored = true
         }
-        dup2(pipe.fileHandleForWriting.fileDescriptor, STDERR_FILENO)
+        defer { restore() }
+
         let result = try body()
-        fflush(stderr)
-        try? pipe.fileHandleForWriting.close()
+        restore()
         let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        return (result, String(decoding: data, as: UTF8.self))
+        return (result, String(bytes: data, encoding: .utf8) ?? "")
 #else
         return (try body(), "")
 #endif
@@ -68,7 +73,7 @@ actor TearDownRecorder {
 func blockingAwait<T>(_ body: @escaping @Sendable () async -> T) -> T {
     let semaphore = DispatchSemaphore(value: 0)
     let resultBox = BlockingResultBox<T>()
-    Task {
+    Task.detached {
         resultBox.value = await body()
         semaphore.signal()
     }

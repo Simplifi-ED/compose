@@ -24,10 +24,11 @@ You are building a **Minimal Real Compose Plugin**—NOT a generic orchestration
 - Opt-in `--remove-orphans` on `up`/`down`: profile-aware orphan detection and removal (project label scoped) [1].
 - Root-level `configs:` / `secrets:` with local `file:` sources (`external: false` only); service-level short and long refs; read-only staged mounts at `/run/configs/` and `/run/secrets/` via `-v …:ro` [1].
 - `down -v` / `--volumes`: Phase 1 bind-mount purge for project-relative host paths only; symlink-safe allowlist [1].
-- Staged config/secret files under a project temp directory (`0600` secrets, `0644` configs); removed on container teardown and `down` [1].
+- Staged config/secret files under `~/.config/container-compose/<project>/` (`0600` secrets, `0644` configs); removed on container teardown and `down` [1].
 - Service-level `develop.watch` (`sync`, `sync+restart`); macOS FSEvents file sync into running containers via `compose watch` and `ContainerClient.copyIn`; path sandbox matches bind-mount rules; sync applies to all running replicas [1].
 - Service `build:` (short context path or object with `context`, `dockerfile`, `args`, `target`); image build during `up`/`run` init via `Application.BuildCommand` before startup waves; default tag `{project}_{service}` when `image` omitted; explicit `image` names build output when both set; context path sandbox matches bind-mount rules; build args never logged; no registry push [1].
 - `compose cp` (`SERVICE:/path` ↔ host) via `ContainerClient.copyIn`/`copyOut`; project/service label scoping same as `exec`; default single replica or `ambiguousService`; `--index N` selects `{project}_{service}_{N}`; `--all` copies into all running replicas (host→container only); relative host paths CWD-sandboxed; absolute host paths allowed with stderr warning; container paths absolute with `..` rejected [1].
+- `--machine <name>` on `up`/`down`/`exec`/`ps`/`logs`/`cp`: validate machine via `MachineClient.inspect` (lazy boot); `ensureBooted()` only before mutating `up` workloads; scope discovery with `com.docker.compose.machine` label; in-VM `container` CLI via `MachineInVMRunner` for list/run/stop/exec/cp/logs/build; host sandbox discovery excludes machine-labeled containers; `ps`/`logs` exit gracefully when machine stopped; execution banner on stderr; dry-run prefixes `machine=<name>` without booting; `watch`/`run`/`top`/`config` error on `--machine` [1].
 
 ### **Out of Scope (DO NOT CODE):**
 
@@ -111,6 +112,25 @@ The output of the discovery command **must** show the `compose` plugin. If it do
 
 ---
 
+## 6. Machine-Mode Hypervisor Corrections (`--machine`)
+
+You must actively resolve the three core gaps in the VM hypervisor boundary instead of leaving them as documented constraints:
+
+1. **In-VM Image Builds:**
+   * Do not run `BuildRunner` on the macOS host when `--machine <name>` is set [2.1].
+   * Run `container build` inside the machine via `MachineInVMRunner` so image construction uses the VM image store [2.1].
+
+2. **Home-Relative File Staging:**
+   * Refactor `ComposeFileStaging.swift` to use `FileManager.default.homeDirectoryForCurrentUser` instead of `NSTemporaryDirectory()` [2.2].
+   * Ensure configs and secrets are staged at `~/.config/container-compose/...` so they fall within the automatically mounted `$HOME` directory inside the VM [2.2].
+
+3. **Lazy VM Booting:**
+   * Remove aggressive `MachineClient.boot` calls from eager context initialization [2.3].
+   * Prevent `ps`, `logs`, and `config` / `--dry-run` commands from booting a stopped VM [2.3]. If the target machine is stopped, `ps`/`logs` must exit gracefully with a "Machine stopped" message [2.3].
+   * Call `ensureBooted()` lazily only inside `Up` immediately before dispatching container executions (including in-VM builds) [2.3].
+
+---
+
 ## Learned User Preferences
 
 - v1 scope is minimal real compose (parse `docker-compose.yml`, start/stop services), not full Docker Compose parity.
@@ -128,18 +148,15 @@ The output of the discovery command **must** show the `compose` plugin. If it do
 
 ## Learned Workspace Facts
 
-- `container` CLI 1.0.0 at `/usr/local` for local dev; plugin at `{INSTALL_ROOT}/libexec/container-plugins/compose` via `scripts/install-plugin.sh` (`sudo` for `/usr/local`). Homebrew `container` sets `CONTAINER_INSTALL_ROOT` to `opt_prefix`, so plugins belong under `opt/container/libexec/container-plugins/compose`—not `HOMEBREW_PREFIX/libexec/...` from `command -v`. Run `container system start` before plugin discovery; host Linux kernel must be configured (`container system kernel set`) before `container run` or `compose up` succeed.
-- Package targets: `ComposeCore`, `compose`, `compose-verify`; on CLT use `swift run -c release compose-verify` (not `swift test`) and `scripts/lint.sh` with `SWIFTLINT_DISABLE_SOURCEKIT=1`. CI (`ci.yml`) is manual-only via `workflow_dispatch` with opt-in `run_smoke`; `release.yml` still runs lint/build/test on version tags. Both install SwiftLint via `scripts/install-swiftlint.sh` before `make lint`.
-- `compose down` reverse-topological with compose file present; parallel fallback for explicit `-p` only (not `COMPOSE_PROJECT_NAME` or compose `name:`).
+- `container` CLI 1.0.0 at `/usr/local` for local dev; plugin at `{INSTALL_ROOT}/libexec/container-plugins/compose` via `scripts/install-plugin.sh` (`sudo` for `/usr/local`). Homebrew `container` sets `CONTAINER_INSTALL_ROOT` to `opt_prefix`, so plugins belong under `opt/container/libexec/container-plugins/compose`—not `HOMEBREW_PREFIX/libexec/...` from `command -v`. Distribute compose via `brew install simplifi-ed/compose/container-compose` (may require `brew trust simplifi-ed/compose`); link step fails if plugin path exists as a non-symlink directory. macOS 26+ required for container machines (`--machine`). Container 1.0.0 has `MachineAPIClient` but no machine-scoped `ContainerClient`—machine runtime I/O uses in-VM `MachineInVMRunner`. Run `container system start` before plugin discovery; host Linux kernel must be configured (`container system kernel set`) before `container run` or `compose up` succeed.
+- Package targets: `ComposeCore`, `compose`, `compose-verify`; on CLT use `swift run -c release compose-verify` (not `swift test`) and `scripts/lint.sh` with `SWIFTLINT_DISABLE_SOURCEKIT=1`. `compose-verify` sync bridge: `blockingAwait` runs async work via `Task.detached`; `StandardStreamCapture.captureStandardError` restores stderr before reading the pipe (avoids deadlock)—use for tests that intentionally emit production stderr. CI (`ci.yml`) is manual-only via `workflow_dispatch` with opt-in `run_smoke`; `release.yml` runs lint/build/test on version tags (auto-generated notes; does not auto-mark `-rc` pre-release; bumps Homebrew formula). Both install SwiftLint via `scripts/install-swiftlint.sh` before `make lint`.
+- `compose down` reverse-topological with compose file present; parallel fallback for explicit `-p` only (not `COMPOSE_PROJECT_NAME` or compose `name:`). `--remove-orphans` on `up`/`down` is opt-in; `OrphanRemoval` handles profile-aware detection. On `up`, discovery/removal failures warn and startup continues (`UpOrphanRemoval.removeBeforeStartupBestEffort`). `down -v` purges project-relative bind-mount paths only (`BindMountPurge`); named volumes deferred.
 - Default compose discovery: `compose.yaml` → … → `docker-compose.yml` + paired `*.override.*`; `COMPOSE_FILE` when no `-f`. Project name: `-p` → `COMPOSE_PROJECT_NAME` → merged `name:` → first-file parent dir. Explicit missing `-f` paths throw; only absent default discovery yields nil so `-p`-only `down`/`ps` can proceed.
-- Multi-file merge: unique-key ports/volumes; env list by var name; `depends_on` keyed merge (override wins per service); `healthcheck` override wins. Relative bind-mount paths resolve against the compose file directory, not shell CWD.
-- `include:` via `ComposeIncludeResolver`: paths relative to the including file; parent services win naming (duplicate service name errors—unlike `-f` merge); recursive includes with cycle rejection; per-include `env_file` and `project_directory`; bind mounts in included services resolve against `project_directory` (default: included file's directory).
+- Multi-file merge and `include:`: unique-key ports/volumes; env list by var name; `depends_on` keyed merge (override wins per service); `healthcheck` override wins. Relative bind-mount paths resolve against the compose file directory, not shell CWD. `include:` via `ComposeIncludeResolver`—paths relative to including file; parent services win naming (duplicate service name errors—unlike `-f` merge); recursive includes with cycle rejection; per-include `env_file` and `project_directory`.
 - Per-file substitution before YAML parse: shell environment overrides `.env` beside each compose file; supports `${VAR}`, `${VAR:-default}`, `${VAR-default}`, and `$$` escapes; unresolved `${VAR}` errors; YAML anchors/aliases resolved by Yams during decode.
 - CLI subcommands: `up`, `down`, `ps`, `logs`, `top`, `exec`, `cp`, `run`, `watch`, `config`; `up`/`down` accept `--progress auto|plain|none`; `up --attach` multiplexes logs after detached start; `-f`/`-p` on subcommands, not `compose` root.
 - Profiles: default `up` skips profiled services; `--profile` (repeatable, OR) on `up`, `ps`, `logs`, `top`, `down`; `down --profile "*"` stops all project containers; `run` auto-enables the target service's profiles; filter before dependency graph with `profileExcludedDependency` for inactive deps; `COMPOSE_PROFILES` deferred.
 - `ComposeCore/Terminal/` is presentation-only (no Container API imports); `Runtime/` holds orchestration (`ServiceRunner` waves + `HealthWait` inter-wave gating, `LogStream`, `SignalForwarding`, `ExecSession`, `AttachAfterUp`, `ProjectStatus`). `compose top` streams `ContainerClient.stats()` by project labels; `compose logs` multiplexes containerLog + bootlog. SIGINT during `up`/`down` leaves started containers running. State uses `com.docker.compose.*` labels on `ContainerRun`.
 - Scaling: `ReplicaPlanning` is pure validation/naming; replica loops live in `ServicePlanner.startupLayers`; `up` names are always `{project}_{service}_{index}` (1-based); `container_name` errors on `up` via `validateForUp` but still keys `run` via `runContainerBaseName`; `deploy.replicas` must be >= 1 at decode; static host port + replicas > 1 fails at plan time; container-only ports (`80`, `:80`) parse but emit no `-p`; replicas carry `com.docker.compose.container-number`; log multiplex keys by container name and disambiguates replica prefixes.
-- `--remove-orphans` on `up`/`down` is opt-in; `OrphanRemoval` handles profile-aware detection. On `up`, discovery/removal failures warn and startup continues (`UpOrphanRemoval.removeBeforeStartupBestEffort`). `down -v` purges project-relative bind-mount paths only (`BindMountPurge`); named volumes deferred.
 - `develop.watch` via `compose watch`: FSEvents (`FileWatchMonitor`), debounced sync (`WatchDebouncer` + `ContainerFileSync.copyIn`), `sync+restart` via `ServiceRunnerRestart.restartPlans` (all replicas, no project teardown); path sandbox reuses `BindMountPathResolver`; Ctrl+C uses `.cancelOnly`. Scale/restart targets derive from running container discovery (no `--scale` on watch); container list refreshes before each apply and after restart.
-- Service `build:` via `BuildRunner` + `Application.BuildCommand` before startup waves on `up`/`run`; default tag `{project}_{service}`; `compose config` injects resolved `image:`; dry-run emits `[DRY-RUN] build image …`; context sandbox reuses `BindMountPathResolver`; build arg values never logged; `develop.watch` `rebuild` still deferred.
-- `compose cp` via `CpSession` + `CpContainerResolver`; shared `ContainerCopyAPI` (`copyIn`/`copyOut`/`get`) for watch + cp; `--index`/`--all` (copy-in only); host paths CWD-sandboxed; dry-run emits `[DRY-RUN] cp container …`. `ExecSession` uses `ComposeContainerGuard` with `serviceName`.
+- Service `build:` via `BuildRunner` + `Application.BuildCommand` before startup waves on `up`/`run`; default tag `{project}_{service}`; `compose config` injects resolved `image:`; dry-run emits `[DRY-RUN] build image …`; context sandbox reuses `BindMountPathResolver`; build arg values never logged; `develop.watch` `rebuild` still deferred. `compose cp` via `CpSession` + `CpContainerResolver`; shared `ContainerCopyAPI` for watch + cp; dry-run emits `[DRY-RUN] cp container …`.

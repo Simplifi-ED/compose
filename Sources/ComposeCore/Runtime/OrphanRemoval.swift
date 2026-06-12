@@ -54,7 +54,8 @@ public enum OrphanRemoval {
     public static func removeOrphans(
         _ orphans: [DiscoveredContainer],
         execution: WaveExecutionPolicy = .unlimited,
-        onRemoved: (@Sendable (String) -> Void)? = nil
+        onRemoved: (@Sendable (String) -> Void)? = nil,
+        machineContext: MachineContext = .applicationSandbox
     ) async throws {
         guard !orphans.isEmpty else { return }
 
@@ -64,7 +65,10 @@ public enum OrphanRemoval {
             },
             maxConcurrent: execution.maxConcurrent
         ) { container in
-            try await ContainerTeardown.teardownRespectingCancellation(id: container.name)
+            try await ContainerTeardown.teardownRespectingCancellation(
+                id: container.name,
+                machineContext: machineContext
+            )
         }
 
         if !result.succeeded.isEmpty {
@@ -74,15 +78,15 @@ public enum OrphanRemoval {
             )
         }
 
+        for name in result.succeeded.sorted() {
+            onRemoved?(name)
+        }
+
         if result.wasInterrupted {
             throw CancellationError()
         }
         if !result.failures.isEmpty {
             throw ComposeError.multipleServiceFailures(result.failures)
-        }
-
-        for name in result.succeeded.sorted() {
-            onRemoved?(name)
         }
     }
 

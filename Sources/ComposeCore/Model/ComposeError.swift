@@ -30,6 +30,7 @@ public enum ComposeError: LocalizedError, Sendable {
     case invalidComposeFilePath(String)
     case undefinedService(service: String)
     case serviceNotFound(service: String, project: String)
+    case containerNotFound(container: String)
     case serviceNotRunning(service: String, state: String)
     case ambiguousService(service: String, containers: [String])
     case containerProjectMismatch(container: String, project: String)
@@ -51,6 +52,14 @@ public enum ComposeError: LocalizedError, Sendable {
     case cpLocalToLocal
     case cpAllRequiresCopyIn
     case replicaNotFound(service: String, index: Int, project: String)
+    case invalidMachineName(String)
+    case machineNotFound(String)
+    case machineStopped(String, reason: MachineStoppedReason)
+    case machineNotRunning(String)
+    case machineBootFailed(String, underlying: Error)
+    case machineUnsupportedCommand(String)
+    case machineUnsupportedOperation(String)
+    case machineCommandFailed(machine: String, command: String, exitCode: Int32)
 
     public var errorDescription: String? {
         switch self {
@@ -128,6 +137,8 @@ public enum ComposeError: LocalizedError, Sendable {
                 No container for service '\(service)' in project '\(project)'. \
                 Check the service name and run compose up.
                 """
+        case .containerNotFound(let container):
+            return "Container '\(container)' not found. Check the name with compose ps."
         case .serviceNotRunning(let service, let state):
             return "Service '\(service)' isn't running (state: \(state)). Start it with compose up."
         case .ambiguousService(let service, let containers):
@@ -182,6 +193,25 @@ public enum ComposeError: LocalizedError, Sendable {
         case .replicaNotFound(let service, let index, let project):
             return "No running replica \(index) for service '\(service)' in project '\(project)'. "
                 + "Check compose ps."
+        case .invalidMachineName(let name):
+            return "Invalid machine name '\(name)'. Use lowercase letters, numbers, and hyphens."
+        case .machineNotFound(let name):
+            return "Container machine '\(name)' not found. Run `container machine list` to see machines."
+        case .machineStopped(let name, let reason):
+            return reason.message(machineName: name)
+        case .machineNotRunning(let name):
+            return """
+                Container machine '\(name)' isn't running. `compose up` and `compose down` boot it \
+                when stopped; start it manually with `container machine run -n \(name)` if boot failed.
+                """
+        case .machineBootFailed(let name, let underlying):
+            return "Couldn't boot container machine '\(name)': \(underlying.localizedDescription)"
+        case .machineUnsupportedCommand(let command):
+            return "The \(command) command doesn't support --machine."
+        case .machineUnsupportedOperation(let operation):
+            return "Machine mode doesn't support \(operation) yet."
+        case .machineCommandFailed(let machine, let command, let exitCode):
+            return "Command failed in container machine '\(machine)' (exit \(exitCode)): \(command)"
         }
     }
 }

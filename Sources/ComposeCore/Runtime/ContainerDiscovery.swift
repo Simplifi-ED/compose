@@ -34,15 +34,26 @@ public struct ProjectContainer: Sendable {
 }
 
 public enum ContainerDiscovery {
-    public static func containers(forProject projectName: String) async throws -> [DiscoveredContainer] {
-        try await projectContainers(forProject: projectName).map {
+    public static func containers(
+        forProject projectName: String,
+        machineContext: MachineContext = .applicationSandbox
+    ) async throws -> [DiscoveredContainer] {
+        try await projectContainers(forProject: projectName, machineContext: machineContext).map {
             DiscoveredContainer(name: $0.name, serviceName: $0.serviceName)
         }
     }
 
-    public static func projectContainers(forProject projectName: String) async throws -> [ProjectContainer] {
-        let client = ContainerClient()
-        let snapshots = try await client.list(filters: listFilters(forProject: projectName))
+    public static func projectContainers(
+        forProject projectName: String,
+        machineContext: MachineContext = .applicationSandbox
+    ) async throws -> [ProjectContainer] {
+        var snapshots = try await ComposeContainerGateway.list(
+            filters: listFilters(forProject: projectName, machineContext: machineContext),
+            machineContext: machineContext
+        )
+        if !machineContext.isMachineMode {
+            snapshots = snapshots.filter { $0.configuration.labels[ComposeLabels.machine] == nil }
+        }
         return snapshots
             .map { snapshot in
                 ProjectContainer(
@@ -55,13 +66,7 @@ public enum ContainerDiscovery {
             .sorted { $0.name < $1.name }
     }
 
-    private static func listFilters(forProject projectName: String) -> ContainerListFilters {
-        ContainerListFilters(
-            labels: [ComposeLabels.project: exactMatchRegex(projectName)]
-        ).withoutMachines()
-    }
-
-    private static func exactMatchRegex(_ value: String) -> String {
+    package static func exactMatchRegex(_ value: String) -> String {
         "^\(NSRegularExpression.escapedPattern(for: value))$"
     }
 }

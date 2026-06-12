@@ -17,6 +17,9 @@ public struct Config: AsyncParsableCommand {
     @OptionGroup
     var scaleOptions: ScaleOptions
 
+    @OptionGroup
+    var machineOptions: MachineOptions
+
     @Flag(
         name: .long,
         help: "Validate without printing the resolved configuration."
@@ -24,6 +27,7 @@ public struct Config: AsyncParsableCommand {
     var quiet = false
 
     public func run() async throws {
+        try machineOptions.rejectIfUnsupported(commandName: "config")
         let fileURLs = try projectOptions.resolvedFileURLs()
         let composeFile = try ComposeParser.parse(fileURLs: fileURLs)
         let projectName = try projectOptions.resolvedProjectName(

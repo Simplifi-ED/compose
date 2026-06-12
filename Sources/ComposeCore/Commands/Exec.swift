@@ -15,6 +15,9 @@ public struct Exec: AsyncParsableCommand {
     @OptionGroup
     var dryRunOptions: DryRunOptions
 
+    @OptionGroup
+    var machineOptions: MachineOptions
+
     @Flag(name: .short, help: "Keep STDIN open even if not attached.")
     var interactive = false
 
@@ -41,10 +44,17 @@ public struct Exec: AsyncParsableCommand {
     }
 
     public func run() async throws {
+        let machineContext = try await machineOptions
+            .resolveContext(stopped: .requireRunning)
+            .machineContext
         let context = try projectOptions.resolvedLabelCommandContext(
-            skipComposeFileOnExplicitProject: true
+            skipComposeFileOnExplicitProject: true,
+            machineContext: machineContext
         )
-        let containers = try await ContainerDiscovery.projectContainers(forProject: context.projectName)
+        let containers = try await ContainerDiscovery.projectContainers(
+            forProject: context.projectName,
+            machineContext: machineContext
+        )
         let target = try ExecContainerResolver.resolve(
             projectName: context.projectName,
             serviceName: service,
@@ -52,7 +62,7 @@ public struct Exec: AsyncParsableCommand {
         )
 
         if dryRunOptions.isEnabled {
-            let manifest = DryRunManifest()
+            let manifest = DryRunManifest(machineName: machineContext.machineName)
             await manifest.recordExec(container: target.name, command: command)
             await manifest.printLines()
             return
@@ -68,7 +78,8 @@ public struct Exec: AsyncParsableCommand {
             projectName: context.projectName,
             composeFile: context.composeFile,
             fileURLs: context.fileURLs,
-            options: GracefulStopOptions(graceSeconds: timeout)
+            options: GracefulStopOptions(graceSeconds: timeout),
+            machineContext: machineContext
         )
 
         let executable = command[0]
@@ -85,7 +96,8 @@ public struct Exec: AsyncParsableCommand {
                 interactive: ioFlags.interactive,
                 useInteractivePTY: ioFlags.useInteractivePTY
             ),
-            shutdownContext: shutdownContext
+            shutdownContext: shutdownContext,
+            machineContext: machineContext
         )
     }
 }

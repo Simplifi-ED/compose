@@ -32,6 +32,9 @@ public struct Up: AsyncParsableCommand {
     @OptionGroup
     var dryRunOptions: DryRunOptions
 
+    @OptionGroup
+    var machineOptions: MachineOptions
+
     @Flag(
         name: .long,
         help: "After startup, follow service logs in the foreground until services exit or you interrupt."
@@ -40,59 +43,35 @@ public struct Up: AsyncParsableCommand {
 
     public func run() async throws {
         try parallelOptions.validate()
-        let fileURLs = try projectOptions.resolvedFileURLs()
-        let composeFile = try ComposeParser.parse(fileURLs: fileURLs)
-        let projectName = try projectOptions.resolvedProjectName(
-            composeFile: composeFile,
-            fileURL: fileURLs[0]
-        )
-        let composeDirectory = fileURLs[0].deletingLastPathComponent()
-
-        let scaleOverrides = try scaleOptions.resolvedScaleOverrides()
-        let buildPlans = try resolveBuildPlans(
-            composeFile: composeFile,
-            projectName: projectName,
-            composeDirectory: composeDirectory
-        )
-        let layers = try ServicePlanner.startupLayers(
-            for: composeFile,
-            projectName: projectName,
-            composeDirectory: composeDirectory,
-            activeProfiles: profileOptions.activeProfileSet,
-            scaleOverrides: scaleOverrides
-        )
-        let plans = layers.flatMap { $0 }
-        let healthContext = HealthWaitContext(
-            services: composeFile.services,
-            projectName: projectName,
-            scaleOverrides: scaleOverrides
-        )
+        let machineContext = try await machineOptions.resolveContext().machineContext
+        let startup = try resolveStartupPlan(machineName: machineOptions.resolvedMachineName)
 
         if dryRunOptions.isEnabled {
             try await runDryRun(
-                projectName: projectName,
-                composeFile: composeFile,
-                layers: layers,
-                healthContext: healthContext,
-                buildPlans: buildPlans
+                DryRunInput(
+                    projectName: startup.projectName,
+                    composeFile: startup.composeFile,
+                    layers: startup.layers,
+                    healthContext: startup.healthContext,
+                    buildPlans: startup.buildPlans,
+                    machineContext: machineContext
+                )
             )
             return
         }
 
-        try await executeBuildPlans(buildPlans, dryRunManifest: nil)
-
-        try await orchestrateStartup(
-            projectName: projectName,
-            composeFile: composeFile,
-            layers: layers,
-            healthContext: healthContext
-        )
-
-        try await finishStartup(
-            plans: plans,
-            projectName: projectName,
-            composeFile: composeFile,
-            fileURLs: fileURLs
+        let bootedContext = try await machineContext.ensureBooted()
+        try await runLive(
+            LiveInput(
+                buildPlans: startup.buildPlans,
+                projectName: startup.projectName,
+                composeFile: startup.composeFile,
+                fileURLs: startup.fileURLs,
+                layers: startup.layers,
+                plans: startup.plans,
+                healthContext: startup.healthContext,
+                machineContext: bootedContext
+            )
         )
     }
 }

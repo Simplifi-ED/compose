@@ -1,6 +1,7 @@
 import ContainerAPIClient
 import ContainerResource
 import Foundation
+import MachineAPIClient
 
 enum HealthProbe {
   struct TimedOut: Error {}
@@ -34,32 +35,65 @@ enum HealthProbe {
     }
   }
 
-  static func defaultStatus(id: String) async throws -> RuntimeStatus? {
-    let client = ContainerClient()
-    do {
-      return try await client.get(id: id).status
-    } catch {
-      if ContainerTeardown.isIgnorableError(error) {
-        return nil
+  static func statusProvider(machineContext: MachineContext) -> HealthWait.StatusProvider {
+    { id in
+      do {
+        return try await ComposeContainerGateway.get(id: id, machineContext: machineContext).status
+      } catch {
+        if ContainerTeardown.isIgnorableError(error) {
+          return nil
+        }
+        throw error
       }
-      throw error
     }
   }
 
-  static func defaultProcessRunner(
-    containerName: String,
-    configuration: ProcessConfiguration,
+  static func processRunner(machineContext: MachineContext) -> HealthWait.ProcessRunner {
+    { containerName, configuration, timeout in
+      if machineContext.isMachineMode {
+        let snapshot = try machineContext.bootedContext().snapshot
+        let execArgs = ["exec", containerName, configuration.executable] + configuration.arguments
+        return try await runMachineHealthExec(
+          snapshot: snapshot,
+          arguments: execArgs,
+          timeout: timeout
+        )
+      }
+      let process = try await ComposeContainerGateway.createProcess(
+        containerId: containerName,
+        processId: UUID().uuidString.lowercased(),
+        configuration: configuration,
+        stdio: [nil, nil, nil],
+        machineContext: machineContext
+      )
+      try await process.start()
+      return try await waitForExit(process: process, timeout: timeout)
+    }
+  }
+
+  private static func runMachineHealthExec(
+    snapshot: MachineSnapshot,
+    arguments: [String],
     timeout: Duration
   ) async throws -> Int32 {
-    let client = ContainerClient()
-    let process = try await client.createProcess(
-      containerId: containerName,
-      processId: UUID().uuidString.lowercased(),
-      configuration: configuration,
-      stdio: [nil, nil, nil]
-    )
-    try await process.start()
-    return try await waitForExit(process: process, timeout: timeout)
+    try await withThrowingTaskGroup(of: Int32.self) { group in
+      group.addTask {
+        let result = try await MachineInVMRunner.runCapturing(
+          snapshot: snapshot,
+          containerArguments: arguments
+        )
+        return result.exitCode
+      }
+      group.addTask {
+        try await Task.sleep(for: timeout)
+        throw TimedOut()
+      }
+      guard let exitCode = try await group.next() else {
+        throw TimedOut()
+      }
+      group.cancelAll()
+      return exitCode
+    }
   }
 
   static func waitForExit(process: any ClientProcess, timeout: Duration) async throws -> Int32 {

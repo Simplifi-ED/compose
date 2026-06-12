@@ -72,7 +72,8 @@ package enum BuildRunner {
     package static func buildAll(
         _ plans: [Plan],
         progress: ProgressSetting?,
-        dryRunManifest: DryRunManifest?
+        dryRunManifest: DryRunManifest?,
+        machineContext: MachineContext = .applicationSandbox
     ) async throws {
         for plan in plans {
             if let dryRunManifest {
@@ -84,10 +85,19 @@ package enum BuildRunner {
                 )
                 continue
             }
-            let arguments = try buildArguments(for: plan, progress: progress)
             do {
-                let command = try Application.BuildCommand.parse(arguments)
-                try await command.run()
+                if machineContext.isMachineMode {
+                    let booted = try machineContext.bootedContext()
+                    let arguments = try buildArguments(for: plan, progress: progress)
+                    try await MachineInVMRunner.run(
+                        snapshot: booted.snapshot,
+                        containerArguments: ["build"] + arguments
+                    )
+                } else {
+                    let arguments = try buildArguments(for: plan, progress: progress)
+                    let command = try Application.BuildCommand.parse(arguments)
+                    try await command.run()
+                }
             } catch {
                 throw ComposeError.buildFailed(service: plan.serviceName, underlying: error)
             }

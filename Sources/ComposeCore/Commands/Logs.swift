@@ -14,6 +14,9 @@ public struct Logs: AsyncParsableCommand {
     @OptionGroup
     var profileOptions: ProfileOptions
 
+    @OptionGroup
+    var machineOptions: MachineOptions
+
     @Flag(name: .long, help: "Stream new log lines.")
     var follow = false
 
@@ -33,11 +36,19 @@ public struct Logs: AsyncParsableCommand {
     }
 
     public func run() async throws {
+        guard let machineContext = try await machineOptions
+            .resolveContext(stopped: .gracefulExit)
+            .machineContextIfReady
+        else { return }
         let context = try projectOptions.resolvedLabelCommandContext(
             skipComposeFileOnExplicitProject: true,
-            profileFilterRequested: profileOptions.profileFilterRequested
+            profileFilterRequested: profileOptions.profileFilterRequested,
+            machineContext: machineContext
         )
-        let containers = try await ContainerDiscovery.projectContainers(forProject: context.projectName)
+        let containers = try await ContainerDiscovery.projectContainers(
+            forProject: context.projectName,
+            machineContext: machineContext
+        )
         let filter = try projectOptions.resolvedQueryServiceFilter(
             context: context,
             profileOptions: profileOptions,
@@ -47,7 +58,13 @@ public struct Logs: AsyncParsableCommand {
         guard !sources.isEmpty else { return }
 
         let mode = TerminalMode.resolve()
-        let options = LogStreamOptions(tail: tail, follow: follow, boot: boot, mode: mode)
+        let options = LogStreamOptions(
+            tail: tail,
+            follow: follow,
+            boot: boot,
+            mode: mode,
+            machineContext: machineContext
+        )
 
         if follow {
             _ = try await LogFollowSession.runUntilCancelled(

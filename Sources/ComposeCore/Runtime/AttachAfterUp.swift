@@ -7,6 +7,7 @@ package enum AttachAfterUp {
         plans: [ServicePlan],
         shutdownContext: ProjectShutdownContext,
         mode: TerminalMode,
+        machineContext: MachineContext = .applicationSandbox,
         stopProject: @Sendable (ProjectShutdownContext) async throws -> Void = {
             try await ProjectShutdown.stop(context: $0)
         }
@@ -14,7 +15,13 @@ package enum AttachAfterUp {
         guard !plans.isEmpty else { return }
 
         let sources = makeLogSources(from: plans)
-        let options = LogStreamOptions(tail: nil, follow: true, boot: false, mode: mode)
+        let options = LogStreamOptions(
+            tail: nil,
+            follow: true,
+            boot: false,
+            mode: mode,
+            machineContext: machineContext
+        )
         let containerIDs = plans.map(\.name)
 
         let outcome = try await LogFollowSession.runUntilCancelled(
@@ -23,7 +30,10 @@ package enum AttachAfterUp {
             policy: .stopProject(shutdownContext),
             stopProject: stopProject,
             parallelUntilComplete: {
-                try await ContainerExitWatch.waitUntilAllStopped(ids: containerIDs)
+                try await ContainerExitWatch.waitUntilAllStopped(
+                    ids: containerIDs,
+                    status: ContainerExitWatch.statusProvider(machineContext: machineContext)
+                )
             },
             onMultiplexError: { error in
                 fputs(
