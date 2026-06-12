@@ -16,10 +16,14 @@ public struct Watch: AsyncParsableCommand {
     @OptionGroup
     var profileOptions: ProfileOptions
 
+    @OptionGroup
+    var machineOptions: MachineOptions
+
     @Argument(help: "Limit watching to these service names.")
     var services: [String] = []
 
     public func run() async throws {
+        try machineOptions.rejectIfUnsupported(commandName: "watch")
         let fileURLs = try projectOptions.resolvedFileURLs()
         let composeFile = try ComposeParser.parse(fileURLs: fileURLs)
         let projectName = try projectOptions.resolvedProjectName(

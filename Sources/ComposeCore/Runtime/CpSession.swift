@@ -42,18 +42,41 @@ package enum CpSession {
 
     package static func run(
         configuration: Configuration,
-        copyIn: @escaping CopyIn = ContainerCopyAPI.copyIn,
-        copyOut: @escaping CopyOut = ContainerCopyAPI.copyOut,
-        getContainer: @escaping GetContainer = ContainerCopyAPI.get
+        machineContext: MachineContext = .applicationSandbox,
+        copyIn: CopyIn? = nil,
+        copyOut: CopyOut? = nil,
+        getContainer: GetContainer? = nil
     ) async throws {
-        try await preflightTargets(configuration: configuration, getContainer: getContainer)
+        let resolvedCopyIn = copyIn ?? { id, source, destination, mode, createParents in
+            try await ContainerCopyAPI.copyIn(
+                id: id,
+                source: source,
+                destination: destination,
+                mode: mode,
+                createParents: createParents,
+                machineContext: machineContext
+            )
+        }
+        let resolvedCopyOut = copyOut ?? { id, source, destination, createParents in
+            try await ContainerCopyAPI.copyOut(
+                id: id,
+                source: source,
+                destination: destination,
+                createParents: createParents,
+                machineContext: machineContext
+            )
+        }
+        let resolvedGetContainer = getContainer ?? { id in
+            try await ContainerCopyAPI.get(id: id, machineContext: machineContext)
+        }
+        try await preflightTargets(configuration: configuration, getContainer: resolvedGetContainer)
 
         if configuration.targets.count == 1 {
             try await copyToTarget(
                 configuration: configuration,
                 containerName: configuration.targets[0].name,
-                copyIn: copyIn,
-                copyOut: copyOut
+                copyIn: resolvedCopyIn,
+                copyOut: resolvedCopyOut
             )
             return
         }
@@ -65,8 +88,8 @@ package enum CpSession {
                     try await copyToTarget(
                         configuration: configuration,
                         containerName: containerName,
-                        copyIn: copyIn,
-                        copyOut: copyOut
+                        copyIn: resolvedCopyIn,
+                        copyOut: resolvedCopyOut
                     )
                 }
             }

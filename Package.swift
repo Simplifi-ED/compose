@@ -17,6 +17,7 @@ let package = Package(
                 .product(name: "ArgumentParser", package: "swift-argument-parser"),
                 .product(name: "ContainerAPIClient", package: "container"),
                 .product(name: "ContainerCommands", package: "container"),
+                .product(name: "MachineAPIClient", package: "container"),
                 .product(name: "Containerization", package: "containerization"),
                 .product(name: "ContainerizationOS", package: "containerization"),
                 .product(name: "Yams", package: "Yams"),

@@ -147,7 +147,8 @@ package enum DownShutdown {
         containers: [DiscoveredContainer],
         useOrderedShutdown: Bool,
         progress: WaveProgressHandlers?,
-        execution: WaveExecutionPolicy = .unlimited
+        execution: WaveExecutionPolicy = .unlimited,
+        machineContext: MachineContext = .applicationSandbox
     ) async throws {
         let layers = try resolveShutdownLayers(
             context: context,
@@ -159,7 +160,8 @@ package enum DownShutdown {
             projectName: context.projectName,
             onRemoved: { print($0) },
             progress: progress,
-            execution: execution
+            execution: execution,
+            machineContext: machineContext
         )
     }
 

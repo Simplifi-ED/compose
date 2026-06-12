@@ -26,7 +26,8 @@ public enum ServiceRunner {
         layers: [[ServicePlan]],
         progress: WaveProgressHandlers? = nil,
         healthContext: HealthWaitContext? = nil,
-        execution: WaveExecutionPolicy = .unlimited
+        execution: WaveExecutionPolicy = .unlimited,
+        machineContext: MachineContext = .applicationSandbox
     ) async throws {
         let allPlans = layers.flatMap { $0 }
         try await orchestrateUp(
@@ -36,7 +37,7 @@ public enum ServiceRunner {
             execution: execution,
             hooks: UpOperationHooks(
                 runContainer: { plan in
-                    try await runContainerWithFileMounts(plan)
+                    try await runContainerWithFileMounts(plan, machineContext: machineContext)
                 },
                 rollbackTeardown: { name in
                     if let plan = allPlans.first(where: { $0.name == name }) {
@@ -45,10 +46,14 @@ public enum ServiceRunner {
                             containerName: name
                         )
                     }
-                    try await ContainerTeardown.teardown(id: name)
+                    try await ContainerTeardown.teardown(id: name, machineContext: machineContext)
                 },
                 waitForDependencies: { gates, context in
-                    try await HealthWait.waitForDependencies(gates: gates, context: context)
+                    try await HealthWait.waitForDependencies(
+                        gates: gates,
+                        context: context,
+                        machineContext: machineContext
+                    )
                 }
             )
         )
@@ -72,8 +77,15 @@ public enum ServiceRunner {
         )
     }
 
-    package static func runContainerWithFileMounts(_ plan: ServicePlan) async throws {
-        try await ContainerTeardown.teardownRespectingCancellation(id: plan.name) {
+    package static func runContainerWithFileMounts(
+        _ plan: ServicePlan,
+        machineContext: MachineContext = .applicationSandbox
+    ) async throws {
+        if machineContext.isMachineMode {
+            try await ComposeContainerGateway.runDetached(plan: plan, machineContext: machineContext)
+            return
+        }
+        try await ContainerTeardown.teardownRespectingCancellation(id: plan.name, machineContext: machineContext) {
             let runArguments = try ComposeFileStaging.preparedRunArguments(for: plan)
             let command: Application.ContainerRun
             do {
@@ -165,7 +177,8 @@ public enum ServiceRunner {
         projectName: String? = nil,
         onRemoved: (@Sendable (String) -> Void)? = nil,
         progress: WaveProgressHandlers? = nil,
-        execution: WaveExecutionPolicy = .unlimited
+        execution: WaveExecutionPolicy = .unlimited,
+        machineContext: MachineContext = .applicationSandbox
     ) async throws {
         try await orchestrateDown(
             layers: layers,
@@ -173,7 +186,10 @@ public enum ServiceRunner {
             progress: progress,
             execution: execution,
             teardown: { container in
-                try await ContainerTeardown.teardownRespectingCancellation(id: container.name)
+                try await ContainerTeardown.teardownRespectingCancellation(
+                    id: container.name,
+                    machineContext: machineContext
+                )
                 if let projectName {
                     ComposeFileStaging.removeContainerStaging(
                         projectName: projectName,
@@ -207,20 +223,6 @@ public enum ServiceRunner {
                 }
             }
         }
-    }
-
-    /// SIGTERM each container with grace, then SIGKILL. Collects per-container failures.
-    package static func stopGracefully(
-        layers: [[DiscoveredContainer]],
-        options: GracefulStopOptions
-    ) async throws -> [(name: String, error: Error)] {
-        try await runContainerWaves(
-            layers: layers,
-            progress: nil,
-            failFast: false
-        ) { container in
-            try await ContainerTeardown.stopGracefully(id: container.name, options: options)
-        } onWaveComplete: { _ in }
     }
 
     public static func rollbackStartedContainers(

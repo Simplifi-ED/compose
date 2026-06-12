@@ -18,6 +18,9 @@ public struct Run: AsyncParsableCommand {
     @OptionGroup
     var dryRunOptions: DryRunOptions
 
+    @OptionGroup
+    var machineOptions: MachineOptions
+
     @Flag(name: .long, help: "Remove the container after it exits.")
     var remove = false
 
@@ -44,6 +47,7 @@ public struct Run: AsyncParsableCommand {
     }
 
     public func run() async throws {
+        try machineOptions.rejectIfUnsupported(commandName: "run")
         let fileURLs = try projectOptions.resolvedFileURLs()
         let composeFile = try ComposeParser.parse(fileURLs: fileURLs)
         let projectName = try projectOptions.resolvedProjectName(

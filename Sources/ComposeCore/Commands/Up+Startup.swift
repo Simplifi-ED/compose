@@ -1,11 +1,41 @@
 import Foundation
 
 extension Up {
+    struct LiveInput: Sendable {
+        let buildPlans: [BuildRunner.Plan]
+        let projectName: String
+        let composeFile: ComposeFile
+        let fileURLs: [URL]
+        let layers: [[ServicePlan]]
+        let plans: [ServicePlan]
+        let healthContext: HealthWaitContext
+        let machineContext: MachineContext
+    }
+
+    func runLive(_ input: LiveInput) async throws {
+        try await executeBuildPlans(input.buildPlans, dryRunManifest: nil)
+        try await orchestrateStartup(
+            projectName: input.projectName,
+            composeFile: input.composeFile,
+            layers: input.layers,
+            healthContext: input.healthContext,
+            machineContext: input.machineContext
+        )
+        try await finishStartup(
+            plans: input.plans,
+            projectName: input.projectName,
+            composeFile: input.composeFile,
+            fileURLs: input.fileURLs,
+            machineContext: input.machineContext
+        )
+    }
+
     func orchestrateStartup(
         projectName: String,
         composeFile: ComposeFile,
         layers: [[ServicePlan]],
-        healthContext: HealthWaitContext
+        healthContext: HealthWaitContext,
+        machineContext: MachineContext
     ) async throws {
         let shouldRemoveOrphans = workspaceHygiene.shouldRemoveOrphans
         let activeProfiles = profileOptions.activeProfileSet
@@ -23,14 +53,16 @@ extension Up {
                     projectName: projectName,
                     composeFile: composeFile,
                     activeProfiles: activeProfiles,
-                    execution: execution
+                    execution: execution,
+                    machineContext: machineContext
                 )
             }
             try await ServiceRunner.up(
                 layers: layers,
                 progress: orchestration.handlers,
                 healthContext: healthContext,
-                execution: execution
+                execution: execution,
+                machineContext: machineContext
             )
         }
     }
@@ -39,7 +71,8 @@ extension Up {
         plans: [ServicePlan],
         projectName: String,
         composeFile: ComposeFile,
-        fileURLs: [URL]
+        fileURLs: [URL],
+        machineContext: MachineContext
     ) async throws {
         for line in UpStartupSummary.lines(for: plans) {
             print(line)
@@ -48,7 +81,8 @@ extension Up {
             projectName: projectName,
             composeFile: composeFile,
             fileURLs: fileURLs,
-            plans: plans
+            plans: plans,
+            machineContext: machineContext
         )
     }
 
@@ -56,19 +90,22 @@ extension Up {
         projectName: String,
         composeFile: ComposeFile,
         fileURLs: [URL],
-        plans: [ServicePlan]
+        plans: [ServicePlan],
+        machineContext: MachineContext
     ) async throws {
         guard attach else { return }
         let shutdownContext = ProjectShutdownContext(
             projectName: projectName,
             composeFile: composeFile,
             fileURLs: fileURLs,
-            options: shutdownTimeoutOptions.gracefulStopOptions()
+            options: shutdownTimeoutOptions.gracefulStopOptions(),
+            machineContext: machineContext
         )
         try await AttachAfterUp.run(
             plans: plans,
             shutdownContext: shutdownContext,
-            mode: TerminalMode.resolve()
+            mode: TerminalMode.resolve(),
+            machineContext: machineContext
         )
     }
 }

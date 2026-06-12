@@ -14,6 +14,9 @@ public struct Cp: AsyncParsableCommand {
     @OptionGroup
     var dryRunOptions: DryRunOptions
 
+    @OptionGroup
+    var machineOptions: MachineOptions
+
     @Option(
         name: .long,
         help: "1-based replica index when a service runs multiple containers (for example 2 for demo_web_2)."
@@ -68,21 +71,22 @@ public struct Cp: AsyncParsableCommand {
         serviceRef: CpPathRef
     ) async throws {
         guard case .local(let rawHostPath) = localRef,
-              case .service(let serviceName, let containerPath) = serviceRef else {
-            return
-        }
-        if direction == .copyOut, all {
-            throw ComposeError.cpAllRequiresCopyIn
-        }
+              case .service(let serviceName, let containerPath) = serviceRef else { return }
+        if direction == .copyOut, all { throw ComposeError.cpAllRequiresCopyIn }
 
         let validatedContainerPath = try CpPathValidator.validateContainerPath(containerPath)
         let hostRole: CpPathValidator.HostPathRole = direction == .copyIn ? .source : .destination
         let resolvedHost = try CpPathValidator.resolveHostPath(rawHostPath, role: hostRole)
 
+        let machineContext = try await machineOptions.resolveContext()
         let context = try projectOptions.resolvedLabelCommandContext(
-            skipComposeFileOnExplicitProject: true
+            skipComposeFileOnExplicitProject: true,
+            machineContext: machineContext
         )
-        let containers = try await ContainerDiscovery.projectContainers(forProject: context.projectName)
+        let containers = try await ContainerDiscovery.projectContainers(
+            forProject: context.projectName,
+            machineContext: machineContext
+        )
         let targets = try CpContainerResolver.resolve(
             projectName: context.projectName,
             serviceName: serviceName,
@@ -96,16 +100,13 @@ public struct Cp: AsyncParsableCommand {
         let dryRunDestination = direction == .copyIn ? validatedContainerPath : rawHostPath
 
         if dryRunOptions.isEnabled {
-            let manifest = DryRunManifest()
-            for target in targets {
-                await manifest.recordCp(
-                    container: target.name,
-                    direction: sessionDirection,
-                    source: dryRunSource,
-                    destination: dryRunDestination
-                )
-            }
-            await manifest.printLines()
+            await printCpDryRun(
+                manifest: DryRunManifest(machineName: machineContext.machineName),
+                targets: targets,
+                direction: sessionDirection,
+                source: dryRunSource,
+                destination: dryRunDestination
+            )
             return
         }
 
@@ -118,7 +119,8 @@ public struct Cp: AsyncParsableCommand {
                 containerPath: validatedContainerPath,
                 hostPath: resolvedHost.path,
                 rawHostPath: rawHostPath
-            )
+            ),
+            machineContext: machineContext
         )
     }
 }

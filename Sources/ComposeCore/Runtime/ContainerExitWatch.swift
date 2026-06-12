@@ -35,15 +35,25 @@ package enum ContainerExitWatch {
         }
     }
 
-    private static func defaultStatus(id: String) async throws -> RuntimeStatus? {
-        let client = ContainerClient()
-        do {
-            return try await client.get(id: id).status
-        } catch {
-            if ContainerTeardown.isIgnorableError(error) {
-                return nil
+    package static func statusProvider(
+        machineContext: MachineContext = .applicationSandbox
+    ) -> StatusProvider {
+        { id in
+            do {
+                return try await ComposeContainerGateway.get(
+                    id: id,
+                    machineContext: machineContext
+                ).status
+            } catch {
+                if ContainerTeardown.isIgnorableError(error) {
+                    return nil
+                }
+                throw error
             }
-            throw error
         }
+    }
+
+    private static func defaultStatus(id: String) async throws -> RuntimeStatus? {
+        try await statusProvider()(id)
     }
 }

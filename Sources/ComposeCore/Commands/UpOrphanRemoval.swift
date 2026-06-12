@@ -7,11 +7,15 @@ package enum UpOrphanRemoval {
         projectName: String,
         composeFile: ComposeFile,
         activeProfiles: Set<String>,
-        execution: WaveExecutionPolicy = .unlimited
+        execution: WaveExecutionPolicy = .unlimited,
+        machineContext: MachineContext = .applicationSandbox
     ) async throws {
         let discovered: [DiscoveredContainer]
         do {
-            discovered = try await ContainerDiscovery.containers(forProject: projectName)
+            discovered = try await ContainerDiscovery.containers(
+                forProject: projectName,
+                machineContext: machineContext
+            )
         } catch is CancellationError {
             throw CancellationError()
         } catch {
@@ -25,7 +29,8 @@ package enum UpOrphanRemoval {
             discovered: discovered,
             composeFile: composeFile,
             activeProfiles: activeProfiles,
-            execution: execution
+            execution: execution,
+            machineContext: machineContext
         )
     }
 
@@ -33,7 +38,8 @@ package enum UpOrphanRemoval {
         discovered: [DiscoveredContainer],
         composeFile: ComposeFile,
         activeProfiles: Set<String>,
-        execution: WaveExecutionPolicy = .unlimited
+        execution: WaveExecutionPolicy = .unlimited,
+        machineContext: MachineContext = .applicationSandbox
     ) async throws {
         let orphans = OrphanRemoval.orphans(
             in: discovered,
@@ -43,7 +49,11 @@ package enum UpOrphanRemoval {
         guard !orphans.isEmpty else { return }
 
         do {
-            try await OrphanRemoval.removeOrphans(orphans, execution: execution)
+            try await OrphanRemoval.removeOrphans(
+                orphans,
+                execution: execution,
+                machineContext: machineContext
+            )
         } catch is CancellationError {
             throw CancellationError()
         } catch {

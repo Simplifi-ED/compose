@@ -59,12 +59,20 @@ package struct LogStreamOptions: Sendable {
     package let follow: Bool
     package let boot: Bool
     package let mode: TerminalMode
+    package let machineContext: MachineContext
 
-    package init(tail: Int?, follow: Bool, boot: Bool, mode: TerminalMode) {
+    package init(
+        tail: Int?,
+        follow: Bool,
+        boot: Bool,
+        mode: TerminalMode,
+        machineContext: MachineContext = .applicationSandbox
+    ) {
         self.tail = tail
         self.follow = follow
         self.boot = boot
         self.mode = mode
+        self.machineContext = machineContext
     }
 }
 
@@ -212,6 +220,14 @@ package actor LogMultiplexer {
             defer { group.cancelAll() }
             for source in sources {
                 group.addTask {
+                    if options.machineContext.isMachineMode {
+                        try await streamMachineLogs(
+                            source: source,
+                            options: options,
+                            multiplexer: multiplexer
+                        )
+                        return
+                    }
                     let handle = try await logHandle(for: source, options: options)
                     try await emitSnapshot(
                         handle: handle,
@@ -268,6 +284,41 @@ package actor LogMultiplexer {
         for line in snapshotLines {
             await multiplexer.emit(prefix: source.serviceLabel, line: line)
         }
+    }
+
+    private static func streamMachineLogs(
+        source: ServiceLogSource,
+        options: LogStreamOptions,
+        multiplexer: LogMultiplexer
+    ) async throws {
+        let snapshot = try options.machineContext.requireSnapshot()
+        var args = ["logs"]
+        if let tail = options.tail {
+            args.append(contentsOf: ["--tail", String(tail)])
+        }
+        if options.boot {
+            args.append("--boot")
+        }
+        if options.follow {
+            args.append("-f")
+        }
+        args.append(source.containerName)
+
+        let captured = try await MachineInVMRunner.streamContainerOutput(
+            snapshot: snapshot,
+            containerArguments: args
+        )
+        if !captured.isEmpty {
+            await multiplexer.ingest(
+                container: source.containerName,
+                prefix: source.serviceLabel,
+                chunk: captured
+            )
+        }
+        await multiplexer.finishPending(
+            container: source.containerName,
+            prefix: source.serviceLabel
+        )
     }
 
     private static func followContainer(

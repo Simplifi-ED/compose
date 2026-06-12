@@ -5,11 +5,18 @@ public enum ServicePlanner {
         package let composeFile: ComposeFile
         package let projectName: String
         package let composeDirectory: URL
+        package let machineName: String?
 
-        package init(composeFile: ComposeFile, projectName: String, composeDirectory: URL) {
+        package init(
+            composeFile: ComposeFile,
+            projectName: String,
+            composeDirectory: URL,
+            machineName: String? = nil
+        ) {
             self.composeFile = composeFile
             self.projectName = projectName
             self.composeDirectory = composeDirectory
+            self.machineName = machineName
         }
     }
 
@@ -34,7 +41,8 @@ public enum ServicePlanner {
         projectName: String,
         composeDirectory: URL,
         activeProfiles: Set<String> = [],
-        scaleOverrides: [String: Int] = [:]
+        scaleOverrides: [String: Int] = [:],
+        machineName: String? = nil
     ) throws -> [[ServicePlan]] {
         let layers = try dependencyLayers(for: composeFile, activeProfiles: activeProfiles)
         try ComposeFileMountResolver.validate(
@@ -63,7 +71,8 @@ public enum ServicePlanner {
                         context: PlanningContext(
                             composeFile: composeFile,
                             projectName: projectName,
-                            composeDirectory: composeDirectory
+                            composeDirectory: composeDirectory,
+                            machineName: machineName
                         ),
                         serviceName: serviceName,
                         service: service,

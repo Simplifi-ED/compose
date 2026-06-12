@@ -26,6 +26,9 @@ public struct Down: AsyncParsableCommand {
     @OptionGroup
     var dryRunOptions: DryRunOptions
 
+    @OptionGroup
+    var machineOptions: MachineOptions
+
     @Flag(
         name: .shortAndLong,
         help: "Remove project-local bind-mount host paths declared in the compose file."
@@ -34,10 +37,15 @@ public struct Down: AsyncParsableCommand {
 
     public func run() async throws {
         try parallelOptions.validate()
+        let machineContext = try await machineOptions.resolveContext()
         let context = try projectOptions.resolvedLabelCommandContext(
-            profileFilterRequested: profileOptions.profileFilterRequested
+            profileFilterRequested: profileOptions.profileFilterRequested,
+            machineContext: machineContext
         )
-        let discovered = try await ContainerDiscovery.containers(forProject: context.projectName)
+        let discovered = try await ContainerDiscovery.containers(
+            forProject: context.projectName,
+            machineContext: machineContext
+        )
         var containers = try DownShutdown.filteredContainers(
             discovered: discovered,
             context: context,
@@ -55,7 +63,8 @@ public struct Down: AsyncParsableCommand {
             try await runDryRun(
                 context: context,
                 discovered: discovered,
-                containers: containers
+                containers: containers,
+                machineContext: machineContext
             )
             return
         }
@@ -63,16 +72,18 @@ public struct Down: AsyncParsableCommand {
         try await executeShutdown(
             context: context,
             discovered: discovered,
-            containers: containers
+            containers: containers,
+            machineContext: machineContext
         )
     }
 
     private func runDryRun(
         context: ProjectOptions.LabelCommandContext,
         discovered: [DiscoveredContainer],
-        containers: [DiscoveredContainer]
+        containers: [DiscoveredContainer],
+        machineContext: MachineContext
     ) async throws {
-        let manifest = DryRunManifest()
+        let manifest = DryRunManifest(machineName: machineContext.machineName)
         let useOrderedShutdown = context.fileURLs != nil && !projectOptions.hasExplicitProjectName
         let execution = WaveExecutionPolicy(maxConcurrent: parallelOptions.resolvedMaxConcurrent())
         let orphanNames = downOrphanNames(
@@ -156,7 +167,8 @@ public struct Down: AsyncParsableCommand {
     private func executeShutdown(
         context: ProjectOptions.LabelCommandContext,
         discovered: [DiscoveredContainer],
-        containers: [DiscoveredContainer]
+        containers: [DiscoveredContainer],
+        machineContext: MachineContext
     ) async throws {
         let useOrderedShutdown = context.fileURLs != nil && !projectOptions.hasExplicitProjectName
         let volumePurgeContext = DownShutdown.volumePurgeContext(
@@ -187,7 +199,8 @@ public struct Down: AsyncParsableCommand {
                 containers: containers,
                 useOrderedShutdown: useOrderedShutdown,
                 progress: orchestration.handlers,
-                execution: execution
+                execution: execution,
+                machineContext: machineContext
             )
             if shouldPurgeVolumes, let volumePurgeContext {
                 DownShutdown.purgeVolumes(context: volumePurgeContext)

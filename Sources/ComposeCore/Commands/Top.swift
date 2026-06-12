@@ -14,10 +14,14 @@ public struct Top: AsyncParsableCommand {
     @OptionGroup
     var profileOptions: ProfileOptions
 
+    @OptionGroup
+    var machineOptions: MachineOptions
+
     @Argument(help: "Limit output to these service names.")
     var services: [String] = []
 
     public func run() async throws {
+        try machineOptions.rejectIfUnsupported(commandName: "top")
         let context = try projectOptions.resolvedLabelCommandContext(
             skipComposeFileOnExplicitProject: true,
             profileFilterRequested: profileOptions.profileFilterRequested

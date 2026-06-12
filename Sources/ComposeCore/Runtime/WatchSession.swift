@@ -23,8 +23,18 @@ package enum WatchSession {
 
         package init(
             projectName: String,
-            copyIn: @escaping ContainerFileSync.CopyIn = ContainerCopyAPI.copyIn,
-            getContainer: @escaping ContainerFileSync.GetContainer = ContainerCopyAPI.get,
+            copyIn: @escaping ContainerFileSync.CopyIn = { id, source, destination, mode, createParents in
+                try await ContainerCopyAPI.copyIn(
+                    id: id,
+                    source: source,
+                    destination: destination,
+                    mode: mode,
+                    createParents: createParents
+                )
+            },
+            getContainer: @escaping ContainerFileSync.GetContainer = { id in
+                try await ContainerCopyAPI.get(id: id)
+            },
             listProjectContainers: (@Sendable () async throws -> [ProjectContainer])? = nil,
             restartPlans: @escaping @Sendable ([ServicePlan]) async throws -> Void = { plans in
                 try await ServiceRunnerRestart.restartPlans(plans)

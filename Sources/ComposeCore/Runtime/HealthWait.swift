@@ -21,9 +21,12 @@ package enum HealthWait {
     package static func waitForDependencies(
         gates: [HealthGate],
         context: HealthWaitContext,
-        status: @escaping StatusProvider = HealthProbe.defaultStatus,
-        runProcess: @escaping ProcessRunner = HealthProbe.defaultProcessRunner
+        machineContext: MachineContext = .applicationSandbox,
+        status: StatusProvider? = nil,
+        runProcess: ProcessRunner? = nil
     ) async throws {
+        let status = status ?? HealthProbe.statusProvider(machineContext: machineContext)
+        let runProcess = runProcess ?? HealthProbe.processRunner(machineContext: machineContext)
         guard !gates.isEmpty else { return }
 
         let gatesByService = Dictionary(grouping: gates, by: \.dependencyService)

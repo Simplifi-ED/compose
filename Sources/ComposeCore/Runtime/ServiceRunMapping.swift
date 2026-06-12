@@ -8,6 +8,7 @@ struct ServiceRunConfiguration: Sendable {
     let image: String
     let command: [String]
     var containerNumber: Int = 1
+    var machineName: String?
 }
 
 enum ServiceRunMapping {
@@ -18,7 +19,8 @@ enum ServiceRunMapping {
         arguments.append(contentsOf: ComposeLabels.runFlags(
             projectName: configuration.projectName,
             serviceName: configuration.serviceName,
-            containerNumber: configuration.containerNumber
+            containerNumber: configuration.containerNumber,
+            machineName: configuration.machineName
         ))
         arguments.append(contentsOf: environmentFlags(configuration.service.environment))
         for port in configuration.service.ports {

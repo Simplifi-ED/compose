@@ -16,28 +16,35 @@ package struct GracefulStopOptions: Sendable {
 }
 
 public enum ContainerTeardown {
-    public static func teardown(id: String) async throws {
+    public static func teardown(
+        id: String,
+        machineContext: MachineContext = .applicationSandbox
+    ) async throws {
         try await ignoringNotFound {
-            try await stop(id: id)
+            try await stop(id: id, machineContext: machineContext)
         }
         try await ignoringNotFound {
-            try await delete(id: id)
+            try await delete(id: id, machineContext: machineContext)
         }
     }
 
     /// Stops and removes a container, force-removing on task cancellation.
-    package static func teardownRespectingCancellation(id: String) async throws {
-        try await teardownRespectingCancellation(id: id) {
-            try await teardown(id: id)
+    package static func teardownRespectingCancellation(
+        id: String,
+        machineContext: MachineContext = .applicationSandbox
+    ) async throws {
+        try await teardownRespectingCancellation(id: id, machineContext: machineContext) {
+            try await teardown(id: id, machineContext: machineContext)
         }
     }
 
     /// Runs container work, force-removing `id` on task cancellation.
     package static func teardownRespectingCancellation(
         id: String,
+        machineContext: MachineContext = .applicationSandbox,
         perform: @escaping @Sendable () async throws -> Void
     ) async throws {
-        try await withInterruptCleanup(id: id) {
+        try await withInterruptCleanup(id: id, machineContext: machineContext) {
             try Task.checkCancellation()
             try await perform()
         }
@@ -52,6 +59,11 @@ public enum ContainerTeardown {
                 return isIgnorableError(cause)
             }
             return false
+        }
+        if let composeError = error as? ComposeError {
+            if case .serviceNotFound = composeError {
+                return true
+            }
         }
         if let aggregate = error as? AggregateError {
             return !aggregate.errors.isEmpty
@@ -68,39 +80,50 @@ public enum ContainerTeardown {
         )
     }
 
-    package static func stopGracefully(id: String, options: GracefulStopOptions) async throws {
-        try await withInterruptCleanup(id: id, onInterrupt: forceKillAfterInterrupt) {
+    package static func stopGracefully(
+        id: String,
+        options: GracefulStopOptions,
+        machineContext: MachineContext = .applicationSandbox
+    ) async throws {
+        try await withInterruptCleanup(id: id, machineContext: machineContext, onInterrupt: forceKillAfterInterrupt) {
             try Task.checkCancellation()
-            try await stopGracefullyUnchecked(id: id, options: options)
+            try await stopGracefullyUnchecked(id: id, options: options, machineContext: machineContext)
         }
     }
 
     private static func withInterruptCleanup(
         id: String,
-        onInterrupt: @escaping @Sendable (String) async -> Void = forceRemoveAfterInterrupt,
+        machineContext: MachineContext = .applicationSandbox,
+        onInterrupt: @escaping @Sendable (String, MachineContext) async -> Void = forceRemoveAfterInterrupt,
         _ body: @escaping @Sendable () async throws -> Void
     ) async throws {
         try await withTaskCancellationHandler {
             try await body()
         } onCancel: {
             Task {
-                await onInterrupt(id)
+                await onInterrupt(id, machineContext)
             }
         }
     }
 
-    private static func stopGracefullyUnchecked(id: String, options: GracefulStopOptions) async throws {
-        let client = ContainerClient()
+    private static func stopGracefullyUnchecked(
+        id: String,
+        options: GracefulStopOptions,
+        machineContext: MachineContext
+    ) async throws {
         let stopOptions = stopOptions(for: options)
         do {
-            try await client.stop(id: id, opts: stopOptions)
+            try await ComposeContainerGateway.stop(id: id, opts: stopOptions, machineContext: machineContext)
         } catch let stopError {
             if isIgnorableError(stopError) {
                 return
             }
-            // Graceful stop API failed; force-kill immediately instead of waiting again.
             do {
-                try await client.kill(id: id, signal: "SIGKILL")
+                try await ComposeContainerGateway.kill(
+                    id: id,
+                    signal: "SIGKILL",
+                    machineContext: machineContext
+                )
             } catch {
                 if isIgnorableError(error) {
                     return
@@ -110,27 +133,41 @@ public enum ContainerTeardown {
         }
     }
 
-    private static func forceKillAfterInterrupt(id: String) async {
-        let client = ContainerClient()
-        try? await client.kill(id: id, signal: "SIGKILL")
+    private static func forceKillAfterInterrupt(id: String, machineContext: MachineContext) async {
+        try? await ComposeContainerGateway.kill(
+            id: id,
+            signal: "SIGKILL",
+            machineContext: machineContext
+        )
     }
 
-    private static func forceRemoveAfterInterrupt(id: String) async {
-        let client = ContainerClient()
-        try? await client.kill(id: id, signal: "SIGKILL")
+    private static func forceRemoveAfterInterrupt(id: String, machineContext: MachineContext) async {
+        try? await ComposeContainerGateway.kill(
+            id: id,
+            signal: "SIGKILL",
+            machineContext: machineContext
+        )
         try? await ignoringNotFound {
-            try await client.delete(id: id, force: true)
+            try await ComposeContainerGateway.delete(
+                id: id,
+                force: true,
+                machineContext: machineContext
+            )
         }
     }
 
-    private static func stop(id: String) async throws {
-        let client = ContainerClient()
-        try await client.stop(id: id)
+    private static func stop(
+        id: String,
+        machineContext: MachineContext
+    ) async throws {
+        try await ComposeContainerGateway.stop(id: id, machineContext: machineContext)
     }
 
-    private static func delete(id: String) async throws {
-        let client = ContainerClient()
-        try await client.delete(id: id, force: true)
+    private static func delete(
+        id: String,
+        machineContext: MachineContext
+    ) async throws {
+        try await ComposeContainerGateway.delete(id: id, machineContext: machineContext)
     }
 
     private static func ignoringNotFound(_ body: () async throws -> Void) async throws {

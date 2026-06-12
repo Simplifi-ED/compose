@@ -114,7 +114,8 @@ extension ServicePlanner {
                 ),
                 image: assembly.image,
                 command: assembly.command,
-                containerNumber: assembly.containerNumber
+                containerNumber: assembly.containerNumber,
+                machineName: assembly.context.machineName
             )
         )
 
