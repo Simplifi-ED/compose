@@ -32,7 +32,7 @@ extension TestRunner {
                 resolvedHostPath: secretFile.path,
                 containerPath: "/run/secrets/x"
             ),
-            "docker.io/library/alpine:3.20"
+            "docker.io/library/alpine:3.24"
         ]
         _ = try Application.ContainerRun.parse(args)
     }
@@ -61,7 +61,7 @@ extension TestRunner {
         }
         expect(plan.fileMounts.count == 1, "file mount planner file mount count")
         expect(plan.fileMounts[0].containerTarget == "/run/secrets/db_password", "file mount planner target path")
-        expect(plan.image == "docker.io/library/alpine:3.20", "file mount planner image")
+        expect(plan.image == "docker.io/library/alpine:3.24", "file mount planner image")
 
         let stagedArgs = try ComposeFileStaging.preparedRunArguments(for: plan)
         expect(stagedArgs.contains(where: { $0.hasSuffix(":ro") }), "file mount staged mount uses :ro")

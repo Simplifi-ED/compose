@@ -1,9 +1,9 @@
 services:
   migrate:
-    image: docker.io/library/alpine:3.20
+    image: docker.io/library/alpine:3.24
     command: ["sh", "-c", "exit 0"]
   app:
-    image: docker.io/library/alpine:3.20
+    image: docker.io/library/alpine:3.24
     command: ["sleep", "300"]
     depends_on:
       migrate:

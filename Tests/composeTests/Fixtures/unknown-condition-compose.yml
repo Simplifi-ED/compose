@@ -1,9 +1,9 @@
 services:
   db:
-    image: docker.io/library/alpine:latest
+    image: docker.io/library/alpine:3.24
     command: sleep 300
   web:
-    image: docker.io/library/alpine:latest
+    image: docker.io/library/alpine:3.24
     command: sleep 300
     depends_on:
       db:

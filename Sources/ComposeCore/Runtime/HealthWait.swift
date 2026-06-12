@@ -28,10 +28,13 @@ package enum HealthWait {
         waitForExit: ExitCodeProvider? = nil,
         completionGateTimeout: Duration? = nil
     ) async throws {
+        let completionGateTimeout = completionGateTimeout ?? defaultStartedTimeout
         let status = status ?? HealthProbe.statusProvider(machineContext: machineContext)
         let runProcess = runProcess ?? HealthProbe.processRunner(machineContext: machineContext)
-        let waitForExit = waitForExit ?? InitExitWait.exitCodeProvider(machineContext: machineContext)
-        let completionGateTimeout = completionGateTimeout ?? defaultStartedTimeout
+        let waitForExit = waitForExit ?? InitExitWait.exitCodeProvider(
+            machineContext: machineContext,
+            timeout: completionGateTimeout
+        )
         let options = DependencyWaitOptions(
             runProcess: runProcess,
             waitForExit: waitForExit,

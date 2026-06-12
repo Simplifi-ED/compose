@@ -136,9 +136,10 @@ Compose prints the active context on stderr once per command (`Execution context
 
 Services start in **dependency waves** — all services in a wave start in parallel, then the next wave begins once the previous one is healthy.
 
-- `depends_on` (list form) → ordering only; no health check required
+- `depends_on` (list form) → ordering only; no readiness wait
+- `depends_on` with `condition: service_started` → waits for the dependency container to reach running state before starting dependents
 - `depends_on` with `condition: service_healthy` → waits for the healthcheck probe to pass before starting dependents
-- `depends_on` with `condition: service_completed_successfully` → waits for a one-shot dependency to exit with code 0 (init/migration services); long-running daemons time out
+- `depends_on` with `condition: service_completed_successfully` → waits for a one-shot dependency to exit with code 0 (init/migration services); host sandbox only (not `--machine`); long-running daemons time out on exit wait
 - If a wave fails, containers from earlier waves are rolled back automatically
 
 ```yaml
@@ -416,7 +417,7 @@ services:
     volumes:
       - mydata:/app/data
   worker:
-    image: alpine:3.20
+    image: alpine:3.24
     volumes:
       - mydata:/var/data:ro
 ```
@@ -522,7 +523,7 @@ Exit codes: `0` = all services stopped cleanly · `130` = SIGINT · `143` = SIGT
 |-------|--------|
 | `image`, `command`, `ports`, `environment` | ✅ |
 | `volumes` (bind mounts; `:ro`, `:z`, `:ro,z`) | ✅ |
-| `depends_on` (list, `service_healthy`, `service_completed_successfully`) | ✅ |
+| `depends_on` (list; long-form `service_started`, `service_healthy`, `service_completed_successfully`†) | ✅ |
 | `healthcheck` | ✅ |
 | `profiles`, `deploy.replicas` | ✅ |
 | `configs`, `secrets` (local `file:`) | ✅ |
@@ -532,8 +533,9 @@ Exit codes: `0` = all services stopped cleanly · `130` = SIGINT · `143` = SIGT
 | `networks` (project-scoped subnets; container-name DNS) | ✅ |
 | named volumes | ❌ v1 deferred |
 | long-form `read_only: true`, explicit `:rw` | ❌ v1 deferred |
-| `service_completed_successfully` | ✅ (host sandbox; not with `--machine`) |
 | `COMPOSE_PROFILES` env var | ✅ (process env; `.env` file deferred) |
+
+† `service_completed_successfully` is supported in the application sandbox only; `compose up --machine` rejects it at plan time.
 
 ---
 

@@ -6,9 +6,9 @@ secrets:
     file: ./secrets/db_password.txt
 services:
   web:
-    image: docker.io/library/alpine:3.20
+    image: docker.io/library/alpine:3.24
   debug:
-    image: docker.io/library/alpine:3.20
+    image: docker.io/library/alpine:3.24
     profiles: [debug]
     configs:
       - source: broken_config
