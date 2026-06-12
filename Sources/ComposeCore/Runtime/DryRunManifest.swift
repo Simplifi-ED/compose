@@ -87,6 +87,26 @@ public actor DryRunManifest {
         )
     }
 
+    package func recordCp(
+        container: String,
+        direction: CpSession.Direction,
+        source: String,
+        destination: String
+    ) {
+        groupOrder += 1
+        currentGroup = groupOrder
+        append(
+            group: currentGroup,
+            sortKey: container,
+            line: DryRunManifestFormatting.formatCp(
+                container: container,
+                direction: direction,
+                source: source,
+                destination: destination
+            )
+        )
+    }
+
     public func recordPurge(paths: [String]) {
         groupOrder += 1
         currentGroup = groupOrder

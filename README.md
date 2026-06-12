@@ -68,6 +68,7 @@ container compose down -f fixtures/minimal-compose.yml -p demo
 | `ps` | List running containers for the project. |
 | `logs` | Stream or print service logs. |
 | `exec SERVICE CMD` | Run a command inside a running service container. |
+| `cp SRC DEST` | Copy files between the host and a running service container. |
 | `run SERVICE [CMD]` | Start a one-off container from a service definition. |
 | `top` | Live CPU/memory stats for all project containers. |
 | `watch` | Sync local file changes into running containers. |
@@ -310,6 +311,29 @@ container compose down -v
 
 ---
 
+## cp — copy files
+
+Copy files to or from a **running** service container without a bind mount:
+
+```bash
+container compose cp web:/app/config.yml ./config.yml    # container → host
+container compose cp ./bootstrap.sh web:/app/bootstrap.sh  # host → container
+```
+
+**Replica selection** (when a service runs multiple containers):
+
+| Flag | Behavior |
+|------|----------|
+| *(default)* | Single replica only; errors if more than one is running |
+| `--index N` | Target `{project}_{service}_{N}` (1-based) |
+| `--all` | Copy into every running replica (**host → container only**) |
+
+**Host paths:** relative paths resolve from your shell's current directory and can't escape it (`..` is rejected). Absolute paths are allowed; compose prints a warning when they fall outside the current directory.
+
+Container paths must be absolute (`SERVICE:/path`) and can't contain `..` segments.
+
+---
+
 ## exec vs run
 
 | | `exec` | `run` |
@@ -396,7 +420,7 @@ swift run -c release compose-verify
 
 | Component | Role |
 |-----------|------|
-| `ComposeCore` | YAML parsing, service planning, startup/teardown, `ps`/`logs`/`top`/`exec`/`run` |
+| `ComposeCore` | YAML parsing, service planning, startup/teardown, `ps`/`logs`/`top`/`exec`/`cp`/`run` |
 | `compose` | CLI binary registered as a `container` plugin |
 | `compose-verify` | Parser and planner tests (Command Line Tools compatible) |
 

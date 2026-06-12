@@ -1,25 +1,17 @@
-import ContainerAPIClient
 import ContainerResource
 import Foundation
 
 package enum ContainerFileSync {
-    package typealias CopyIn = @Sendable (
-        String,
-        String,
-        String,
-        UInt32,
-        Bool
-    ) async throws -> Void
-
-    package typealias GetContainer = @Sendable (String) async throws -> ContainerSnapshot
+    package typealias CopyIn = ContainerCopyAPI.CopyIn
+    package typealias GetContainer = ContainerCopyAPI.GetContainer
 
     package static func sync(
         resolved: ResolvedWatchRule,
         hostPath: URL,
         containers: [ProjectContainer],
         projectName: String,
-        copyIn: @escaping CopyIn = defaultCopyIn,
-        getContainer: @escaping GetContainer = defaultGetContainer
+        copyIn: @escaping CopyIn = ContainerCopyAPI.copyIn,
+        getContainer: @escaping GetContainer = ContainerCopyAPI.get
     ) async throws {
         let running = containers.filter { $0.status == .running }
         guard !running.isEmpty else {
@@ -93,8 +85,8 @@ package enum ContainerFileSync {
         resolved: ResolvedWatchRule,
         containers: [ProjectContainer],
         projectName: String,
-        copyIn: @escaping CopyIn = defaultCopyIn,
-        getContainer: @escaping GetContainer = defaultGetContainer
+        copyIn: @escaping CopyIn = ContainerCopyAPI.copyIn,
+        getContainer: @escaping GetContainer = ContainerCopyAPI.get
     ) async throws {
         let files = try WatchPathValidator.enumerateSyncableFiles(
             at: resolved.watchRoot,
@@ -118,66 +110,12 @@ package enum ContainerFileSync {
         projectName: String,
         serviceName: String
     ) throws {
-        let labelProject = snapshot.configuration.labels[ComposeLabels.project]
-        guard labelProject == projectName else {
-            throw ComposeError.containerProjectMismatch(
-                container: containerName,
-                project: projectName
-            )
-        }
-        let labelService = snapshot.configuration.labels[ComposeLabels.service]
-        guard labelService == serviceName else {
-            throw ComposeError.invalidField(
-                "develop.watch",
-                reason: "container '\(containerName)' belongs to service '\(labelService ?? "unknown")', "
-                    + "not '\(serviceName)'"
-            )
-        }
-        guard snapshot.status == .running else {
-            throw ComposeError.serviceNotRunning(
-                service: serviceName,
-                state: ProjectStatus.formatState(snapshot.status)
-            )
-        }
-    }
-
-    private static func defaultCopyIn(
-        id: String,
-        source: String,
-        destination: String,
-        mode: UInt32,
-        createParents: Bool
-    ) async throws {
-        try await defaultCopyInForInjection(
-            id: id,
-            source: source,
-            destination: destination,
-            mode: mode,
-            createParents: createParents
+        try ComposeContainerGuard.verifyRunningProjectService(
+            snapshot: snapshot,
+            containerName: containerName,
+            projectName: projectName,
+            serviceName: serviceName,
+            fieldName: "develop.watch"
         )
-    }
-
-    private static func defaultGetContainer(id: String) async throws -> ContainerSnapshot {
-        try await defaultGetContainerForInjection(id: id)
-    }
-
-    package static func defaultCopyInForInjection(
-        id: String,
-        source: String,
-        destination: String,
-        mode: UInt32,
-        createParents: Bool
-    ) async throws {
-        try await ContainerClient().copyIn(
-            id: id,
-            source: source,
-            destination: destination,
-            mode: mode,
-            createParents: createParents
-        )
-    }
-
-    package static func defaultGetContainerForInjection(id: String) async throws -> ContainerSnapshot {
-        try await ContainerClient().get(id: id)
     }
 }

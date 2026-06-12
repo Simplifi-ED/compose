@@ -67,6 +67,17 @@ package enum DryRunManifestFormatting {
         "[DRY-RUN] purge bind-mount path \"\(path)\""
     }
 
+    package static func formatCp(
+        container: String,
+        direction: CpSession.Direction,
+        source: String,
+        destination: String
+    ) -> String {
+        let directionLabel = direction == .copyIn ? "in" : "out"
+        return "[DRY-RUN] cp container \"\(container)\" direction=\(directionLabel) "
+            + "source=\"\(source)\" destination=\"\(destination)\""
+    }
+
     static func parseRunArguments(_ arguments: [String]) -> ParsedRunArguments {
         var parsed = ParsedRunArguments()
         var index = 0

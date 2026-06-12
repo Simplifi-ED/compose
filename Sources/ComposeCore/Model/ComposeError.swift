@@ -44,6 +44,13 @@ public enum ComposeError: LocalizedError, Sendable {
     case undefinedResource(name: String, kind: ComposeFileMountKind)
     case resourceFileNotFound(path: String, kind: ComposeFileMountKind)
     case includeResourceConflict(name: String, kind: ComposeFileMountKind, includePath: String, definedIn: String)
+    case invalidCpPath(reason: String)
+    case cpHostPathOutsideCWD(path: String)
+    case cpSourceNotFound(path: String)
+    case cpContainerToContainer
+    case cpLocalToLocal
+    case cpAllRequiresCopyIn
+    case replicaNotFound(service: String, index: Int, project: String)
 
     public var errorDescription: String? {
         switch self {
@@ -126,7 +133,7 @@ public enum ComposeError: LocalizedError, Sendable {
         case .ambiguousService(let service, let containers):
             let names = containers.joined(separator: ", ")
             return "Service '\(service)' is running multiple replicas (\(names)). "
-                + "Replica selection isn't supported yet; pick one with 'container exec CONTAINER COMMAND'."
+                + "Use compose cp --index N, or pick a container with 'container exec CONTAINER COMMAND'."
         case .containerProjectMismatch(let container, let project):
             return "Container '\(container)' isn't part of project '\(project)'."
         case .invalidScaleSpec(let value):
@@ -160,6 +167,21 @@ public enum ComposeError: LocalizedError, Sendable {
         case .includeResourceConflict(let name, let kind, let includePath, let definedIn):
             return "\(kind.rootFieldName.capitalized) '\(name)' is already defined in \(definedIn). "
                 + "\(includePath) also defines '\(name)'. Rename one entry or remove the duplicate include."
+        case .invalidCpPath(let reason):
+            return "Invalid cp path: \(reason)."
+        case .cpHostPathOutsideCWD(let path):
+            return "Host path '\(path)' resolves outside the current directory."
+        case .cpSourceNotFound(let path):
+            return "Host path '\(path)' doesn't exist."
+        case .cpContainerToContainer:
+            return "Can't copy between two containers. Copy through the host instead."
+        case .cpLocalToLocal:
+            return "One side must be a service reference (SERVICE:/path)."
+        case .cpAllRequiresCopyIn:
+            return "Can't use --all when copying from a container to the host. Use --index to pick a replica."
+        case .replicaNotFound(let service, let index, let project):
+            return "No running replica \(index) for service '\(service)' in project '\(project)'. "
+                + "Check compose ps."
         }
     }
 }

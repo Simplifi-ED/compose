@@ -78,6 +78,7 @@ public struct Exec: AsyncParsableCommand {
             configuration: ExecSession.Configuration(
                 containerName: target.name,
                 projectName: context.projectName,
+                serviceName: service,
                 executable: executable,
                 arguments: arguments,
                 processTerminal: ioFlags.processTerminal,
