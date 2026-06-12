@@ -77,15 +77,19 @@ enum ComposeNetworkDecoder {
 
     /// Decodes service-level `networks:` membership — short list or
     /// long map form with empty entries (per-network options are rejected).
+    /// `nullRemovals` records long-form `name: null` disconnect overrides for merge.
     static func decodeServiceNetworks<Key: CodingKey>(
         from container: KeyedDecodingContainer<Key>,
         forKey key: Key
-    ) throws -> [String] {
-        guard container.contains(key) else { return [] }
+    ) throws -> (names: [String], nullRemovals: Set<String>) {
+        guard container.contains(key) else { return ([], []) }
 
         if let names = try? container.decode([String].self, forKey: key) {
             var seen: Set<String> = []
-            return names.filter { seen.insert($0).inserted }
+            return (
+                names.filter { seen.insert($0).inserted }.sorted(),
+                []
+            )
         }
         guard let nested = try? container.nestedContainer(
             keyedBy: ComposeSerializeCodingKey.self,
@@ -96,8 +100,11 @@ enum ComposeNetworkDecoder {
                 reason: "expected a list of network names or a map of network entries"
             )
         }
+        var memberships: [String] = []
+        var nullRemovals: Set<String> = []
         for name in nested.allKeys.sorted(by: { $0.stringValue < $1.stringValue }) {
             if (try? nested.decodeNil(forKey: name)) == true {
+                nullRemovals.insert(name.stringValue)
                 continue
             }
             let entry = try nested.nestedContainer(
@@ -110,7 +117,8 @@ enum ComposeNetworkDecoder {
                     option: option.stringValue
                 )
             }
+            memberships.append(name.stringValue)
         }
-        return nested.allKeys.map(\.stringValue).sorted()
+        return (memberships.sorted(), nullRemovals)
     }
 }

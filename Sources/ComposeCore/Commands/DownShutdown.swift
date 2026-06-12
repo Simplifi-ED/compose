@@ -128,31 +128,28 @@ package enum DownShutdown {
         )
     }
 
-    /// Project networks safe to remove after teardown: every network the compose
-    /// file can create, minus those still referenced by running services.
-    /// Empty without a compose file — `-p`-only down can't name project networks.
+    /// Project networks safe to remove after teardown: networks referenced by
+    /// torn-down or still-running services, minus those still needed by running
+    /// containers. Empty without a compose file — `-p`-only down can't name
+    /// project networks. Uses the same teardown/running service scope as volume purge.
     package static func networkRemovalPlans(
         context: ProjectOptions.LabelCommandContext,
         discovered: [DiscoveredContainer],
         teardownContainers: [DiscoveredContainer]
-    ) -> [NetworkPlanning.Plan] {
+    ) throws -> [NetworkPlanning.Plan] {
         guard let composeFile = context.composeFile else { return [] }
-        let allPlans: [NetworkPlanning.Plan]
-        do {
-            allPlans = try NetworkPlanning.plans(
-                composeFile: composeFile,
-                projectName: context.projectName,
-                activeServiceNames: Set(composeFile.services.keys)
-            )
-        } catch {
-            fputs(
-                "Warning: skipping network removal: \(error.localizedDescription)\n",
-                stderr
-            )
-            return []
-        }
+
         let teardownNames = Set(teardownContainers.map(\.name))
         let stillRunning = discovered.filter { !teardownNames.contains($0.name) }
+        let teardownServiceNames = Set(teardownContainers.compactMap(\.serviceName))
+        let runningServiceNames = Set(stillRunning.compactMap(\.serviceName))
+        let scopedServiceNames = teardownServiceNames.union(runningServiceNames)
+
+        let allPlans = try NetworkPlanning.plans(
+            composeFile: composeFile,
+            projectName: context.projectName,
+            activeServiceNames: scopedServiceNames
+        )
         let runningNetworkNames = Set(
             stillRunning
                 .compactMap(\.serviceName)

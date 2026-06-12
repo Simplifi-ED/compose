@@ -39,12 +39,14 @@ package enum NetworkPlanning {
     }
 
     /// Unique networks referenced by active services, sorted by logical name.
+    ///
+    /// Call ``validate(composeFile:activeServiceNames:)`` before planning when
+    /// undefined memberships must be rejected (for example `up` and `run`).
     package static func plans(
         composeFile: ComposeFile,
         projectName: String,
         activeServiceNames: Set<String>
     ) throws -> [Plan] {
-        try validate(composeFile: composeFile, activeServiceNames: activeServiceNames)
         var referenced: Set<String> = []
         for serviceName in activeServiceNames {
             guard let service = composeFile.services[serviceName] else { continue }

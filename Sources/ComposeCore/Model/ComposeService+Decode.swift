@@ -42,7 +42,9 @@ extension ComposeService: Decodable {
         configs = try Self.decodeServiceMounts(from: container, key: .configs, kind: .config)
         secrets = try Self.decodeServiceMounts(from: container, key: .secrets, kind: .secret)
         develop = try Self.decodeDevelop(from: container)
-        networks = try ComposeNetworkDecoder.decodeServiceNetworks(from: container, forKey: .networks)
+        let decodedNetworks = try ComposeNetworkDecoder.decodeServiceNetworks(from: container, forKey: .networks)
+        networks = decodedNetworks.names
+        networkNullRemovals = decodedNetworks.nullRemovals
         projectDirectory = nil
     }
 

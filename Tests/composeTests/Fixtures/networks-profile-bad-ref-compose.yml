@@ -1,14 +1,13 @@
-name: demo
 networks:
   backend: {}
 
 services:
-  client:
+  web:
     image: docker.io/library/alpine:3.20
     command: sleep 300
     networks: [backend]
-  server:
+  debug:
+    profiles: [debug]
     image: docker.io/library/alpine:3.20
     command: sleep 300
-    networks:
-      backend: {}
+    networks: [missing]

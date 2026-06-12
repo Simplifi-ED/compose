@@ -124,7 +124,7 @@ public struct Down: AsyncParsableCommand {
             BindMountPurge.warnPurgeSkipped(DownShutdown.volumePurgeSkipReason(context: context))
         }
 
-        let networkPlans = DownShutdown.networkRemovalPlans(
+        let networkPlans = try DownShutdown.networkRemovalPlans(
             context: context,
             discovered: discovered,
             teardownContainers: containers
@@ -218,7 +218,7 @@ public struct Down: AsyncParsableCommand {
                 BindMountPurge.warnPurgeSkipped(DownShutdown.volumePurgeSkipReason(context: context))
             }
             await NetworkRunner.removeProjectNetworks(
-                DownShutdown.networkRemovalPlans(
+                try DownShutdown.networkRemovalPlans(
                     context: context,
                     discovered: discovered,
                     teardownContainers: containers

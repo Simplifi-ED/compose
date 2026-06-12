@@ -40,11 +40,7 @@ package enum NetworkRunner {
         for plan in plans {
             if let resource = resourcesByID[plan.runtimeName] {
                 if !isProjectNetwork(resource, projectName: projectName) {
-                    fputs(
-                        "Warning: network '\(plan.runtimeName)' already exists but wasn't created"
-                            + " by this compose project; reusing it.\n",
-                        stderr
-                    )
+                    warnUnlabeledNetworkReuse(runtimeName: plan.runtimeName)
                 }
                 continue
             }
@@ -77,7 +73,7 @@ package enum NetworkRunner {
     ) async {
         guard !plans.isEmpty else { return }
         if machineContext.isMachineMode {
-            await removeInMachine(plans, machineContext: machineContext)
+            await removeInMachine(plans, projectName: projectName, machineContext: machineContext)
             return
         }
         let client = NetworkClient()
@@ -120,8 +116,16 @@ package enum NetworkRunner {
         machineContext: MachineContext
     ) async throws {
         let booted = try machineContext.bootedContext()
-        let existing = try await machineNetworkNames(snapshot: booted.snapshot)
-        for plan in plans where !existing.contains(plan.runtimeName) {
+        for plan in plans {
+            if let resource = try await machineNetworkResource(
+                snapshot: booted.snapshot,
+                name: plan.runtimeName
+            ) {
+                if !isProjectNetwork(resource, projectName: projectName) {
+                    warnUnlabeledNetworkReuse(runtimeName: plan.runtimeName)
+                }
+                continue
+            }
             do {
                 var arguments = ["network", "create"]
                 for (key, value) in ComposeLabels.networkLabels(
@@ -140,18 +144,26 @@ package enum NetworkRunner {
 
     private static func removeInMachine(
         _ plans: [NetworkPlanning.Plan],
+        projectName: String,
         machineContext: MachineContext
     ) async {
         let booted: BootedMachineContext
-        let existing: Set<String>
         do {
             booted = try machineContext.bootedContext()
-            existing = try await machineNetworkNames(snapshot: booted.snapshot)
         } catch {
             warnRemoveFailed(names: plans.map(\.runtimeName), error: error)
             return
         }
-        for plan in plans where existing.contains(plan.runtimeName) {
+        for plan in plans {
+            guard let resource = try? await machineNetworkResource(
+                snapshot: booted.snapshot,
+                name: plan.runtimeName
+            ),
+                !resource.isBuiltin,
+                isProjectNetwork(resource, projectName: projectName)
+            else {
+                continue
+            }
             do {
                 try await MachineInVMRunner.run(
                     snapshot: booted.snapshot,
@@ -164,23 +176,30 @@ package enum NetworkRunner {
         }
     }
 
-    private static func machineNetworkNames(snapshot: MachineSnapshot) async throws -> Set<String> {
+    private static func machineNetworkResource(
+        snapshot: MachineSnapshot,
+        name: String
+    ) async throws -> NetworkResource? {
         let capture = try await MachineInVMRunner.runCapturing(
             snapshot: snapshot,
-            containerArguments: ["network", "list", "--quiet"]
+            containerArguments: ["network", "inspect", name]
         )
-        guard capture.exitCode == 0 else {
-            throw ComposeError.machineCommandFailed(
-                machine: snapshot.id,
-                command: "network list",
-                exitCode: capture.exitCode
-            )
-        }
-        return Set(capture.stdout.split(separator: "\n").map(String.init))
+        guard capture.exitCode == 0 else { return nil }
+        let trimmed = capture.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        return try JSONDecoder().decode([NetworkResource].self, from: Data(trimmed.utf8)).first
     }
 
     private static func isProjectNetwork(_ resource: NetworkResource, projectName: String) -> Bool {
         resource.labels.contains { $0 == ComposeLabels.project && $1 == projectName }
+    }
+
+    private static func warnUnlabeledNetworkReuse(runtimeName: String) {
+        fputs(
+            "Warning: network '\(runtimeName)' already exists but wasn't created"
+                + " by this compose project; reusing it.\n",
+            stderr
+        )
     }
 
     private static func warnRemoveFailed(names: [String], error: Error) {
