@@ -10,6 +10,7 @@ extension TestRunner {
         try runProfileMergeTests()
         try runProfileEmptyFilterTests()
         try runProfileDownFilterTests()
+        try runProfileResolutionTests()
     }
 
     mutating func runProfileDecodeTests() throws {

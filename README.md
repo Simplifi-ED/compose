@@ -229,7 +229,13 @@ services:
 ```bash
 container compose up                   # app only
 container compose up --profile debug   # app + debugger
+COMPOSE_PROFILES=debug container compose up   # same as --profile debug
+COMPOSE_PROFILES=debug container compose up --profile metrics   # debug + metrics (union)
 ```
+
+`--profile` flags add to any profiles set in `COMPOSE_PROFILES` (comma-separated process environment). `COMPOSE_PROFILES` in a `.env` file beside the compose file is not supported yet.
+
+If `COMPOSE_PROFILES` is exported in your shell, `ps`, `logs`, `top`, and `down` need a compose file to apply profile filtering—even with `-p` only. Use `COMPOSE_PROFILES=*` (or `down --profile "*"`) to stop every project container without a compose file.
 
 `compose run debugger sh` auto-enables the service's profiles.
 
@@ -245,6 +251,8 @@ Variables are substituted in compose files before parsing. Each `-f` file loads 
 | `${VAR:-default}` | Uses `default` if unset or empty |
 | `${VAR-default}` | Uses `default` only if unset |
 | `$$` | Literal `$` |
+
+Process environment (not compose `${}` substitution): `COMPOSE_FILE`, `COMPOSE_PROJECT_NAME`, and `COMPOSE_PROFILES` (comma-separated; merged with `--profile`).
 
 ---
 
@@ -432,7 +440,7 @@ Exit codes: `0` = all services stopped cleanly · `130` = SIGINT · `143` = SIGT
 | `build` (`context`, `dockerfile`, `args`, `target`) | ✅ |
 | networks, named volumes | ❌ v1 deferred |
 | `volumes:` `:ro`, `service_completed_successfully` | ❌ v1 deferred |
-| `COMPOSE_PROFILES` env var | ❌ v1 deferred |
+| `COMPOSE_PROFILES` env var | ✅ (process env; `.env` file deferred) |
 
 ---
 
