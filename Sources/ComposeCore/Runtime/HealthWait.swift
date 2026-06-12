@@ -150,7 +150,7 @@ package enum HealthWait {
                         exitCode: exitCode
                     )
                 } catch is InitExitWait.TimedOut {
-                    throw ComposeError.serviceCompletionTimeout(
+                    throw ComposeError.serviceCompletionExitTimeout(
                         dependency: dependencyService,
                         container: containerName
                     )
@@ -161,7 +161,7 @@ package enum HealthWait {
             try await Task.sleep(for: statusPollInterval)
         }
 
-        throw ComposeError.serviceCompletionTimeout(
+        throw ComposeError.serviceCompletionNeverAppeared(
             dependency: dependencyService,
             container: containerName
         )

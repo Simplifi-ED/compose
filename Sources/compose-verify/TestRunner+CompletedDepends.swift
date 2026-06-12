@@ -11,6 +11,8 @@ extension TestRunner {
         runCompletedDependsFastExitTest()
         runCompletedDependsWaitTimeoutTest()
         runCompletedDependsExitWaitTimeoutTest()
+        try runCompletedDependsMachinePlanRejectionTest()
+        runCompletedDependsMachineRuntimeRejectionTest()
     }
 
     mutating func runCompletedDependsDecodeTests() throws {
@@ -116,13 +118,13 @@ extension TestRunner {
                     completionGateTimeout: .milliseconds(50)
                 )
                 return false
-            } catch ComposeError.serviceCompletionTimeout {
+            } catch ComposeError.serviceCompletionNeverAppeared {
                 return true
             } catch {
                 return false
             }
         }
-        expect(timedOut, "service_completed_successfully times out when dependency never appears")
+        expect(timedOut, "service_completed_successfully errors when dependency never appears")
     }
 
     mutating func runCompletedDependsExitWaitTimeoutTest() {
@@ -139,13 +141,58 @@ extension TestRunner {
                     waitForExit: { _ in throw InitExitWait.TimedOut() }
                 )
                 return false
-            } catch ComposeError.serviceCompletionTimeout {
+            } catch ComposeError.serviceCompletionExitTimeout {
                 return true
             } catch {
                 return false
             }
         }
-        expect(timedOut, "service_completed_successfully times out when exit wait exceeds deadline")
+        expect(timedOut, "service_completed_successfully errors when exit wait exceeds deadline")
+    }
+
+    mutating func runCompletedDependsMachinePlanRejectionTest() throws {
+        let fixture = try ComposeParser.parse(fileURL: Self.fixtureURL("depends-completed-compose.yml"))
+        expectComposeError(
+            "service_completed_successfully rejects --machine at plan time",
+            matching: {
+                if case .machineUnsupportedOperation("depends_on condition service_completed_successfully") = $0 {
+                    true
+                } else {
+                    false
+                }
+            },
+            body: {
+                try DependencyValidation.validateMachineMode(
+                    services: fixture.services,
+                    machineName: "dev"
+                )
+            }
+        )
+    }
+
+    mutating func runCompletedDependsMachineRuntimeRejectionTest() {
+        let gate = Self.completedDependsGate()
+        let context = Self.completedDependsContext()
+        let machineContext = MachineContext(machineName: "dev", snapshot: nil)
+
+        let rejected = blockingAwait {
+            do {
+                try await HealthWait.waitForDependencies(
+                    gates: [gate],
+                    context: context,
+                    machineContext: machineContext,
+                    status: { _ in .running }
+                )
+                return false
+            } catch ComposeError.machineUnsupportedOperation(
+                "depends_on condition service_completed_successfully"
+            ) {
+                return true
+            } catch {
+                return false
+            }
+        }
+        expect(rejected, "service_completed_successfully rejects machine mode at runtime")
     }
 
     static func completedDependsGate() -> HealthGate {
