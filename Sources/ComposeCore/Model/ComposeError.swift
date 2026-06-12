@@ -61,6 +61,16 @@ public enum ComposeError: LocalizedError, Sendable {
     case machineUnsupportedOperation(String)
     case machineCommandFailed(machine: String, command: String, exitCode: Int32)
 
+    private static func profileNamesDescription(_ profiles: [String]) -> String {
+        profiles.map { "'\($0)'" }.joined(separator: " or ")
+    }
+
+    private static func profileActivationOptions(_ profiles: [String]) -> String {
+        let flags = profiles.map { "--profile \($0)" }.joined(separator: " ")
+        let envValue = profiles.joined(separator: ",")
+        return "\(flags) or COMPOSE_PROFILES=\(envValue)"
+    }
+
     public var errorDescription: String? {
         switch self {
         case .fileNotFound(let path):
@@ -105,11 +115,12 @@ public enum ComposeError: LocalizedError, Sendable {
             return "Service '\(service)' depends on '\(dependency)', "
                 + "which isn't defined. Check service names in depends_on."
         case .profileExcludedDependency(let service, let dependency, let requiredProfiles):
-            let flags = requiredProfiles.map { "--profile \($0)" }.joined(separator: " or ")
-            return "Service '\(service)' depends on '\(dependency)', which only starts with \(flags). "
-                + "Pass \(flags) or remove the dependency."
+            let names = Self.profileNamesDescription(requiredProfiles)
+            let options = Self.profileActivationOptions(requiredProfiles)
+            return "Service '\(service)' depends on '\(dependency)', which requires profile \(names). "
+                + "Enable it with \(options), or remove the dependency."
         case .profileFilterRequiresComposeFile:
-            return "Using --profile requires a compose file. Pass -f or run from a directory with compose.yaml."
+            return "Profile filtering requires a compose file. Pass -f or run from a directory with compose.yaml."
         case .circularDependency(let services):
             let path = services.joined(separator: " → ")
             return "Circular dependency: \(path). Remove or reorder depends_on entries."
@@ -162,8 +173,9 @@ public enum ComposeError: LocalizedError, Sendable {
                 + "Each replica would bind the same host port. "
                 + "Remove the host port (for example '80' instead of '8080:80') or set replicas to 1."
         case .scaleServiceRequiresProfile(let service, let requiredProfiles):
-            let flags = requiredProfiles.map { "--profile \($0)" }.joined(separator: " or ")
-            return "Service '\(service)' only starts with \(flags). Pass \(flags) to scale it."
+            let names = Self.profileNamesDescription(requiredProfiles)
+            let options = Self.profileActivationOptions(requiredProfiles)
+            return "Service '\(service)' requires profile \(names). Enable it with \(options) to scale it."
         case .healthCheckTimeout(let dependency, let container):
             return "Service '\(dependency)' didn't become healthy in time (container '\(container)'). "
                 + "Check logs with compose logs \(dependency)."
