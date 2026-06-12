@@ -78,15 +78,15 @@ public enum OrphanRemoval {
             )
         }
 
+        for name in result.succeeded.sorted() {
+            onRemoved?(name)
+        }
+
         if result.wasInterrupted {
             throw CancellationError()
         }
         if !result.failures.isEmpty {
             throw ComposeError.multipleServiceFailures(result.failures)
-        }
-
-        for name in result.succeeded.sorted() {
-            onRemoved?(name)
         }
     }
 

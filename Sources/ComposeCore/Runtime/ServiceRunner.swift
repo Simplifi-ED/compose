@@ -18,8 +18,11 @@ public enum ServiceRunner {
         }
     }
 
-    public static func up(plans: [ServicePlan]) async throws {
-        try await up(layers: [plans])
+    public static func up(
+        plans: [ServicePlan],
+        machineContext: MachineContext = .applicationSandbox
+    ) async throws {
+        try await up(layers: [plans], machineContext: machineContext)
     }
 
     public static func up(
@@ -161,14 +164,16 @@ public enum ServiceRunner {
         projectName: String? = nil,
         onRemoved: (@Sendable (String) -> Void)? = nil,
         progress: WaveProgressHandlers? = nil,
-        execution: WaveExecutionPolicy = .unlimited
+        execution: WaveExecutionPolicy = .unlimited,
+        machineContext: MachineContext = .applicationSandbox
     ) async throws {
         try await down(
             layers: [containers],
             projectName: projectName,
             onRemoved: onRemoved,
             progress: progress,
-            execution: execution
+            execution: execution,
+            machineContext: machineContext
         )
     }
 
