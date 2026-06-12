@@ -26,6 +26,8 @@ public struct ComposeService: Sendable, Equatable {
     public let configs: [ComposeServiceMount]
     public let secrets: [ComposeServiceMount]
     public let develop: ComposeDevelop?
+    /// Logical network names this service joins; empty means the builtin default network.
+    public let networks: [String]
     /// Base directory for relative bind-mount paths; nil uses the CLI compose file directory.
     public let projectDirectory: URL?
 
@@ -44,6 +46,7 @@ public struct ComposeService: Sendable, Equatable {
         configs: [ComposeServiceMount] = [],
         secrets: [ComposeServiceMount] = [],
         develop: ComposeDevelop? = nil,
+        networks: [String] = [],
         projectDirectory: URL? = nil
     ) {
         self.image = image
@@ -60,6 +63,7 @@ public struct ComposeService: Sendable, Equatable {
         self.configs = configs
         self.secrets = secrets
         self.develop = develop
+        self.networks = networks
         self.projectDirectory = projectDirectory
     }
 
@@ -84,6 +88,7 @@ public struct ComposeService: Sendable, Equatable {
             configs: configs,
             secrets: secrets,
             develop: develop,
+            networks: networks,
             projectDirectory: projectDirectory
         )
     }
@@ -104,6 +109,7 @@ public struct ComposeService: Sendable, Equatable {
             configs: configs,
             secrets: secrets,
             develop: develop,
+            networks: networks,
             projectDirectory: directory
         )
     }
@@ -124,6 +130,7 @@ public struct ComposeService: Sendable, Equatable {
             configs: configs,
             secrets: secrets,
             develop: develop,
+            networks: networks,
             projectDirectory: projectDirectory
         )
     }
@@ -144,6 +151,7 @@ public struct ComposeService: Sendable, Equatable {
             configs: configs,
             secrets: secrets,
             develop: develop,
+            networks: networks,
             projectDirectory: projectDirectory
         )
     }

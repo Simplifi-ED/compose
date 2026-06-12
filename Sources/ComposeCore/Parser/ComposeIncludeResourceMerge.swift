@@ -29,12 +29,39 @@ enum ComposeIncludeResourceMerge {
                 )
             }
         }
+        let networks = try mergeNetworks(
+            into: model.networks,
+            from: included.networks,
+            includePath: includePath,
+            definedIn: definedIn
+        )
         model = ComposeFile(
             name: model.name,
             services: model.services,
             configs: configs,
-            secrets: secrets
+            secrets: secrets,
+            networks: networks
         )
+    }
+
+    private static func mergeNetworks(
+        into target: [String: ComposeNetwork],
+        from included: [String: ComposeNetwork],
+        includePath: String,
+        definedIn: String
+    ) throws -> [String: ComposeNetwork] {
+        var merged = target
+        for (name, network) in included {
+            if merged[name] != nil {
+                throw ComposeError.includeNetworkConflict(
+                    name: name,
+                    includePath: includePath,
+                    definedIn: definedIn
+                )
+            }
+            merged[name] = network
+        }
+        return merged
     }
 
     private static func mergeResources(

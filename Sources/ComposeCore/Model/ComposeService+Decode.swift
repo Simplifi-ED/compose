@@ -16,10 +16,18 @@ extension ComposeService: Decodable {
         case configs
         case secrets
         case develop
+        case networks
+        case networkMode = "network_mode"
     }
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
+        guard !container.contains(.networkMode) else {
+            throw ComposeError.invalidField(
+                "network_mode",
+                reason: "isn't supported; attach the service to a project network with networks: instead"
+            )
+        }
         image = try container.decodeIfPresent(String.self, forKey: .image)
         build = try Self.decodeBuild(from: container)
         command = try Self.decodeCommand(from: container)
@@ -34,6 +42,7 @@ extension ComposeService: Decodable {
         configs = try Self.decodeServiceMounts(from: container, key: .configs, kind: .config)
         secrets = try Self.decodeServiceMounts(from: container, key: .secrets, kind: .secret)
         develop = try Self.decodeDevelop(from: container)
+        networks = try ComposeNetworkDecoder.decodeServiceNetworks(from: container, forKey: .networks)
         projectDirectory = nil
     }
 

@@ -7,6 +7,7 @@ extension Up {
         let layers: [[ServicePlan]]
         let healthContext: HealthWaitContext
         let buildPlans: [BuildRunner.Plan]
+        let networkPlans: [NetworkPlanning.Plan]
         let machineContext: MachineContext
     }
 
@@ -16,6 +17,12 @@ extension Up {
 
         try await executeBuildPlans(
             input.buildPlans,
+            dryRunManifest: manifest,
+            machineContext: input.machineContext
+        )
+        try await NetworkRunner.createAll(
+            input.networkPlans,
+            projectName: input.projectName,
             dryRunManifest: manifest,
             machineContext: input.machineContext
         )

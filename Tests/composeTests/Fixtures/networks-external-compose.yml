@@ -1,0 +1,9 @@
+networks:
+  shared:
+    external: true
+
+services:
+  api:
+    image: docker.io/library/alpine:3.20
+    command: sleep 300
+    networks: [shared]

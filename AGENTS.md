@@ -30,10 +30,11 @@ You are building a **Minimal Real Compose Plugin**—NOT a generic orchestration
 - Service `build:` (short context path or object with `context`, `dockerfile`, `args`, `target`); image build during `up`/`run` init via `Application.BuildCommand` before startup waves; default tag `{project}_{service}` when `image` omitted; explicit `image` names build output when both set; context path sandbox matches bind-mount rules; build args never logged; no registry push [1].
 - `compose cp` (`SERVICE:/path` ↔ host) via `ContainerClient.copyIn`/`copyOut`; project/service label scoping same as `exec`; default single replica or `ambiguousService`; `--index N` selects `{project}_{service}_{N}`; `--all` copies into all running replicas (host→container only); relative host paths CWD-sandboxed; absolute host paths allowed with stderr warning; container paths absolute with `..` rejected [1].
 - `--machine <name>` on `up`/`down`/`exec`/`ps`/`logs`/`cp`: validate machine via `MachineClient.inspect` (lazy boot); `ensureBooted()` only before mutating `up` workloads; scope discovery with `com.docker.compose.machine` label; in-VM `container` CLI via `MachineInVMRunner` for list/run/stop/exec/cp/logs/build; host sandbox discovery excludes machine-labeled containers; `ps`/`logs` exit gracefully when machine stopped; execution banner on stderr; dry-run prefixes `machine=<name>` without booting; `watch`/`run`/`top`/`config` error on `--machine` [1].
+- Minimal compose `networks:`: root declarations (empty/no-option form; `external: false` only) and service memberships (short list + empty-map long form); project-scoped network create (`{project}_{network}`) before startup waves and removal on `down`; attach via `container run --network`; DNS resolves **container names** (`{project}_{service}_{index}`), not Docker-style service shorthand; custom networks require macOS 26+ [1].
 
 ### **Out of Scope (DO NOT CODE):**
 
-- Custom bridging networks, overlay networks, or advanced routing [1].
+- Network drivers, overlay networks, IPAM plugins, network `aliases`, static `ipv4_address`/`ipv6_address`, `priority`, `network_mode`, `external: true` networks, cross-project network sharing, or modifying macOS `pf`/system-wide routing [1].
 - Named volume declarations, volume drivers, and root-level `volumes:` blocks [1].
 - Long-form bind-mount `read_only: true`, explicit `:rw` volume suffix, and `:ro` on named volumes [1].
 - External secret/config managers (`external: true`, Vault, cloud SM) [1].

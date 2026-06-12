@@ -75,6 +75,7 @@ struct ComposeFileDocument: Sendable, Equatable {
     let services: [String: ComposeService]
     let configs: [String: ComposeFileResource]
     let secrets: [String: ComposeFileResource]
+    let networks: [String: ComposeNetwork]
     let include: [ComposeIncludeEntry]
 
     init(
@@ -82,12 +83,14 @@ struct ComposeFileDocument: Sendable, Equatable {
         services: [String: ComposeService],
         configs: [String: ComposeFileResource] = [:],
         secrets: [String: ComposeFileResource] = [:],
+        networks: [String: ComposeNetwork] = [:],
         include: [ComposeIncludeEntry] = []
     ) {
         self.name = name
         self.services = services
         self.configs = configs
         self.secrets = secrets
+        self.networks = networks
         self.include = include
     }
 }
@@ -98,6 +101,7 @@ extension ComposeFileDocument: Decodable {
         case services
         case configs
         case secrets
+        case networks
         case include
     }
 
@@ -107,6 +111,7 @@ extension ComposeFileDocument: Decodable {
         services = try container.decodeIfPresent([String: ComposeService].self, forKey: .services) ?? [:]
         configs = try ComposeFileResourceDecoder.decodeMap(from: container, forKey: .configs, kind: .config)
         secrets = try ComposeFileResourceDecoder.decodeMap(from: container, forKey: .secrets, kind: .secret)
+        networks = try ComposeNetworkDecoder.decodeMap(from: container, forKey: .networks)
         include = try Self.decodeInclude(from: container)
     }
 

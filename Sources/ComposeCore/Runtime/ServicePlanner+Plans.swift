@@ -24,6 +24,10 @@ extension ServicePlanner {
             composeFile: context.composeFile,
             activeServiceNames: [serviceName]
         )
+        try NetworkPlanning.validate(
+            composeFile: context.composeFile,
+            activeServiceNames: [serviceName]
+        )
 
         var arguments: [String] = ["--name", name]
         if options.removeContainer {

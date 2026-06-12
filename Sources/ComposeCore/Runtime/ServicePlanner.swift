@@ -45,14 +45,19 @@ public enum ServicePlanner {
         machineName: String? = nil
     ) throws -> [[ServicePlan]] {
         let layers = try dependencyLayers(for: composeFile, activeProfiles: activeProfiles)
+        let activeServiceNames = Set(layers.flatMap { $0.map(\.serviceName) })
         try ComposeFileMountResolver.validate(
             composeFile: composeFile,
-            activeServiceNames: Set(layers.flatMap { $0.map(\.serviceName) })
+            activeServiceNames: activeServiceNames
+        )
+        try NetworkPlanning.validate(
+            composeFile: composeFile,
+            activeServiceNames: activeServiceNames
         )
         try ReplicaPlanning.validateScaleTargets(
             scaleOverrides: scaleOverrides,
             services: composeFile.services,
-            activeServiceNames: Set(layers.flatMap { $0.map(\.serviceName) })
+            activeServiceNames: activeServiceNames
         )
         return try layers.map { layer in
             try layer.flatMap { serviceName, service in

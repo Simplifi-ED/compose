@@ -20,7 +20,8 @@ enum ComposeFileMerge {
             name: override.name ?? base.name,
             services: mergedServices,
             configs: mergeResources(base: base.configs, override: override.configs),
-            secrets: mergeResources(base: base.secrets, override: override.secrets)
+            secrets: mergeResources(base: base.secrets, override: override.secrets),
+            networks: base.networks.merging(override.networks) { _, override in override }
         )
     }
 
@@ -56,6 +57,11 @@ enum ComposeFileMerge {
                 key: { ComposeServiceMountDecoder.mergeKey(for: $0) }
             ),
             develop: override.develop ?? base.develop,
+            networks: ComposeBindingKeys.mergeUniqueEntries(
+                base: base.networks,
+                override: override.networks,
+                key: { $0 }
+            ),
             projectDirectory: override.projectDirectory ?? base.projectDirectory
         )
     }

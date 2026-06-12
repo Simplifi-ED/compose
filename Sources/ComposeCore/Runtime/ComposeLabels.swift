@@ -5,6 +5,15 @@ public enum ComposeLabels {
     public static let service = "com.docker.compose.service"
     public static let containerNumber = "com.docker.compose.container-number"
     public static let machine = "com.docker.compose.machine"
+    public static let network = "com.docker.compose.network"
+
+    /// Labels stamped on project-scoped networks at `network create` time.
+    package static func networkLabels(projectName: String, logicalName: String) -> [String: String] {
+        [
+            project: projectName,
+            network: logicalName
+        ]
+    }
 
     public static func runFlags(
         projectName: String,

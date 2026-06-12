@@ -6,6 +6,7 @@ package enum DryRunManifestFormatting {
         var labels: [String: String] = [:]
         var volumes: [String] = []
         var env: [String] = []
+        var networks: [String] = []
         var detach = false
         var interactive = false
         var tty = false
@@ -38,8 +39,19 @@ package enum DryRunManifestFormatting {
         let env = formatStringArray(parsed.env.sorted())
         let flags = formatBooleanFlags(parsed)
         let header = "[DRY-RUN] create container \"\(plan.name)\" image=\(plan.image)"
-        let details = "ports=\(ports) labels=\(labels) volumes=\(volumes) env=\(env)"
+        var details = "ports=\(ports) labels=\(labels) volumes=\(volumes) env=\(env)"
+        if !parsed.networks.isEmpty {
+            details += " networks=\(formatStringArray(parsed.networks.sorted()))"
+        }
         return flags.isEmpty ? "\(header) \(details)" : "\(header) \(details) \(flags)"
+    }
+
+    package static func formatNetworkCreate(name: String) -> String {
+        "[DRY-RUN] create network \"\(name)\""
+    }
+
+    package static func formatNetworkRemove(name: String) -> String {
+        "[DRY-RUN] remove network \"\(name)\""
     }
 
     package static func formatTeardown(_ name: String, reason: DryRunManifest.TeardownReason) -> String {
@@ -124,6 +136,8 @@ package enum DryRunManifestFormatting {
             parsed.volumes.append(value)
         case "-e":
             parsed.env.append(value)
+        case "--network":
+            parsed.networks.append(value)
         default:
             return nil
         }
