@@ -235,7 +235,7 @@ COMPOSE_PROFILES=debug container compose up --profile metrics   # debug + metric
 
 `--profile` flags add to any profiles set in `COMPOSE_PROFILES` (comma-separated process environment). `COMPOSE_PROFILES` in a `.env` file beside the compose file is not supported yet.
 
-If `COMPOSE_PROFILES` is exported in your shell, `ps`, `logs`, `top`, and `down` need a compose file to apply profile filtering—even with `-p` only. Use `COMPOSE_PROFILES=*` (or `down --profile "*"`) to stop every project container without a compose file.
+If `COMPOSE_PROFILES` is exported in your shell, `ps`, `logs`, `top`, `config`, `watch`, and `down` need a compose file to apply profile filtering—even with `-p` only. Use `COMPOSE_PROFILES=*` (or `down --profile "*"`) to stop every project container without a compose file.
 
 `compose run debugger sh` auto-enables the service's profiles.
 

@@ -89,27 +89,14 @@ extension TestRunner {
     }
 
     private mutating func runProfileResolutionDownOrphanTests() throws {
-        let discovered = [
-            DiscoveredContainer(name: "demo_web", serviceName: "web"),
-            DiscoveredContainer(name: "demo_debugger", serviceName: "debugger"),
-            DiscoveredContainer(name: "demo_metrics", serviceName: "metrics")
-        ]
+        try runProfileResolutionDownFilterTests()
+        try runProfileResolutionOrphanPolicyTests()
+    }
 
-        let envDebug = ProfileResolution.resolve(
-            cliProfiles: [],
-            environment: [ProfileResolution.environmentVariableName: "debug"]
-        )
-        expectComposeError(
-            "env-only COMPOSE_PROFILES down -p without compose file errors",
-            matching: { if case .profileFilterRequiresComposeFile = $0 { true } else { false } },
-            body: {
-                _ = try ProfileFilter.downServiceFilter(
-                    composeFile: nil,
-                    activeProfiles: envDebug.activeProfiles,
-                    tearsDownAll: envDebug.tearsDownAll
-                )
-            }
-        )
+    private mutating func runProfileResolutionDownFilterTests() throws {
+        let discovered = profileResolutionDiscoveredContainers()
+        let envDebug = envDebugProfileResolution()
+        try runProfileResolutionMissingComposeFileTests(envDebug: envDebug)
 
         let profilesFixture = try ComposeParser.parse(fileURL: Self.fixtureURL("profiles-compose.yml"))
         let serviceFilter = try ProfileFilter.downServiceFilter(
@@ -123,6 +110,40 @@ extension TestRunner {
             "env-only COMPOSE_PROFILES down narrows teardown to active profiles"
         )
 
+        try runProfileResolutionWildcardDownTests(discovered: discovered)
+    }
+
+    private mutating func runProfileResolutionMissingComposeFileTests(
+        envDebug: ProfileResolution.Result
+    ) throws {
+        expectComposeError(
+            "env-only COMPOSE_PROFILES down -p without compose file errors",
+            matching: { if case .profileFilterRequiresComposeFile = $0 { true } else { false } },
+            body: {
+                _ = try ProfileFilter.downServiceFilter(
+                    composeFile: nil,
+                    activeProfiles: envDebug.activeProfiles,
+                    tearsDownAll: envDebug.tearsDownAll
+                )
+            }
+        )
+        expectComposeError(
+            "env-only COMPOSE_PROFILES ps filter without compose file errors",
+            matching: { if case .profileFilterRequiresComposeFile = $0 { true } else { false } },
+            body: {
+                _ = try ProfileFilter.queryServiceFilter(
+                    composeFile: nil,
+                    activeProfiles: envDebug.activeProfiles,
+                    positionalServices: [],
+                    profileFilterRequested: envDebug.profileFilterRequested
+                )
+            }
+        )
+    }
+
+    private mutating func runProfileResolutionWildcardDownTests(
+        discovered: [DiscoveredContainer]
+    ) throws {
         let envWildcard = ProfileResolution.resolve(
             cliProfiles: [],
             environment: [ProfileResolution.environmentVariableName: "*"]
@@ -135,7 +156,12 @@ extension TestRunner {
         expect(wildcardFilter == nil, "env-only COMPOSE_PROFILES=* down -p skips compose file filter")
         let allContainers = ProjectStatus.filteredDiscoveredContainers(from: discovered, filter: wildcardFilter)
         expect(allContainers.count == 3, "env-only COMPOSE_PROFILES=* down -p keeps all containers")
+    }
 
+    private mutating func runProfileResolutionOrphanPolicyTests() throws {
+        let discovered = profileResolutionDiscoveredContainers()
+        let envDebug = envDebugProfileResolution()
+        let profilesFixture = try ComposeParser.parse(fileURL: Self.fixtureURL("profiles-compose.yml"))
         let profileOrphans = OrphanRemoval.orphans(
             in: discovered,
             composeFile: profilesFixture,
@@ -149,18 +175,20 @@ extension TestRunner {
             profileOrphans.map(\.name) == ["demo_metrics"],
             "env-only COMPOSE_PROFILES orphan policy matches CLI --profile debug"
         )
+    }
 
-        expectComposeError(
-            "env-only COMPOSE_PROFILES ps filter without compose file errors",
-            matching: { if case .profileFilterRequiresComposeFile = $0 { true } else { false } },
-            body: {
-                _ = try ProfileFilter.queryServiceFilter(
-                    composeFile: nil,
-                    activeProfiles: envDebug.activeProfiles,
-                    positionalServices: [],
-                    profileFilterRequested: envDebug.profileFilterRequested
-                )
-            }
+    private func profileResolutionDiscoveredContainers() -> [DiscoveredContainer] {
+        [
+            DiscoveredContainer(name: "demo_web", serviceName: "web"),
+            DiscoveredContainer(name: "demo_debugger", serviceName: "debugger"),
+            DiscoveredContainer(name: "demo_metrics", serviceName: "metrics")
+        ]
+    }
+
+    private func envDebugProfileResolution() -> ProfileResolution.Result {
+        ProfileResolution.resolve(
+            cliProfiles: [],
+            environment: [ProfileResolution.environmentVariableName: "debug"]
         )
     }
 }
