@@ -17,22 +17,28 @@ public struct MachineOptions: ParsableArguments {
     }
 
     public func validateMachineName() throws {
-        guard let name = resolvedMachineName else { return }
+        guard machine != nil else { return }
+        guard let name = resolvedMachineName else {
+            throw ComposeError.invalidMachineName("")
+        }
         try MachineNameValidator.validate(name)
     }
 
     package func rejectIfUnsupported(commandName: String) throws {
-        guard resolvedMachineName != nil else { return }
+        guard machine != nil else { return }
+        try validateMachineName()
         throw ComposeError.machineUnsupportedCommand(commandName)
     }
 
-    public func resolveContext() async throws -> MachineContext {
+    package func resolveContext(
+        stopped stoppedPolicy: MachineStoppedPolicy = .allowStopped
+    ) async throws -> MachineContextResolution {
         try validateMachineName()
         let machineContext = try await MachineContext.resolve(
             machineName: resolvedMachineName
         )
         machineContext.printExecutionBanner()
-        return machineContext
+        return try MachineContext.applyStoppedPolicy(machineContext, policy: stoppedPolicy)
     }
 }
 

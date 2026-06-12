@@ -44,7 +44,9 @@ public struct Exec: AsyncParsableCommand {
     }
 
     public func run() async throws {
-        let machineContext = try await machineOptions.resolveContext()
+        let machineContext = try await machineOptions
+            .resolveContext(stopped: .requireRunning)
+            .machineContext
         let context = try projectOptions.resolvedLabelCommandContext(
             skipComposeFileOnExplicitProject: true,
             machineContext: machineContext

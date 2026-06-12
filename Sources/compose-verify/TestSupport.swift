@@ -14,11 +14,19 @@ enum StandardStreamCapture {
             return (try body(), "")
         }
         dup2(pipe.fileHandleForWriting.fileDescriptor, STDERR_FILENO)
+        var restored = false
+        func restore() {
+            guard !restored else { return }
+            fflush(stderr)
+            dup2(originalFD, STDERR_FILENO)
+            close(originalFD)
+            try? pipe.fileHandleForWriting.close()
+            restored = true
+        }
+        defer { restore() }
+
         let result = try body()
-        fflush(stderr)
-        dup2(originalFD, STDERR_FILENO)
-        close(originalFD)
-        try? pipe.fileHandleForWriting.close()
+        restore()
         let data = pipe.fileHandleForReading.readDataToEndOfFile()
         return (result, String(bytes: data, encoding: .utf8) ?? "")
 #else

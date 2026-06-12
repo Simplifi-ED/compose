@@ -14,7 +14,11 @@ extension Up {
         let manifest = DryRunManifest(machineName: input.machineContext.machineName)
         let execution = WaveExecutionPolicy(maxConcurrent: parallelOptions.resolvedMaxConcurrent())
 
-        try await executeBuildPlans(input.buildPlans, dryRunManifest: manifest)
+        try await executeBuildPlans(
+            input.buildPlans,
+            dryRunManifest: manifest,
+            machineContext: input.machineContext
+        )
 
         if workspaceHygiene.shouldRemoveOrphans {
             try await recordOrphanTeardowns(

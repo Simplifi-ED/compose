@@ -24,11 +24,11 @@ You are building a **Minimal Real Compose Plugin**—NOT a generic orchestration
 - Opt-in `--remove-orphans` on `up`/`down`: profile-aware orphan detection and removal (project label scoped) [1].
 - Root-level `configs:` / `secrets:` with local `file:` sources (`external: false` only); service-level short and long refs; read-only staged mounts at `/run/configs/` and `/run/secrets/` via `-v …:ro` [1].
 - `down -v` / `--volumes`: Phase 1 bind-mount purge for project-relative host paths only; symlink-safe allowlist [1].
-- Staged config/secret files under a project temp directory (`0600` secrets, `0644` configs); removed on container teardown and `down` [1].
+- Staged config/secret files under `~/.config/container-compose/<project>/` (`0600` secrets, `0644` configs); removed on container teardown and `down` [1].
 - Service-level `develop.watch` (`sync`, `sync+restart`); macOS FSEvents file sync into running containers via `compose watch` and `ContainerClient.copyIn`; path sandbox matches bind-mount rules; sync applies to all running replicas [1].
 - Service `build:` (short context path or object with `context`, `dockerfile`, `args`, `target`); image build during `up`/`run` init via `Application.BuildCommand` before startup waves; default tag `{project}_{service}` when `image` omitted; explicit `image` names build output when both set; context path sandbox matches bind-mount rules; build args never logged; no registry push [1].
 - `compose cp` (`SERVICE:/path` ↔ host) via `ContainerClient.copyIn`/`copyOut`; project/service label scoping same as `exec`; default single replica or `ambiguousService`; `--index N` selects `{project}_{service}_{N}`; `--all` copies into all running replicas (host→container only); relative host paths CWD-sandboxed; absolute host paths allowed with stderr warning; container paths absolute with `..` rejected [1].
-- `--machine <name>` on `up`/`down`/`exec`/`ps`/`logs`/`cp`: boot/validate existing container machine via `MachineClient`; scope discovery with `com.docker.compose.machine` label; in-VM `container` CLI via `MachineInVMRunner` (`/sbin.machine/init -s container …`) for list/run/stop/exec/cp/logs; host sandbox discovery excludes machine-labeled containers; execution banner on stderr; dry-run prefixes `machine=<name>`; `build:` stays on host v1; `watch`/`run`/`top`/`config` error on `--machine` [1].
+- `--machine <name>` on `up`/`down`/`exec`/`ps`/`logs`/`cp`: validate machine via `MachineClient.inspect` (lazy boot); `ensureBooted()` only before mutating `up` workloads; scope discovery with `com.docker.compose.machine` label; in-VM `container` CLI via `MachineInVMRunner` for list/run/stop/exec/cp/logs/build; host sandbox discovery excludes machine-labeled containers; `ps`/`logs` exit gracefully when machine stopped; execution banner on stderr; dry-run prefixes `machine=<name>` without booting; `watch`/`run`/`top`/`config` error on `--machine` [1].
 
 ### **Out of Scope (DO NOT CODE):**
 
@@ -109,6 +109,25 @@ container --help | grep -A 2 "PLUGINS:"
 ```
 
 The output of the discovery command **must** show the `compose` plugin. If it does not appear, your `config.toml` structure is incorrect or placed in the wrong path. Stop and debug.
+
+---
+
+## 6. Machine-Mode Hypervisor Corrections (`--machine`)
+
+You must actively resolve the three core gaps in the VM hypervisor boundary instead of leaving them as documented constraints:
+
+1. **In-VM Image Builds:**
+   * Do not run `BuildRunner` on the macOS host when `--machine <name>` is set [2.1].
+   * Run `container build` inside the machine via `MachineInVMRunner` so image construction uses the VM image store [2.1].
+
+2. **Home-Relative File Staging:**
+   * Refactor `ComposeFileStaging.swift` to use `FileManager.default.homeDirectoryForCurrentUser` instead of `NSTemporaryDirectory()` [2.2].
+   * Ensure configs and secrets are staged at `~/.config/container-compose/...` so they fall within the automatically mounted `$HOME` directory inside the VM [2.2].
+
+3. **Lazy VM Booting:**
+   * Remove aggressive `MachineClient.boot` calls from eager context initialization [2.3].
+   * Prevent `ps`, `logs`, and `config` / `--dry-run` commands from booting a stopped VM [2.3]. If the target machine is stopped, `ps`/`logs` must exit gracefully with a "Machine stopped" message [2.3].
+   * Call `ensureBooted()` lazily only inside `Up` immediately before dispatching container executions (including in-VM builds) [2.3].
 
 ---
 

@@ -17,7 +17,7 @@ package enum ContainerCopyAPI {
         machineContext: MachineContext = .applicationSandbox
     ) async throws {
         if machineContext.isMachineMode {
-            let snapshot = try machineContext.requireSnapshot()
+            let snapshot = try machineContext.bootedContext().snapshot
             var args = ["cp"]
             if createParents {
                 args.append("--parents")
@@ -43,7 +43,7 @@ package enum ContainerCopyAPI {
         machineContext: MachineContext = .applicationSandbox
     ) async throws {
         if machineContext.isMachineMode {
-            let snapshot = try machineContext.requireSnapshot()
+            let snapshot = try machineContext.bootedContext().snapshot
             var args = ["cp"]
             if createParents {
                 args.append("--parents")

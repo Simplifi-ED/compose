@@ -4,14 +4,22 @@ import ContainerResource
 import Foundation
 
 /// Routes container I/O to the application sandbox or an in-machine `container` CLI.
+///
+/// **Machine mode contracts**
+/// - ``list(filters:machineContext:)`` accepts an inspected context (running or stopped).
+///   Returns an empty list when the machine is stopped.
+/// - All other machine-mode methods require a **booted, running** machine. Call
+///   ``MachineContext/ensureBooted()`` on mutating commands, then pass the returned context
+///   (or call ``MachineContext/bootedContext()`` before in-VM I/O).
 package enum ComposeContainerGateway {
     package static func list(
         filters: ContainerListFilters,
         machineContext: MachineContext = .applicationSandbox
     ) async throws -> [ContainerSnapshot] {
         if machineContext.isMachineMode {
-            let snapshot = try machineContext.requireSnapshot()
-            let managed = try await MachineInVMRunner.listContainers(snapshot: snapshot)
+            guard machineContext.isMachineRunning else { return [] }
+            let booted = try machineContext.bootedContext()
+            let managed = try await MachineInVMRunner.listContainers(snapshot: booted.snapshot)
             return managed.map { item in
                 ContainerSnapshot(
                     configuration: item.configuration,
@@ -31,7 +39,7 @@ package enum ComposeContainerGateway {
         if machineContext.isMachineMode {
             let containers = try await list(filters: .init(ids: [id]), machineContext: machineContext)
             guard let container = containers.first else {
-                throw ComposeError.serviceNotFound(service: id, project: "")
+                throw ComposeError.containerNotFound(container: id)
             }
             return container
         }
@@ -43,11 +51,17 @@ package enum ComposeContainerGateway {
         machineContext: MachineContext = .applicationSandbox
     ) async throws {
         if machineContext.isMachineMode {
-            let snapshot = try machineContext.requireSnapshot()
-            try? await ContainerTeardown.teardown(id: plan.name, machineContext: machineContext)
+            let booted = try machineContext.bootedContext()
+            let existing = try await list(
+                filters: .init(ids: [plan.name]),
+                machineContext: machineContext
+            )
+            if !existing.isEmpty {
+                try await ContainerTeardown.teardown(id: plan.name, machineContext: machineContext)
+            }
             let runArguments = try ComposeFileStaging.preparedRunArguments(for: plan)
             try await MachineInVMRunner.run(
-                snapshot: snapshot,
+                snapshot: booted.snapshot,
                 containerArguments: ["run"] + runArguments
             )
             return
@@ -61,12 +75,12 @@ package enum ComposeContainerGateway {
         machineContext: MachineContext = .applicationSandbox
     ) async throws {
         if machineContext.isMachineMode {
-            let snapshot = try machineContext.requireSnapshot()
+            let booted = try machineContext.bootedContext()
             var args = ["stop", id]
             if let timeout = opts?.timeoutInSeconds {
                 args.append(contentsOf: ["--timeout", String(timeout)])
             }
-            try await MachineInVMRunner.run(snapshot: snapshot, containerArguments: args)
+            try await MachineInVMRunner.run(snapshot: booted.snapshot, containerArguments: args)
             return
         }
         let client = ContainerClient()
@@ -83,9 +97,9 @@ package enum ComposeContainerGateway {
         machineContext: MachineContext = .applicationSandbox
     ) async throws {
         if machineContext.isMachineMode {
-            let snapshot = try machineContext.requireSnapshot()
+            let booted = try machineContext.bootedContext()
             try await MachineInVMRunner.run(
-                snapshot: snapshot,
+                snapshot: booted.snapshot,
                 containerArguments: ["kill", "--signal", signal, id]
             )
             return
@@ -99,12 +113,12 @@ package enum ComposeContainerGateway {
         machineContext: MachineContext = .applicationSandbox
     ) async throws {
         if machineContext.isMachineMode {
-            let snapshot = try machineContext.requireSnapshot()
+            let booted = try machineContext.bootedContext()
             var args = ["delete", id]
             if force {
                 args.insert("--force", at: 1)
             }
-            try await MachineInVMRunner.run(snapshot: snapshot, containerArguments: args)
+            try await MachineInVMRunner.run(snapshot: booted.snapshot, containerArguments: args)
             return
         }
         try await ContainerClient().delete(id: id, force: force)

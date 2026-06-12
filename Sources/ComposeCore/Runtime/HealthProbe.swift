@@ -51,7 +51,7 @@ enum HealthProbe {
   static func processRunner(machineContext: MachineContext) -> HealthWait.ProcessRunner {
     { containerName, configuration, timeout in
       if machineContext.isMachineMode {
-        let snapshot = try machineContext.requireSnapshot()
+        let snapshot = try machineContext.bootedContext().snapshot
         let execArgs = ["exec", containerName, configuration.executable] + configuration.arguments
         return try await runMachineHealthExec(
           snapshot: snapshot,

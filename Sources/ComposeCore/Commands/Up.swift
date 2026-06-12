@@ -43,7 +43,7 @@ public struct Up: AsyncParsableCommand {
 
     public func run() async throws {
         try parallelOptions.validate()
-        let machineContext = try await machineOptions.resolveContext()
+        let machineContext = try await machineOptions.resolveContext().machineContext
         let startup = try resolveStartupPlan(machineName: machineOptions.resolvedMachineName)
 
         if dryRunOptions.isEnabled {
@@ -60,6 +60,7 @@ public struct Up: AsyncParsableCommand {
             return
         }
 
+        let bootedContext = try await machineContext.ensureBooted()
         try await runLive(
             LiveInput(
                 buildPlans: startup.buildPlans,
@@ -69,7 +70,7 @@ public struct Up: AsyncParsableCommand {
                 layers: startup.layers,
                 plans: startup.plans,
                 healthContext: startup.healthContext,
-                machineContext: machineContext
+                machineContext: bootedContext
             )
         )
     }

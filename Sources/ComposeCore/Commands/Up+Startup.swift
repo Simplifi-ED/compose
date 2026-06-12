@@ -13,7 +13,11 @@ extension Up {
     }
 
     func runLive(_ input: LiveInput) async throws {
-        try await executeBuildPlans(input.buildPlans, dryRunManifest: nil)
+        try await executeBuildPlans(
+            input.buildPlans,
+            dryRunManifest: nil,
+            machineContext: input.machineContext
+        )
         try await orchestrateStartup(
             projectName: input.projectName,
             composeFile: input.composeFile,

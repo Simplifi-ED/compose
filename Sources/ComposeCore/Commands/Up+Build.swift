@@ -16,12 +16,14 @@ extension Up {
 
     func executeBuildPlans(
         _ buildPlans: [BuildRunner.Plan],
-        dryRunManifest: DryRunManifest?
+        dryRunManifest: DryRunManifest?,
+        machineContext: MachineContext
     ) async throws {
         try await BuildRunner.buildAll(
             buildPlans,
             progress: dryRunManifest == nil ? progressOptions.progress : nil,
-            dryRunManifest: dryRunManifest
+            dryRunManifest: dryRunManifest,
+            machineContext: machineContext
         )
     }
 }

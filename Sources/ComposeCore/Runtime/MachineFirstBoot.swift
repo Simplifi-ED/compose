@@ -27,6 +27,7 @@ enum MachineFirstBoot {
         )
         try await process.start()
         let exitCode = try await process.wait()
+        try? stderrPipe.fileHandleForWriting.close()
         guard exitCode == 0 else {
             let errData = stderrPipe.fileHandleForReading.readDataToEndOfFile()
             let detail = String(bytes: errData, encoding: .utf8)?

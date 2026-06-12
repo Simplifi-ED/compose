@@ -105,7 +105,7 @@ Run a project inside an existing [container machine](https://github.com/apple/co
 
 1. macOS 26+ with container machines enabled.
 2. Create and name a machine outside compose: `container machine create --name dev` (see `container machine --help`).
-3. The machine must already exist; compose boots it if stopped.
+3. The machine must already exist; `compose up` boots it when stopped. Read-only commands (`ps`, `logs`, `--dry-run`) do not boot a stopped machine.
 
 **Examples**
 
@@ -123,9 +123,9 @@ Compose prints the active context on stderr once per command (`Execution context
 
 **Volumes and bind mounts**
 
-- Machine home mount (`home-mount` on the machine) maps your macOS `$HOME` into the VM. Compose-relative bind mounts still resolve against the compose file directory on the host; those paths must be visible inside the machine at the same absolute path when home is mounted.
-- Image builds (`build:`) run on the **host** in v1; only container lifecycle runs inside the machine. The machine must already have any pre-built images available in its own image store.
-- Staged `configs:` / `secrets:` files are written under the host temp directory; they are not visible inside the machine unless that path is mounted. Prefer bind-mounted config files for machine projects in v1.
+- Machine home mount (`home-mount` on the machine) maps your macOS `$HOME` into the VM at the same path. Compose-relative bind mounts still resolve against the compose file directory on the host; those paths must be visible inside the machine at the same absolute path when home is mounted.
+- Image builds (`build:`) run inside the machine during `compose up --machine` via the in-VM `container build` CLI. Build context paths must be visible inside the machine (typically under `$HOME`).
+- Staged `configs:` / `secrets:` files are written under `~/.config/container-compose/<project>/`, which is inside the mounted home directory.
 - A project runs entirely in one context (sandbox or one machine); mixed mode is not supported.
 
 ---

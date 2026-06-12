@@ -78,7 +78,9 @@ public struct Cp: AsyncParsableCommand {
         let hostRole: CpPathValidator.HostPathRole = direction == .copyIn ? .source : .destination
         let resolvedHost = try CpPathValidator.resolveHostPath(rawHostPath, role: hostRole)
 
-        let machineContext = try await machineOptions.resolveContext()
+        let machineContext = try await machineOptions
+            .resolveContext(stopped: .requireRunning)
+            .machineContext
         let context = try projectOptions.resolvedLabelCommandContext(
             skipComposeFileOnExplicitProject: true,
             machineContext: machineContext

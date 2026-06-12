@@ -191,14 +191,14 @@ package enum ExecSession {
         if configuration.interactive {
             args.append("-i")
         }
-        if configuration.useInteractivePTY {
+        if configuration.processTerminal {
             args.append("-t")
         }
         args.append(configuration.containerName)
         args.append(configuration.executable)
         args.append(contentsOf: configuration.arguments)
 
-        let machineSnapshot = try machineContext.requireSnapshot()
+        let machineSnapshot = try machineContext.bootedContext().snapshot
         let log = Logger(label: "compose.exec")
         return try await MachineInVMRunner.runInteractive(
             snapshot: machineSnapshot,

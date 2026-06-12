@@ -37,7 +37,10 @@ public struct Down: AsyncParsableCommand {
 
     public func run() async throws {
         try parallelOptions.validate()
-        let machineContext = try await machineOptions.resolveContext()
+        var machineContext = try await machineOptions.resolveContext().machineContext
+        if machineContext.isMachineMode, !dryRunOptions.isEnabled, !machineContext.isMachineRunning {
+            machineContext = try await machineContext.ensureBooted()
+        }
         let context = try projectOptions.resolvedLabelCommandContext(
             profileFilterRequested: profileOptions.profileFilterRequested,
             machineContext: machineContext

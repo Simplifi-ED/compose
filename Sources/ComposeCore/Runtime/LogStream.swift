@@ -291,7 +291,7 @@ package actor LogMultiplexer {
         options: LogStreamOptions,
         multiplexer: LogMultiplexer
     ) async throws {
-        let snapshot = try options.machineContext.requireSnapshot()
+        let snapshot = try options.machineContext.bootedContext().snapshot
         var args = ["logs"]
         if let tail = options.tail {
             args.append(contentsOf: ["--tail", String(tail)])
@@ -304,15 +304,17 @@ package actor LogMultiplexer {
         }
         args.append(source.containerName)
 
-        let captured = try await MachineInVMRunner.streamContainerOutput(
+        for try await chunk in MachineInVMRunner.streamContainerOutput(
             snapshot: snapshot,
             containerArguments: args
-        )
-        if !captured.isEmpty {
+        ) {
+            if Task.isCancelled {
+                break
+            }
             await multiplexer.ingest(
                 container: source.containerName,
                 prefix: source.serviceLabel,
-                chunk: captured
+                chunk: chunk
             )
         }
         await multiplexer.finishPending(

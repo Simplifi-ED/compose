@@ -15,6 +15,8 @@ extension TestRunner {
         }
         runMachineUnsupportedCommandTests()
         runMachineDryRunTests()
+        runMachineLazyBootTests()
+        runMachineStagingRootTests()
     }
 
     private mutating func runMachineNameValidationTests() {
@@ -32,6 +34,15 @@ extension TestRunner {
             matching: { if case .invalidMachineName = $0 { true } else { false } },
             body: {
                 let options = try MachineOptions.parse(["--machine", "dev!"])
+                try options.validateMachineName()
+            }
+        )
+
+        expectComposeError(
+            "whitespace-only machine name",
+            matching: { if case .invalidMachineName("") = $0 { true } else { false } },
+            body: {
+                let options = try MachineOptions.parse(["--machine", "   "])
                 try options.validateMachineName()
             }
         )
@@ -112,6 +123,71 @@ extension TestRunner {
                 let options = try MachineOptions.parse(["--machine", "dev"])
                 try options.rejectIfUnsupported(commandName: "watch")
             }
+        )
+    }
+
+    private mutating func runMachineLazyBootTests() {
+        expect(
+            !MachineContext.applicationSandbox.isMachineRunning,
+            "sandbox is not machine running"
+        )
+        let stopped = MachineContext(machineName: "dev", snapshot: nil)
+        expect(!stopped.isMachineRunning, "machine without snapshot is not running")
+
+        let graceful = try? MachineContext.applyStoppedPolicy(stopped, policy: .gracefulExit)
+        let isGracefulStop: Bool = {
+            if case .stoppedGracefully = graceful { return true }
+            return false
+        }()
+        expect(isGracefulStop, "graceful policy on stopped machine")
+
+        let notice = StandardStreamCapture.captureStandardError {
+            _ = try? MachineContext.applyStoppedPolicy(stopped, policy: .gracefulExit)
+        }
+        expect(
+            notice.captured.contains("Machine 'dev' is stopped. No active containers."),
+            "graceful policy prints stopped notice"
+        )
+
+        expectComposeError(
+            "requireRunning policy on stopped machine",
+            matching: {
+                if case .machineStopped("dev", .startRequired) = $0 { true } else { false }
+            },
+            body: {
+                _ = try MachineContext.applyStoppedPolicy(stopped, policy: .requireRunning)
+            }
+        )
+
+        let startMessage = ComposeError.machineStopped("dev", reason: .startRequired).localizedDescription
+        expect(
+            startMessage.contains("Machine 'dev' is stopped."),
+            "startRequired message uses stopped prefix"
+        )
+        let readMessage = MachineStoppedReason.noActiveContainers.message(machineName: "dev")
+        expect(
+            readMessage.contains("Machine 'dev' is stopped.") && readMessage.contains("No active containers"),
+            "noActiveContainers message aligned"
+        )
+
+        let allowed = try? MachineContext.applyStoppedPolicy(stopped, policy: .allowStopped)
+        if case .ready(let context) = allowed {
+            expect(context.machineName == "dev", "allowStopped returns inspected context")
+        } else {
+            expect(false, "allowStopped returns inspected context")
+        }
+    }
+
+    private mutating func runMachineStagingRootTests() {
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        let root = ComposeFileStaging.stagingRoot().path
+        expect(
+            root.hasPrefix(home),
+            "staging root is under home directory"
+        )
+        expect(
+            root.contains("/.config/container-compose"),
+            "staging root uses ~/.config/container-compose"
         )
     }
 

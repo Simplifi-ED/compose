@@ -1,6 +1,35 @@
 import ContainerAPIClient
+import ContainerResource
 import Foundation
 import MachineAPIClient
+
+package enum MachineStoppedPolicy: Sendable {
+    case allowStopped
+    case gracefulExit
+    case requireRunning
+}
+
+package enum MachineContextResolution: Sendable {
+    case ready(MachineContext)
+    case stoppedGracefully
+
+    package var machineContext: MachineContext {
+        get throws {
+            guard case .ready(let context) = self else {
+                throw ComposeError.invalidField(
+                    "machine context",
+                    reason: "machine is stopped; use machineContextIfReady for graceful exit"
+                )
+            }
+            return context
+        }
+    }
+
+    package var machineContextIfReady: MachineContext? {
+        guard case .ready(let context) = self else { return nil }
+        return context
+    }
+}
 
 /// Execution target for compose runtime operations (application sandbox or a container machine).
 public struct MachineContext: Sendable {
@@ -11,11 +40,17 @@ public struct MachineContext: Sendable {
 
     public var isMachineMode: Bool { machineName != nil }
 
+    package var isMachineRunning: Bool {
+        guard isMachineMode, let snapshot else { return false }
+        return Self.isRunning(snapshot)
+    }
+
     public init(machineName: String?, snapshot: MachineSnapshot?) {
         self.machineName = machineName
         self.snapshot = snapshot
     }
 
+    /// Validates machine existence and inspects state without booting.
     public static func resolve(machineName: String?) async throws -> MachineContext {
         guard let machineName else {
             return .applicationSandbox
@@ -28,19 +63,38 @@ public struct MachineContext: Sendable {
             throw ComposeError.machineNotFound(machineName)
         }
 
-        var dynamicEnv: [String: String] = [:]
-        if let sshAuthSock = ProcessInfo.processInfo.environment["SSH_AUTH_SOCK"] {
-            dynamicEnv["SSH_AUTH_SOCK"] = sshAuthSock
+        let snapshot = try await machineClient.inspect(id: machineName)
+        return MachineContext(machineName: machineName, snapshot: snapshot)
+    }
+
+    /// Boots the machine when stopped and runs first-boot setup when needed.
+    ///
+    /// Returns a context suitable for ``bootedContext()`` on mutating machine-mode paths.
+    public func ensureBooted() async throws -> MachineContext {
+        guard let machineName else { return self }
+
+        if isMachineRunning, let snapshot, snapshot.initialized {
+            return self
         }
 
+        let machineClient = MachineClient()
         var snapshot: MachineSnapshot
-        do {
-            snapshot = try await machineClient.boot(id: machineName, dynamicEnv: dynamicEnv)
-        } catch {
-            throw ComposeError.machineBootFailed(machineName, underlying: error)
+        if isMachineRunning, let existing = self.snapshot {
+            snapshot = existing
+        } else {
+            fputs("Booting machine '\(machineName)'...\n", stderr)
+            var dynamicEnv: [String: String] = [:]
+            if let sshAuthSock = ProcessInfo.processInfo.environment["SSH_AUTH_SOCK"] {
+                dynamicEnv["SSH_AUTH_SOCK"] = sshAuthSock
+            }
+            do {
+                snapshot = try await machineClient.boot(id: machineName, dynamicEnv: dynamicEnv)
+            } catch {
+                throw ComposeError.machineBootFailed(machineName, underlying: error)
+            }
         }
 
-        guard snapshot.containerId != nil else {
+        guard Self.isRunning(snapshot) else {
             throw ComposeError.machineNotRunning(machineName)
         }
 
@@ -60,10 +114,32 @@ public struct MachineContext: Sendable {
         }
     }
 
-    func requireSnapshot() throws -> MachineSnapshot {
-        guard let snapshot else {
-            throw ComposeError.machineNotRunning(machineName ?? "unknown")
+    package static func applyStoppedPolicy(
+        _ context: MachineContext,
+        policy: MachineStoppedPolicy
+    ) throws -> MachineContextResolution {
+        guard context.isMachineMode, !context.isMachineRunning else {
+            return .ready(context)
         }
-        return snapshot
+        switch policy {
+        case .allowStopped:
+            return .ready(context)
+        case .gracefulExit:
+            guard let machineName = context.machineName else {
+                return .ready(context)
+            }
+            let message = MachineStoppedReason.noActiveContainers.message(machineName: machineName)
+            fputs("\(message)\n", stderr)
+            return .stoppedGracefully
+        case .requireRunning:
+            guard let machineName = context.machineName else {
+                return .ready(context)
+            }
+            throw ComposeError.machineStopped(machineName, reason: .startRequired)
+        }
+    }
+
+    package static func isRunning(_ snapshot: MachineSnapshot) -> Bool {
+        snapshot.status == .running && snapshot.containerId != nil
     }
 }

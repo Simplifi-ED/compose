@@ -36,7 +36,10 @@ public struct Logs: AsyncParsableCommand {
     }
 
     public func run() async throws {
-        let machineContext = try await machineOptions.resolveContext()
+        guard let machineContext = try await machineOptions
+            .resolveContext(stopped: .gracefulExit)
+            .machineContextIfReady
+        else { return }
         let context = try projectOptions.resolvedLabelCommandContext(
             skipComposeFileOnExplicitProject: true,
             profileFilterRequested: profileOptions.profileFilterRequested,
