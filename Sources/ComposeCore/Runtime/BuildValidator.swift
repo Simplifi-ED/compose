@@ -63,6 +63,14 @@ package enum BuildValidator {
             }
             return url
         case .absoluteExternal(let url):
+            let composeRoot = composeDirectory.standardizedFileURL.resolvingSymlinksInPath()
+            guard BindMountPathResolver.isPathContained(url, within: composeRoot) else {
+                throw ComposeError.invalidField(
+                    "build.context",
+                    reason: "host path '\(build.context)' resolves outside the compose file directory. "
+                        + "Use a path within the project."
+                )
+            }
             var isDirectory: ObjCBool = false
             guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory),
                   isDirectory.boolValue

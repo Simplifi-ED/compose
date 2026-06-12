@@ -244,7 +244,7 @@ services:
 
 **Dry-run:** `up --dry-run` / `run --dry-run` emit `[DRY-RUN] build image "…"` lines without invoking the builder.
 
-**Limits:** Dockerfile size capped at 16 KiB by the Apple build engine; no cross-arch `platform` builds; no registry push; `develop.watch` `rebuild` is not supported yet. Build context paths must stay inside the compose file directory (or use an absolute path).
+**Limits:** Dockerfile size capped at 16 KiB by the Apple build engine; no cross-arch `platform` builds; no registry push; `develop.watch` `rebuild` is not supported yet. Build context paths must stay inside the compose file directory (absolute paths are allowed when they still resolve within it).
 
 ---
 

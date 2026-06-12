@@ -8,6 +8,7 @@ extension TestRunner {
         try runBuildImageResolverTests()
         try runBuildValidatorTests()
         try runBuildValidatorEscapeTests()
+        try runBuildValidatorAbsoluteContextTests()
         try runBuildPlannerTests()
         try runBuildConfigTests()
         try runBuildRunDependencyTests()
@@ -130,6 +131,59 @@ extension TestRunner {
                 )
             }
         )
+
+    }
+
+    private mutating func runBuildValidatorAbsoluteContextTests() throws {
+        let fixturesDirectory = Self.fixtureURL("build-compose.yml").deletingLastPathComponent()
+        expectComposeError(
+            "absolute build context escapes compose directory",
+            matching: {
+                if case .invalidField("build.context", _) = $0 { true } else { false }
+            },
+            body: {
+                let outside = FileManager.default.temporaryDirectory
+                    .appendingPathComponent("compose-verify-build-outside-\(UUID().uuidString)")
+                defer { try? FileManager.default.removeItem(at: outside) }
+                try FileManager.default.createDirectory(at: outside, withIntermediateDirectories: true)
+                let composePath = fixturesDirectory.appendingPathComponent("absolute-escape-build.yml")
+                try """
+                services:
+                  web:
+                    build:
+                      context: \(outside.path)
+                    command: sleep 300
+                """.write(to: composePath, atomically: true, encoding: .utf8)
+                defer { try? FileManager.default.removeItem(at: composePath) }
+                _ = try BuildRunner.plans(
+                    composeFile: try ComposeParser.parse(fileURL: composePath),
+                    projectName: "demo",
+                    composeDirectory: fixturesDirectory,
+                    activeProfiles: []
+                )
+            }
+        )
+
+        let insideContext = fixturesDirectory
+            .appendingPathComponent("build-fixture")
+            .standardizedFileURL
+            .path
+        let insideComposePath = fixturesDirectory.appendingPathComponent("absolute-inside-build.yml")
+        try """
+        services:
+          web:
+            build:
+              context: \(insideContext)
+            command: sleep 300
+        """.write(to: insideComposePath, atomically: true, encoding: .utf8)
+        defer { try? FileManager.default.removeItem(at: insideComposePath) }
+        _ = try BuildRunner.plans(
+            composeFile: try ComposeParser.parse(fileURL: insideComposePath),
+            projectName: "demo",
+            composeDirectory: fixturesDirectory,
+            activeProfiles: []
+        )
+        expect(true, "absolute build context inside compose directory passes validation")
     }
 
     private mutating func runBuildPlannerTests() throws {
