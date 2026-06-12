@@ -32,26 +32,28 @@ extension TestRunner {
         let expectedHostPath = hostFile.path
         let expectedDestination = "/usr/share/nginx/html/index.html"
 
-        let syncResult = blockingAwait { () -> WatchSyncTestRecorder.Snapshot? in
-            let recorder = WatchSyncTestRecorder(
-                expectedSource: expectedHostPath,
-                expectedDestination: expectedDestination
-            )
-            do {
-                try await ContainerFileSync.sync(
-                    resolved: resolved,
-                    hostPath: hostFile,
-                    containers: containers,
-                    projectName: "demo",
-                    copyIn: { container, source, destination, _, _ in
-                        recorder.record(container: container, source: source, destination: destination)
-                    },
-                    getContainer: { _ in snapshot }
+        let (syncResult, captured) = StandardStreamCapture.captureStandardError {
+            blockingAwait { () -> WatchSyncTestRecorder.Snapshot? in
+                let recorder = WatchSyncTestRecorder(
+                    expectedSource: expectedHostPath,
+                    expectedDestination: expectedDestination
                 )
-                return recorder.snapshot()
-            } catch {
-                fputs("FAIL: sync test threw: \(error)\n", stderr)
-                return nil
+                do {
+                    try await ContainerFileSync.sync(
+                        resolved: resolved,
+                        hostPath: hostFile,
+                        containers: containers,
+                        projectName: "demo",
+                        copyIn: { container, source, destination, _, _ in
+                            recorder.record(container: container, source: source, destination: destination)
+                        },
+                        getContainer: { _ in snapshot }
+                    )
+                    return recorder.snapshot()
+                } catch {
+                    fputs("FAIL: sync test threw: \(error)\n", stderr)
+                    return nil
+                }
             }
         }
 
@@ -61,6 +63,14 @@ extension TestRunner {
             expect(Set(syncResult.containers) == Set(["demo_web_1", "demo_web_2"]), "sync targets each replica")
             expect(syncResult.pathChecksPassed, "sync copyIn paths match watch mapping")
         }
+        expect(
+            captured.contains("Syncing web → demo_web_1: index.html"),
+            "sync progress logged for first replica"
+        )
+        expect(
+            captured.contains("Syncing web → demo_web_2: index.html"),
+            "sync progress logged for second replica"
+        )
     }
 
     private mutating func runWatchRestartTests() throws {

@@ -180,10 +180,25 @@ extension TestRunner {
     }
 
     private mutating func runTopStatsFailureWarningTests() {
-        var warned: Set<String> = []
-        StatsStreamSession.warnStatsFailures(["demo_web"], warned: &warned)
-        StatsStreamSession.warnStatsFailures(["demo_web", "demo_db"], warned: &warned)
+        let (warned, captured) = StandardStreamCapture.captureStandardError { () -> Set<String> in
+            var warned: Set<String> = []
+            StatsStreamSession.warnStatsFailures(["demo_web"], warned: &warned)
+            StatsStreamSession.warnStatsFailures(["demo_web", "demo_db"], warned: &warned)
+            return warned
+        }
         expect(warned == ["demo_web", "demo_db"], "stats failure warnings deduplicate per container")
+        expect(
+            captured.contains("Warning: stats unavailable for 'demo_web'."),
+            "stats warning emitted for demo_web"
+        )
+        expect(
+            captured.contains("Warning: stats unavailable for 'demo_db'."),
+            "stats warning emitted for demo_db"
+        )
+        expect(
+            captured.components(separatedBy: "demo_web").count - 1 == 1,
+            "stats warning for demo_web is not duplicated on stderr"
+        )
     }
 
     private mutating func runTopSignalPolicyTests() {

@@ -10,11 +10,15 @@ if [[ "$(uname -m)" != "arm64" ]]; then
 fi
 
 rm -rf dist/compose
-make build BUILD_CONFIGURATION=release
 
 BIN_DIR="$(swift build -c release --show-bin-path)"
 SOURCE_BINARY="${BIN_DIR}/compose"
-if [[ ! -f "$SOURCE_BINARY" ]]; then
+if [[ ! -x "$SOURCE_BINARY" ]]; then
+  make build BUILD_CONFIGURATION=release
+  BIN_DIR="$(swift build -c release --show-bin-path)"
+  SOURCE_BINARY="${BIN_DIR}/compose"
+fi
+if [[ ! -x "$SOURCE_BINARY" ]]; then
   echo "error: release binary not found at ${SOURCE_BINARY}" >&2
   exit 1
 fi

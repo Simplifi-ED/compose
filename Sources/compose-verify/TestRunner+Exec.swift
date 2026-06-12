@@ -201,10 +201,11 @@ extension TestRunner {
             },
             body: {
                 try ExecSession.verifyExecTarget(
-                    snapshot: Self.makeExecSnapshot(
+                    snapshot: Self.makeContainerSnapshot(
                         project: "other",
                         service: "web",
-                        status: .running
+                        status: .running,
+                        id: "demo_web"
                     ),
                     configuration: Self.sampleExecConfiguration()
                 )
@@ -216,10 +217,11 @@ extension TestRunner {
             matching: { if case .serviceNotRunning(service: "web", state: "stopped") = $0 { true } else { false } },
             body: {
                 try ExecSession.verifyExecTarget(
-                    snapshot: Self.makeExecSnapshot(
+                    snapshot: Self.makeContainerSnapshot(
                         project: "demo",
                         service: "web",
-                        status: .stopped
+                        status: .stopped,
+                        id: "demo_web"
                     ),
                     configuration: Self.sampleExecConfiguration()
                 )
@@ -250,7 +252,12 @@ extension TestRunner {
                     configuration: Self.sampleExecConfiguration(),
                     shutdownContext: Self.sampleShutdownContext(),
                     getContainer: { _ in
-                        Self.makeExecSnapshot(project: "other", service: "web", status: .running)
+                        Self.makeContainerSnapshot(
+                            project: "other",
+                            service: "web",
+                            status: .running,
+                            id: "demo_web"
+                        )
                     },
                     execBody: ExecSession.runExecBody
                 )
@@ -281,7 +288,12 @@ extension TestRunner {
                     ),
                     shutdownContext: Self.sampleShutdownContext(),
                     getContainer: { _ in
-                        Self.makeExecSnapshot(project: "demo", service: "web", status: .running)
+                        Self.makeContainerSnapshot(
+                            project: "demo",
+                            service: "web",
+                            status: .running,
+                            id: "demo_web"
+                        )
                     },
                     createProcess: { _, _, config, _ in
                         capture.configuration = config
@@ -329,6 +341,7 @@ extension TestRunner {
         ExecSession.Configuration(
             containerName: "demo_web",
             projectName: "demo",
+            serviceName: "web",
             executable: executable,
             arguments: arguments,
             processTerminal: processTerminal,
@@ -346,34 +359,4 @@ extension TestRunner {
         )
     }
 
-    static func makeExecSnapshot(
-        project: String,
-        service: String,
-        status: RuntimeStatus
-    ) -> ContainerSnapshot {
-        let image = ImageDescription(
-            reference: "docker.io/library/alpine:latest",
-            descriptor: Descriptor(
-                mediaType: "application/vnd.oci.image.manifest.v1+json",
-                digest: "sha256:" + String(repeating: "0", count: 64),
-                size: 0
-            )
-        )
-        let process = ProcessConfiguration(
-            executable: "/bin/sh",
-            arguments: [],
-            environment: [],
-            user: .raw(userString: "root")
-        )
-        var configuration = ContainerConfiguration(id: "demo_web", image: image, process: process)
-        configuration.labels = [
-            ComposeLabels.project: project,
-            ComposeLabels.service: service
-        ]
-        return ContainerSnapshot(
-            configuration: configuration,
-            status: status,
-            networks: []
-        )
-    }
 }

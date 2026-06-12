@@ -214,6 +214,7 @@ do {
     runner.runTopTests()
     try runner.runAttachTests()
     runner.runExecTests()
+    runner.runCpTests()
     runner.runRunTests()
     runner.runSignalsTests()
 } catch {

@@ -102,19 +102,34 @@ extension TestRunner {
         expect(outcome == .interrupted(InterruptSignal(number: 2)), "attach interrupt maps to signal exit")
         expect(stopped, "attach interrupt stops project containers")
 
-        enum StopError: Error { case boom }
-        let failedStop = blockingAwait {
-            try? await SignalForwarding.interruptedOutcome(
-                policy: .stopProject(context),
-                signal: InterruptSignal(number: 2),
-                stopProject: { _ in throw StopError.boom }
-            )
+        let (failedStop, captured) = StandardStreamCapture.captureStandardError {
+            blockingAwait {
+                try? await SignalForwarding.interruptedOutcome(
+                    policy: .stopProject(context),
+                    signal: InterruptSignal(number: 2),
+                    stopProject: { _ in throw AttachStopTestError.simulatedFailure }
+                )
+            }
         }
         expect(
             failedStop == .interrupted(InterruptSignal(number: 2)),
             "stopProject failure still maps to signal exit"
         )
+        expect(
+            captured.contains("Warning: couldn't stop all project containers after interrupt:"),
+            "stopProject failure emits interrupt warning"
+        )
+        expect(
+            captured.contains(AttachStopTestError.simulatedFailure.localizedDescription),
+            "stopProject failure warning includes error detail"
+        )
     }
+}
+
+private struct AttachStopTestError: LocalizedError {
+    static let simulatedFailure = AttachStopTestError()
+
+    var errorDescription: String? { "simulated stop failure" }
 }
 
 private actor AttachStopRecorder {

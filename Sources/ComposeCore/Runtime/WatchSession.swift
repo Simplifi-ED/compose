@@ -23,8 +23,8 @@ package enum WatchSession {
 
         package init(
             projectName: String,
-            copyIn: @escaping ContainerFileSync.CopyIn = ContainerFileSync.defaultCopyInForInjection,
-            getContainer: @escaping ContainerFileSync.GetContainer = ContainerFileSync.defaultGetContainerForInjection,
+            copyIn: @escaping ContainerFileSync.CopyIn = ContainerCopyAPI.copyIn,
+            getContainer: @escaping ContainerFileSync.GetContainer = ContainerCopyAPI.get,
             listProjectContainers: (@Sendable () async throws -> [ProjectContainer])? = nil,
             restartPlans: @escaping @Sendable ([ServicePlan]) async throws -> Void = { plans in
                 try await ServiceRunnerRestart.restartPlans(plans)

@@ -1,5 +1,35 @@
 import Foundation
 
+#if canImport(Darwin)
+import Darwin
+#endif
+
+/// Redirects process stderr during `body`, then returns the captured bytes.
+enum StandardStreamCapture {
+    static func captureStandardError<T>(_ body: () throws -> T) rethrows -> (result: T, captured: String) {
+#if canImport(Darwin)
+        let pipe = Pipe()
+        let originalFD = dup(STDERR_FILENO)
+        guard originalFD >= 0 else {
+            return (try body(), "")
+        }
+        defer {
+            fflush(stderr)
+            dup2(originalFD, STDERR_FILENO)
+            close(originalFD)
+        }
+        dup2(pipe.fileHandleForWriting.fileDescriptor, STDERR_FILENO)
+        let result = try body()
+        fflush(stderr)
+        try? pipe.fileHandleForWriting.close()
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        return (result, String(decoding: data, as: UTF8.self))
+#else
+        return (try body(), "")
+#endif
+    }
+}
+
 /// Removes ANSI SGR escape sequences for plain-text comparisons.
 func stripANSI(_ string: String) -> String {
     string.replacingOccurrences(

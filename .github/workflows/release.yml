@@ -33,13 +33,13 @@ jobs:
       - name: Lint Source Code
         run: make lint
 
-      - name: Build Debug (Strict Warnings)
-        run: make build BUILD_CONFIGURATION=debug WARNINGS_AS_ERRORS=true
+      - name: Build Release (Strict Warnings)
+        run: make build BUILD_CONFIGURATION=release WARNINGS_AS_ERRORS=true
 
       - name: Run Integration Checks
         run: make test
 
-      - name: Build Release Package
+      - name: Package Release Artifacts
         run: make dist
 
       - name: Write SHA256 Checksums
@@ -60,14 +60,12 @@ jobs:
   bump-homebrew-formula:
     needs: release
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      pull-requests: write
     steps:
-      - name: Checkout Default Branch
+      - name: Checkout Homebrew Tap
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
-          ref: ${{ github.event.repository.default_branch }}
+          repository: Simplifi-ED/homebrew-compose
+          token: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
 
       - name: Update container-compose Formula
         env:
@@ -84,7 +82,7 @@ jobs:
       - name: Open Formula Pull Request
         uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
           branch: bump-container-compose-${{ github.ref_name }}
           title: container-compose ${{ github.ref_name }}
           commit-message: container-compose ${{ github.ref_name }}

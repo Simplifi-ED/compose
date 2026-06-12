@@ -12,6 +12,7 @@ package enum ExecSession {
     package struct Configuration: Sendable {
         package let containerName: String
         package let projectName: String
+        package let serviceName: String
         package let executable: String
         package let arguments: [String]
         package let processTerminal: Bool
@@ -21,6 +22,7 @@ package enum ExecSession {
         package init(
             containerName: String,
             projectName: String,
+            serviceName: String,
             executable: String,
             arguments: [String],
             processTerminal: Bool,
@@ -29,6 +31,7 @@ package enum ExecSession {
         ) {
             self.containerName = containerName
             self.projectName = projectName
+            self.serviceName = serviceName
             self.executable = executable
             self.arguments = arguments
             self.processTerminal = processTerminal
@@ -47,9 +50,7 @@ package enum ExecSession {
     package static func run(
         configuration: Configuration,
         shutdownContext: ProjectShutdownContext,
-        getContainer: @escaping @Sendable (String) async throws -> ContainerSnapshot = { id in
-            try await ContainerClient().get(id: id)
-        },
+        getContainer: @escaping @Sendable (String) async throws -> ContainerSnapshot = ContainerCopyAPI.get,
         createProcess: @escaping @Sendable (
             String,
             String,
@@ -98,7 +99,7 @@ package enum ExecSession {
         ) async throws -> any ClientProcess
     ) async throws -> Int32 {
         let snapshot = try await getContainer(configuration.containerName)
-        try verifyProjectLabel(snapshot: snapshot, configuration: configuration)
+        try verifyExecTarget(snapshot: snapshot, configuration: configuration)
 
         var processConfig = snapshot.configuration.initProcess
         processConfig.executable = configuration.executable
@@ -134,25 +135,12 @@ package enum ExecSession {
         snapshot: ContainerSnapshot,
         configuration: Configuration
     ) throws {
-        try verifyProjectLabel(snapshot: snapshot, configuration: configuration)
-    }
-
-    private static func verifyProjectLabel(
-        snapshot: ContainerSnapshot,
-        configuration: Configuration
-    ) throws {
-        let labelProject = snapshot.configuration.labels[ComposeLabels.project]
-        guard labelProject == configuration.projectName else {
-            throw ComposeError.containerProjectMismatch(
-                container: configuration.containerName,
-                project: configuration.projectName
-            )
-        }
-        guard snapshot.status == .running else {
-            throw ComposeError.serviceNotRunning(
-                service: snapshot.configuration.labels[ComposeLabels.service] ?? configuration.containerName,
-                state: ProjectStatus.formatState(snapshot.status)
-            )
-        }
+        try ComposeContainerGuard.verifyRunningProjectService(
+            snapshot: snapshot,
+            containerName: configuration.containerName,
+            projectName: configuration.projectName,
+            serviceName: configuration.serviceName,
+            fieldName: "exec"
+        )
     }
 }
