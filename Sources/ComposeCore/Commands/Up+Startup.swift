@@ -3,6 +3,7 @@ import Foundation
 extension Up {
     struct LiveInput: Sendable {
         let buildPlans: [BuildRunner.Plan]
+        let networkPlans: [NetworkPlanning.Plan]
         let projectName: String
         let composeFile: ComposeFile
         let fileURLs: [URL]
@@ -16,6 +17,11 @@ extension Up {
         try await executeBuildPlans(
             input.buildPlans,
             dryRunManifest: nil,
+            machineContext: input.machineContext
+        )
+        try await NetworkRunner.createAll(
+            input.networkPlans,
+            projectName: input.projectName,
             machineContext: input.machineContext
         )
         try await orchestrateStartup(

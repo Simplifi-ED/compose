@@ -45,7 +45,8 @@ public enum ComposeConfigResolver {
             name: parsed.name,
             services: resolvedServices,
             configs: parsed.configs,
-            secrets: parsed.secrets
+            secrets: parsed.secrets,
+            networks: parsed.networks
         )
     }
 

@@ -34,6 +34,10 @@ enum ServiceRunMapping {
                 try volumeFlag(for: volume, relativeTo: configuration.composeDirectory)
             ])
         }
+        arguments.append(contentsOf: try NetworkPlanning.networkFlags(
+            service: configuration.service,
+            projectName: configuration.projectName
+        ))
         arguments.append(configuration.image)
         arguments.append(contentsOf: configuration.command)
     }

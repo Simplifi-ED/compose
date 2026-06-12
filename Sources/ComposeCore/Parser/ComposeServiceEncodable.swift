@@ -55,6 +55,7 @@ extension ComposeService: Encodable {
         case configs
         case secrets
         case develop
+        case networks
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -88,6 +89,9 @@ extension ComposeService: Encodable {
             if !serviceMounts.isEmpty {
                 try encodeServiceMounts(serviceMounts, kind: kind, to: &container)
             }
+        }
+        if !networks.isEmpty {
+            try container.encode(networks, forKey: .networks)
         }
     }
 

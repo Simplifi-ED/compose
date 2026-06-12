@@ -45,6 +45,13 @@ public enum ComposeError: LocalizedError, Sendable {
     case undefinedResource(name: String, kind: ComposeFileMountKind)
     case resourceFileNotFound(path: String, kind: ComposeFileMountKind)
     case includeResourceConflict(name: String, kind: ComposeFileMountKind, includePath: String, definedIn: String)
+    case unsupportedExternalNetwork(name: String)
+    case unsupportedNetworkOption(network: String, option: String)
+    case undefinedNetwork(service: String, network: String)
+    case invalidNetworkName(network: String, runtimeName: String)
+    case includeNetworkConflict(name: String, includePath: String, definedIn: String)
+    case networkCreateFailed(network: String, underlying: Error)
+    case networksRequireMacOS26
     case invalidCpPath(reason: String)
     case cpHostPathOutsideCWD(path: String)
     case cpSourceNotFound(path: String)
@@ -60,16 +67,6 @@ public enum ComposeError: LocalizedError, Sendable {
     case machineUnsupportedCommand(String)
     case machineUnsupportedOperation(String)
     case machineCommandFailed(machine: String, command: String, exitCode: Int32)
-
-    private static func profileNamesDescription(_ profiles: [String]) -> String {
-        profiles.map { "'\($0)'" }.joined(separator: " or ")
-    }
-
-    private static func profileActivationOptions(_ profiles: [String]) -> String {
-        let flags = profiles.map { "--profile \($0)" }.joined(separator: " ")
-        let envValue = profiles.joined(separator: ",")
-        return "\(flags) or COMPOSE_PROFILES=\(envValue)"
-    }
 
     public var errorDescription: String? {
         switch self {
@@ -193,6 +190,26 @@ public enum ComposeError: LocalizedError, Sendable {
         case .includeResourceConflict(let name, let kind, let includePath, let definedIn):
             return "\(kind.rootFieldName.capitalized) '\(name)' is already defined in \(definedIn). "
                 + "\(includePath) also defines '\(name)'. Rename one entry or remove the duplicate include."
+        case .unsupportedExternalNetwork(let name):
+            return "External networks aren't supported. Remove external: true from network '\(name)' "
+                + "to let compose create it as a project-scoped network."
+        case .unsupportedNetworkOption(let network, let option):
+            return "Network option '\(option)' on '\(network)' isn't supported. "
+                + "Use a plain membership entry like 'networks: [\(network)]'."
+        case .undefinedNetwork(let service, let network):
+            return "Network '\(network)' isn't defined in networks:. "
+                + "Add it at the root or remove the reference from service '\(service)'."
+        case .invalidNetworkName(let network, let runtimeName):
+            return "Network '\(network)' maps to runtime name '\(runtimeName)', which isn't valid. "
+                + "Use up to 63 lowercase letters, numbers, dots, hyphens, or underscores."
+        case .includeNetworkConflict(let name, let includePath, let definedIn):
+            return "Network '\(name)' is already defined in \(definedIn). "
+                + "\(includePath) also defines '\(name)'. Rename one entry or remove the duplicate include."
+        case .networkCreateFailed(let network, let underlying):
+            return "Couldn't create network '\(network)': \(underlying.localizedDescription)"
+        case .networksRequireMacOS26:
+            return "Custom networks require macOS 26 or newer. "
+                + "Remove networks: from the compose file, or upgrade macOS."
         case .invalidCpPath(let reason):
             return "Invalid cp path: \(reason)."
         case .cpHostPathOutsideCWD(let path):
@@ -228,5 +245,17 @@ public enum ComposeError: LocalizedError, Sendable {
         case .machineCommandFailed(let machine, let command, let exitCode):
             return "Command failed in container machine '\(machine)' (exit \(exitCode)): \(command)"
         }
+    }
+}
+
+extension ComposeError {
+    fileprivate static func profileNamesDescription(_ profiles: [String]) -> String {
+        profiles.map { "'\($0)'" }.joined(separator: " or ")
+    }
+
+    fileprivate static func profileActivationOptions(_ profiles: [String]) -> String {
+        let flags = profiles.map { "--profile \($0)" }.joined(separator: " ")
+        let envValue = profiles.joined(separator: ",")
+        return "\(flags) or COMPOSE_PROFILES=\(envValue)"
     }
 }

@@ -20,7 +20,8 @@ enum ComposeFileMerge {
             name: override.name ?? base.name,
             services: mergedServices,
             configs: mergeResources(base: base.configs, override: override.configs),
-            secrets: mergeResources(base: base.secrets, override: override.secrets)
+            secrets: mergeResources(base: base.secrets, override: override.secrets),
+            networks: base.networks.merging(override.networks) { _, override in override }
         )
     }
 
@@ -56,8 +57,24 @@ enum ComposeFileMerge {
                 key: { ComposeServiceMountDecoder.mergeKey(for: $0) }
             ),
             develop: override.develop ?? base.develop,
+            networks: mergeServiceNetworks(base: base, override: override),
             projectDirectory: override.projectDirectory ?? base.projectDirectory
         )
+    }
+
+    private static func mergeServiceNetworks(
+        base: ComposeService,
+        override: ComposeService
+    ) -> [String] {
+        var merged = ComposeBindingKeys.mergeUniqueEntries(
+            base: base.networks,
+            override: override.networks,
+            key: { $0 }
+        )
+        if !override.networkNullRemovals.isEmpty {
+            merged = merged.filter { !override.networkNullRemovals.contains($0) }
+        }
+        return merged
     }
 
     private static func mergeResources(

@@ -73,9 +73,14 @@ public struct Run: AsyncParsableCommand {
             serviceDirectory: serviceDirectory,
             composeService: composeService
         )
+        let networkPlans = try NetworkPlanning.plans(
+            composeFile: composeFile,
+            projectName: projectName,
+            activeServiceNames: [service]
+        )
 
         if dryRunOptions.isEnabled {
-            try await runDryRun(buildPlans: buildPlans, plan: plan)
+            try await runDryRun(buildPlans: buildPlans, networkPlans: networkPlans, plan: plan)
             return
         }
 
@@ -86,6 +91,7 @@ public struct Run: AsyncParsableCommand {
                 dryRunManifest: nil
             )
         }
+        try await NetworkRunner.createAll(networkPlans, projectName: projectName)
 
         try await RunSession.run(
             plan: plan,
@@ -134,7 +140,11 @@ public struct Run: AsyncParsableCommand {
         )
     }
 
-    private func runDryRun(buildPlans: [BuildRunner.Plan], plan: ServicePlan) async throws {
+    private func runDryRun(
+        buildPlans: [BuildRunner.Plan],
+        networkPlans: [NetworkPlanning.Plan],
+        plan: ServicePlan
+    ) async throws {
         let manifest = DryRunManifest()
         if !buildPlans.isEmpty {
             try await BuildRunner.buildAll(
@@ -143,6 +153,11 @@ public struct Run: AsyncParsableCommand {
                 dryRunManifest: manifest
             )
         }
+        try await NetworkRunner.createAll(
+            networkPlans,
+            projectName: plan.projectName,
+            dryRunManifest: manifest
+        )
         await manifest.recordCreate(plan)
         await manifest.printLines()
     }

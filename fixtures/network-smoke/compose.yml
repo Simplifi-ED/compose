@@ -1,0 +1,14 @@
+networks:
+  backend: {}
+
+services:
+  server:
+    image: docker.io/library/alpine:3.20
+    command: sleep 300
+    networks: [backend]
+  client:
+    image: docker.io/library/alpine:3.20
+    command: sleep 300
+    networks: [backend]
+    depends_on:
+      - server

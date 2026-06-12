@@ -50,6 +50,27 @@ public actor DryRunManifest {
         )
     }
 
+    public func recordNetworkCreate(name: String) {
+        append(
+            group: 0,
+            sortKey: "network:\(name)",
+            line: DryRunManifestFormatting.formatNetworkCreate(name: name)
+        )
+    }
+
+    public func recordNetworkRemovals(names: [String]) {
+        guard !names.isEmpty else { return }
+        groupOrder += 1
+        currentGroup = groupOrder
+        for name in names.sorted() {
+            append(
+                group: currentGroup,
+                sortKey: name,
+                line: DryRunManifestFormatting.formatNetworkRemove(name: name)
+            )
+        }
+    }
+
     public func recordCreate(_ plan: ServicePlan) {
         append(
             group: currentGroup,

@@ -54,6 +54,7 @@ public struct Up: AsyncParsableCommand {
                     layers: startup.layers,
                     healthContext: startup.healthContext,
                     buildPlans: startup.buildPlans,
+                    networkPlans: startup.networkPlans,
                     machineContext: machineContext
                 )
             )
@@ -64,6 +65,7 @@ public struct Up: AsyncParsableCommand {
         try await runLive(
             LiveInput(
                 buildPlans: startup.buildPlans,
+                networkPlans: startup.networkPlans,
                 projectName: startup.projectName,
                 composeFile: startup.composeFile,
                 fileURLs: startup.fileURLs,

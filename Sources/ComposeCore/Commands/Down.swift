@@ -124,6 +124,13 @@ public struct Down: AsyncParsableCommand {
             BindMountPurge.warnPurgeSkipped(DownShutdown.volumePurgeSkipReason(context: context))
         }
 
+        let networkPlans = try DownShutdown.networkRemovalPlans(
+            context: context,
+            discovered: discovered,
+            teardownContainers: containers
+        )
+        await manifest.recordNetworkRemovals(names: networkPlans.map(\.runtimeName))
+
         await manifest.printLines()
     }
 
@@ -210,6 +217,15 @@ public struct Down: AsyncParsableCommand {
             } else if shouldPurgeVolumes {
                 BindMountPurge.warnPurgeSkipped(DownShutdown.volumePurgeSkipReason(context: context))
             }
+            await NetworkRunner.removeProjectNetworks(
+                try DownShutdown.networkRemovalPlans(
+                    context: context,
+                    discovered: discovered,
+                    teardownContainers: containers
+                ),
+                projectName: context.projectName,
+                machineContext: machineContext
+            )
             ComposeFileStaging.removeProjectStaging(projectName: context.projectName)
         }
     }

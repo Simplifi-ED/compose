@@ -401,6 +401,36 @@ Multi-file `-f` merge replaces bind mounts by host+container path key — an ove
 
 ---
 
+## Networks
+
+Declare networks at the root and attach services to them. Each network becomes a project-scoped subnet named `{project}_{network}`, created before startup and removed on `down`.
+
+```yaml
+networks:
+  backend: {}
+
+services:
+  api:
+    image: nginx:1.27
+    networks: [backend]
+  db:
+    image: postgres:16
+    networks:
+      backend: {}
+```
+
+| Behavior | Detail |
+|----------|--------|
+| Naming | `backend` in project `demo` → `demo_backend` |
+| Default | Services without `networks:` join the builtin `default` network |
+| DNS | Containers resolve each other by **container name** (`demo_db_1`), not Docker-style service shorthand (`db`) |
+| Cleanup | `compose down` removes project networks after containers; `-p`-only `down` (no compose file) leaves them — remove with `container network rm` |
+| Requirements | Custom networks need macOS 26 or newer |
+
+**Not supported:** network drivers, `aliases`, static IP addresses, `priority`, `network_mode`, `external: true`, cross-project sharing.
+
+---
+
 ## cp — copy files
 
 Copy files to or from a **running** service container without a bind mount:
@@ -466,7 +496,8 @@ Exit codes: `0` = all services stopped cleanly · `130` = SIGINT · `143` = SIGT
 | `develop.watch` | ✅ |
 | `-f` merge, `include:`, `COMPOSE_FILE` | ✅ |
 | `build` (`context`, `dockerfile`, `args`, `target`) | ✅ |
-| networks, named volumes | ❌ v1 deferred |
+| `networks` (project-scoped subnets; container-name DNS) | ✅ |
+| named volumes | ❌ v1 deferred |
 | long-form `read_only: true`, explicit `:rw` | ❌ v1 deferred |
 | `service_completed_successfully` | ❌ v1 deferred |
 | `COMPOSE_PROFILES` env var | ✅ (process env; `.env` file deferred) |
