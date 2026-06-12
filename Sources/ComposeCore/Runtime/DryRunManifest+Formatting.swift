@@ -211,6 +211,14 @@ package enum DryRunManifestFormatting {
         }
     }
 
+    package static func formatSaveImage(service: String, reference: String) -> String {
+        "[DRY-RUN] save image \"\(reference)\" service=\"\(service)\""
+    }
+
+    package static func formatSaveArchive(path: String, imageCount: Int, serviceCount: Int) -> String {
+        "[DRY-RUN] write archive \"\(path)\" images=\(imageCount) services=\(serviceCount)"
+    }
+
     private static func formatStringArray(_ values: [String]) -> String {
         let quoted = values.map { "\"\($0)\"" }
         return "[\(quoted.joined(separator: ", "))]"

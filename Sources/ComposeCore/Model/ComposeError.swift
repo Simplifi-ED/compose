@@ -74,4 +74,9 @@ public enum ComposeError: LocalizedError, Sendable {
     case machineUnsupportedCommand(String)
     case machineUnsupportedOperation(String)
     case machineCommandFailed(machine: String, command: String, exitCode: Int32)
+    case imageNotFoundLocally(service: String, reference: String)
+    case archiveInvalid(reason: String)
+    case archiveUnsupportedVersion(found: Int, supported: Int)
+    case archiveWriteFailed(path: String, underlying: Error)
+    case archiveReadFailed(path: String, underlying: Error)
 }

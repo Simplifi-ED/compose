@@ -19,6 +19,7 @@ let package = Package(
                 .product(name: "ContainerCommands", package: "container"),
                 .product(name: "MachineAPIClient", package: "container"),
                 .product(name: "Containerization", package: "containerization"),
+                .product(name: "ContainerizationArchive", package: "containerization"),
                 .product(name: "ContainerizationOS", package: "containerization"),
                 .product(name: "Yams", package: "Yams"),
             ],

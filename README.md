@@ -88,6 +88,8 @@ container compose down -f fixtures/minimal-compose.yml -p demo
 | `top` | Live CPU/memory stats for all project containers. |
 | `watch` | Sync local file changes into running containers. |
 | `config` | Print the resolved compose config without starting anything. |
+| `save` | Export service images and resolved compose YAML to a portable archive. |
+| `load` | Import images from a stack archive into the local image store. |
 
 Supported on `up`, `down`, `ps`, `logs`, `exec`, and `cp`:
 
@@ -95,7 +97,33 @@ Supported on `up`, `down`, `ps`, `logs`, `exec`, and `cp`:
 container compose up --machine dev -f compose.yaml
 ```
 
-`watch`, `run`, `top`, and `config` reject `--machine`.
+`watch`, `run`, `top`, `config`, `save`, and `load` reject `--machine`.
+
+---
+
+## Save / load (offline migration)
+
+Bundle resolved compose configuration and local OCI images into a single archive for offline transfer between machines.
+
+```bash
+container compose save -f compose.yaml -o stack.tar
+container compose load -i stack.tar
+container compose up -f compose.yaml
+```
+
+**`compose save`** resolves the project the same way as `config` (`-f`, `-p`, profiles, `--scale`). It exports every active service image that is already present in the local Apple container image store. Images are not pulled or built during save — run `compose up` or `container build` first if a tag is missing. Use `--dry-run` to list tags that would be exported without writing an archive.
+
+**`compose load`** imports the nested OCI image tar into the local image store, writes the bundled resolved compose file (default `compose.yaml`, override with `-o`), prints loaded image tags, and shows a manifest summary. It does not start containers. Pass `--force` to load when the nested OCI archive contains invalid members.
+
+**Archive contents (format v1):**
+
+| Member | Contents |
+|--------|----------|
+| `manifest.json` | Format version, project name, service→image mapping |
+| `compose.yaml` | Fully resolved compose configuration |
+| `images.tar` | OCI archive (`container image save` format) |
+
+**Limits:** images and resolved YAML only — no volumes, container filesystem state, staged config/secret files, registry push/pull, or encryption. After load, copy any required config/secret source files beside the extracted compose file before `compose up`.
 
 ---
 
