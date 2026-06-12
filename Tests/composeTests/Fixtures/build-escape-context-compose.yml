@@ -1,0 +1,5 @@
+services:
+  web:
+    build:
+      context: ../
+    command: sleep 300

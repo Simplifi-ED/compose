@@ -4,11 +4,17 @@ import Foundation
 public enum ComposeConfigResolver {
     public static func resolve(
         fileURLs: [URL],
+        projectName: String? = nil,
         activeProfiles: Set<String>,
         scaleOverrides: [String: Int],
         processEnvironment: [String: String] = ProcessInfo.processInfo.environment
     ) throws -> ComposeFile {
         let parsed = try ComposeParser.parse(fileURLs: fileURLs, processEnvironment: processEnvironment)
+        let resolvedProjectName = try projectName ?? ProjectNameResolver.resolve(
+            cliProjectName: nil,
+            composeName: parsed.name,
+            firstFileURL: fileURLs.first
+        )
         let activeServices = try ProfileFilter.activeServices(
             from: parsed.services,
             activeProfiles: activeProfiles
@@ -20,6 +26,53 @@ public enum ComposeConfigResolver {
             activeServiceNames: activeServiceNames
         )
 
+        let adjusted = try scaledActiveServices(
+            activeServices,
+            scaleOverrides: scaleOverrides
+        )
+
+        try ComposeFileMountResolver.validate(
+            composeFile: parsed,
+            activeServiceNames: Set(activeServices.keys)
+        )
+
+        let resolvedServices = try BuildImageResolver.withResolvedImages(
+            projectName: resolvedProjectName,
+            services: adjusted
+        )
+
+        return ComposeFile(
+            name: parsed.name,
+            services: resolvedServices,
+            configs: parsed.configs,
+            secrets: parsed.secrets
+        )
+    }
+
+    /// Resolves the compose file and returns YAML unless `quiet` requests validation only.
+    public static func resolveOutput(
+        fileURLs: [URL],
+        projectName: String? = nil,
+        activeProfiles: Set<String>,
+        scaleOverrides: [String: Int],
+        quiet: Bool = false,
+        processEnvironment: [String: String] = ProcessInfo.processInfo.environment
+    ) throws -> String? {
+        let composeFile = try resolve(
+            fileURLs: fileURLs,
+            projectName: projectName,
+            activeProfiles: activeProfiles,
+            scaleOverrides: scaleOverrides,
+            processEnvironment: processEnvironment
+        )
+        guard !quiet else { return nil }
+        return try ComposeSerializer.yamlString(from: composeFile)
+    }
+
+    private static func scaledActiveServices(
+        _ activeServices: [String: ComposeService],
+        scaleOverrides: [String: Int]
+    ) throws -> [String: ComposeService] {
         var adjusted: [String: ComposeService] = [:]
         adjusted.reserveCapacity(activeServices.count)
         for (serviceName, service) in activeServices {
@@ -40,36 +93,7 @@ public enum ComposeConfigResolver {
             )
             adjusted[serviceName] = scaled
         }
-
-        try ComposeFileMountResolver.validate(
-            composeFile: parsed,
-            activeServiceNames: Set(activeServices.keys)
-        )
-
-        return ComposeFile(
-            name: parsed.name,
-            services: adjusted,
-            configs: parsed.configs,
-            secrets: parsed.secrets
-        )
-    }
-
-    /// Resolves the compose file and returns YAML unless `quiet` requests validation only.
-    public static func resolveOutput(
-        fileURLs: [URL],
-        activeProfiles: Set<String>,
-        scaleOverrides: [String: Int],
-        quiet: Bool = false,
-        processEnvironment: [String: String] = ProcessInfo.processInfo.environment
-    ) throws -> String? {
-        let composeFile = try resolve(
-            fileURLs: fileURLs,
-            activeProfiles: activeProfiles,
-            scaleOverrides: scaleOverrides,
-            processEnvironment: processEnvironment
-        )
-        guard !quiet else { return nil }
-        return try ComposeSerializer.yamlString(from: composeFile)
+        return adjusted
     }
 
     private static func applyScale(

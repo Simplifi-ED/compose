@@ -13,6 +13,9 @@ public struct Run: AsyncParsableCommand {
     var projectOptions: ProjectOptions
 
     @OptionGroup
+    var progressOptions: ProgressOptions
+
+    @OptionGroup
     var dryRunOptions: DryRunOptions
 
     @Flag(name: .long, help: "Remove the container after it exits.")
@@ -52,19 +55,68 @@ public struct Run: AsyncParsableCommand {
         }
 
         let composeDirectory = fileURLs[0].deletingLastPathComponent()
-        let ioFlags = InteractiveSession.IOFlags.resolve(
+        let serviceDirectory = composeService.projectDirectory(orDefault: composeDirectory)
+        let buildPlans = try BuildRunner.runBuildPlans(
+            targetServiceName: service,
+            composeFile: composeFile,
+            projectName: projectName,
+            composeDirectory: composeDirectory
+        )
+
+        let plan = try makeRunPlan(
+            composeFile: composeFile,
+            projectName: projectName,
+            serviceDirectory: serviceDirectory,
+            composeService: composeService
+        )
+
+        if dryRunOptions.isEnabled {
+            try await runDryRun(buildPlans: buildPlans, plan: plan)
+            return
+        }
+
+        if !buildPlans.isEmpty {
+            try await BuildRunner.buildAll(
+                buildPlans,
+                progress: progressOptions.progress,
+                dryRunManifest: nil
+            )
+        }
+
+        try await RunSession.run(
+            plan: plan,
+            shutdownContext: RunShutdownContext(
+                containerID: plan.name,
+                projectName: projectName,
+                options: GracefulStopOptions(graceSeconds: timeout)
+            ),
+            useInteractivePTY: resolvedIOFlags().useInteractivePTY
+        )
+    }
+
+    private func resolvedIOFlags() -> InteractiveSession.IOFlags {
+        InteractiveSession.IOFlags.resolve(
             explicitInteractive: interactive,
             explicitTTY: tty,
             stdinIsTTY: isatty(STDIN_FILENO) == 1
         )
+    }
+
+    private func makeRunPlan(
+        composeFile: ComposeFile,
+        projectName: String,
+        serviceDirectory: URL,
+        composeService: ComposeService
+    ) throws -> ServicePlan {
+        let ioFlags = resolvedIOFlags()
         let suffix = dryRunOptions.isEnabled
             ? "dryrun"
             : String(UUID().uuidString.lowercased().prefix(8))
-        let plan = try ServicePlanner.runPlan(
+        return try ServicePlanner.runPlan(
             context: ServicePlanner.PlanningContext(
                 composeFile: composeFile,
                 projectName: projectName,
-                composeDirectory: composeService.projectDirectory(orDefault: composeDirectory)
+                composeDirectory: serviceDirectory
             ),
             serviceName: service,
             service: composeService,
@@ -76,24 +128,18 @@ public struct Run: AsyncParsableCommand {
                 nameSuffix: String(suffix)
             )
         )
+    }
 
-        if dryRunOptions.isEnabled {
-            let manifest = DryRunManifest()
-            await manifest.recordCreate(plan)
-            await manifest.printLines()
-            return
+    private func runDryRun(buildPlans: [BuildRunner.Plan], plan: ServicePlan) async throws {
+        let manifest = DryRunManifest()
+        if !buildPlans.isEmpty {
+            try await BuildRunner.buildAll(
+                buildPlans,
+                progress: nil,
+                dryRunManifest: manifest
+            )
         }
-
-        let shutdownContext = RunShutdownContext(
-            containerID: plan.name,
-            projectName: projectName,
-            options: GracefulStopOptions(graceSeconds: timeout)
-        )
-
-        try await RunSession.run(
-            plan: plan,
-            shutdownContext: shutdownContext,
-            useInteractivePTY: ioFlags.useInteractivePTY
-        )
+        await manifest.recordCreate(plan)
+        await manifest.printLines()
     }
 }

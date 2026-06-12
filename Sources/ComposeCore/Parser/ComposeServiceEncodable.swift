@@ -42,6 +42,7 @@ extension ComposeDeploy: Encodable {
 extension ComposeService: Encodable {
     private enum CodingKeys: String, CodingKey {
         case image
+        case build
         case command
         case ports
         case volumes
@@ -59,6 +60,7 @@ extension ComposeService: Encodable {
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encodeIfPresent(image, forKey: .image)
+        try encodeBuild(to: &container)
         try container.encodeIfPresent(command, forKey: .command)
         if !ports.isEmpty {
             try container.encode(ports, forKey: .ports)
@@ -102,6 +104,15 @@ extension ComposeService: Encodable {
         for mount in serviceMounts {
             try list.encode(ResolvedServiceMountEncoder(mount: mount, kind: kind))
         }
+    }
+
+    private func encodeBuild(to container: inout KeyedEncodingContainer<CodingKeys>) throws {
+        guard let build else { return }
+        if build.dockerfile == nil, build.args.isEmpty, build.target == nil {
+            try container.encode(build.context, forKey: .build)
+            return
+        }
+        try container.encode(build, forKey: .build)
     }
 
     private func encodeDependsOn(to container: inout KeyedEncodingContainer<CodingKeys>) throws {

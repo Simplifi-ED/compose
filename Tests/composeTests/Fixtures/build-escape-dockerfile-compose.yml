@@ -1,0 +1,6 @@
+services:
+  web:
+    build:
+      context: ./build-fixture
+      dockerfile: ../../../../../../etc/passwd
+    command: sleep 300

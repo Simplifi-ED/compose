@@ -1,0 +1,6 @@
+services:
+  web:
+    image: custom_web_tag
+    build:
+      context: ./build-fixture
+    command: sleep 300

@@ -3,6 +3,7 @@ import Foundation
 extension ComposeService: Decodable {
     private enum CodingKeys: String, CodingKey {
         case image
+        case build
         case command
         case ports
         case volumes
@@ -20,6 +21,7 @@ extension ComposeService: Decodable {
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         image = try container.decodeIfPresent(String.self, forKey: .image)
+        build = try Self.decodeBuild(from: container)
         command = try Self.decodeCommand(from: container)
         ports = try container.decodeIfPresent([String].self, forKey: .ports) ?? []
         volumes = try Self.decodeVolumes(from: container)
@@ -33,6 +35,43 @@ extension ComposeService: Decodable {
         secrets = try Self.decodeServiceMounts(from: container, key: .secrets, kind: .secret)
         develop = try Self.decodeDevelop(from: container)
         projectDirectory = nil
+    }
+
+    private static func decodeBuild(
+        from container: KeyedDecodingContainer<CodingKeys>
+    ) throws -> ComposeBuild? {
+        guard container.contains(.build) else { return nil }
+        if let contextPath = try? container.decode(String.self, forKey: .build) {
+            guard !contextPath.isEmpty else {
+                throw ComposeError.invalidField("build", reason: "expected a non-empty context path")
+            }
+            return ComposeBuild(context: contextPath)
+        }
+        warnUnsupportedBuildKeys(in: container)
+        do {
+            return try container.decode(ComposeBuild.self, forKey: .build)
+        } catch let error as ComposeError {
+            throw error
+        } catch {
+            throw ComposeError.invalidField(
+                "build",
+                reason: "expected a context path string or a map with context"
+            )
+        }
+    }
+
+    private static func warnUnsupportedBuildKeys(
+        in container: KeyedDecodingContainer<CodingKeys>
+    ) {
+        guard let nested = try? container.nestedContainer(
+            keyedBy: ComposeBuildDynamicKey.self,
+            forKey: .build
+        ) else {
+            return
+        }
+        for key in nested.allKeys where !ComposeBuild.supportedKeys.contains(key.stringValue) {
+            fputs("warning: build: key '\(key.stringValue)' isn't supported yet\n", stderr)
+        }
     }
 
     private static func decodeDevelop(
@@ -165,4 +204,17 @@ extension ComposeService: Decodable {
 
 private struct DependsOnEntry: Decodable {
     let condition: String
+}
+
+private struct ComposeBuildDynamicKey: CodingKey {
+    var stringValue: String
+    var intValue: Int?
+
+    init?(stringValue: String) {
+        self.stringValue = stringValue
+    }
+
+    init?(intValue: Int) {
+        return nil
+    }
 }

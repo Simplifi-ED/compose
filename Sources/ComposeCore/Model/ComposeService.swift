@@ -13,6 +13,7 @@ public enum ComposeEnvironment: Sendable, Equatable {
 public struct ComposeService: Sendable, Equatable {
     // MERGE: update ComposeFileMerge and Parser/Compose*Encodable.swift when adding stored properties.
     public let image: String?
+    public let build: ComposeBuild?
     public let command: ComposeCommandValue?
     public let ports: [String]
     public let volumes: [String]
@@ -30,6 +31,7 @@ public struct ComposeService: Sendable, Equatable {
 
     public init(
         image: String?,
+        build: ComposeBuild? = nil,
         command: ComposeCommandValue?,
         ports: [String],
         volumes: [String] = [],
@@ -45,6 +47,7 @@ public struct ComposeService: Sendable, Equatable {
         projectDirectory: URL? = nil
     ) {
         self.image = image
+        self.build = build
         self.command = command
         self.ports = ports
         self.volumes = volumes
@@ -65,9 +68,30 @@ public struct ComposeService: Sendable, Equatable {
         projectDirectory ?? defaultDirectory
     }
 
+    package func withResolvedImage(_ image: String) -> ComposeService {
+        ComposeService(
+            image: image,
+            build: build,
+            command: command,
+            ports: ports,
+            volumes: volumes,
+            environment: environment,
+            containerName: containerName,
+            dependsOn: dependsOn,
+            profiles: profiles,
+            deploy: deploy,
+            healthcheck: healthcheck,
+            configs: configs,
+            secrets: secrets,
+            develop: develop,
+            projectDirectory: projectDirectory
+        )
+    }
+
     func withProjectDirectory(_ directory: URL) -> ComposeService {
         ComposeService(
             image: image,
+            build: build,
             command: command,
             ports: ports,
             volumes: volumes,
@@ -87,6 +111,7 @@ public struct ComposeService: Sendable, Equatable {
     func withDevelop(_ develop: ComposeDevelop?) -> ComposeService {
         ComposeService(
             image: image,
+            build: build,
             command: command,
             ports: ports,
             volumes: volumes,
@@ -106,6 +131,7 @@ public struct ComposeService: Sendable, Equatable {
     func withDeploy(replicas: Int) -> ComposeService {
         ComposeService(
             image: image,
+            build: build,
             command: command,
             ports: ports,
             volumes: volumes,
