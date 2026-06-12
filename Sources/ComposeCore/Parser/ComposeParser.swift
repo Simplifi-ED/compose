@@ -83,7 +83,9 @@ public enum ComposeParser {
         }
 
         for (serviceName, service) in composeFile.services {
-            guard let image = service.image, !image.isEmpty else {
+            let hasImage = service.image.map { !$0.isEmpty } ?? false
+            let hasBuild = service.build != nil
+            guard hasImage || hasBuild else {
                 throw ComposeError.missingImage(service: serviceName)
             }
         }

@@ -6,6 +6,9 @@ public enum ComposeError: LocalizedError, Sendable {
     case parseFailed(String, underlying: Error)
     case noServices
     case missingImage(service: String)
+    case buildContextNotFound(path: String, service: String)
+    case buildDockerfileNotFound(path: String, service: String)
+    case buildFailed(service: String, underlying: Error)
     case invalidField(String, reason: String)
     case unsupportedPort(String)
     case unsupportedVolume(String)
@@ -53,7 +56,14 @@ public enum ComposeError: LocalizedError, Sendable {
         case .noServices:
             return "The compose file doesn't define any services."
         case .missingImage(let service):
-            return "Service '\(service)' is missing an image. Add an image and try again."
+            return "Service '\(service)' needs an image or build block."
+        case .buildContextNotFound(let path, let service):
+            return "Build context '\(path)' doesn't exist for service '\(service)'. "
+                + "Create the directory or fix build.context."
+        case .buildDockerfileNotFound(let path, let service):
+            return "Dockerfile '\(path)' doesn't exist for service '\(service)'."
+        case .buildFailed(let service, let underlying):
+            return "Build for '\(service)' failed: \(underlying.localizedDescription)"
         case .invalidField(let field, let reason):
             return "Invalid \(field): \(reason)."
         case .unsupportedPort(let port):

@@ -203,6 +203,7 @@ do {
     try runner.runOrphanTests()
     try runner.runVolumePurgeTests()
     try runner.runDryRunTests()
+    try runner.runBuildTests()
     runner.runLabelTests()
     runner.runRollbackTests()
     runner.runTeardownErrorTests()

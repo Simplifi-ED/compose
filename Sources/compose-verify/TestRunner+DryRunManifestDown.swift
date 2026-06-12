@@ -167,6 +167,7 @@ extension TestRunner {
             services: [
                 "web": ComposeService(
                     image: nil,
+                    build: nil,
                     command: .string("sleep 300"),
                     ports: [],
                     environment: nil,

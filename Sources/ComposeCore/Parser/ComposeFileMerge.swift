@@ -27,6 +27,7 @@ enum ComposeFileMerge {
     static func merge(base: ComposeService, override: ComposeService) -> ComposeService {
         ComposeService(
             image: override.image ?? base.image,
+            build: override.build ?? base.build,
             command: override.command ?? base.command,
             ports: ComposeBindingKeys.mergeUniqueEntries(
                 base: base.ports,

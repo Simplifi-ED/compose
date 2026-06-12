@@ -12,6 +12,23 @@ package enum DryRunManifestFormatting {
         var remove = false
     }
 
+    package static func formatBuild(
+        service: String,
+        tag: String,
+        context: String,
+        dockerfile: String?
+    ) -> String {
+        let dockerfilePart: String
+        if let dockerfile, !dockerfile.isEmpty {
+            dockerfilePart = " dockerfile=\"\(dockerfile)\""
+        } else {
+            dockerfilePart = ""
+        }
+        return """
+        [DRY-RUN] build image \"\(tag)\" service=\"\(service)\" context=\"\(context)\"\(dockerfilePart)
+        """
+    }
+
     package static func formatCreate(_ plan: ServicePlan) -> String {
         var parsed = parseRunArguments(plan.runArguments)
         appendFileMountVolumes(from: plan.fileMounts, into: &parsed.volumes)

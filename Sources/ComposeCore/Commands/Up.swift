@@ -49,6 +49,11 @@ public struct Up: AsyncParsableCommand {
         let composeDirectory = fileURLs[0].deletingLastPathComponent()
 
         let scaleOverrides = try scaleOptions.resolvedScaleOverrides()
+        let buildPlans = try resolveBuildPlans(
+            composeFile: composeFile,
+            projectName: projectName,
+            composeDirectory: composeDirectory
+        )
         let layers = try ServicePlanner.startupLayers(
             for: composeFile,
             projectName: projectName,
@@ -68,10 +73,13 @@ public struct Up: AsyncParsableCommand {
                 projectName: projectName,
                 composeFile: composeFile,
                 layers: layers,
-                healthContext: healthContext
+                healthContext: healthContext,
+                buildPlans: buildPlans
             )
             return
         }
+
+        try await executeBuildPlans(buildPlans, dryRunManifest: nil)
 
         try await orchestrateStartup(
             projectName: projectName,
@@ -85,133 +93,6 @@ public struct Up: AsyncParsableCommand {
             projectName: projectName,
             composeFile: composeFile,
             fileURLs: fileURLs
-        )
-    }
-
-    private func runDryRun(
-        projectName: String,
-        composeFile: ComposeFile,
-        layers: [[ServicePlan]],
-        healthContext: HealthWaitContext
-    ) async throws {
-        let manifest = DryRunManifest()
-        let execution = WaveExecutionPolicy(maxConcurrent: parallelOptions.resolvedMaxConcurrent())
-
-        if workspaceHygiene.shouldRemoveOrphans {
-            try await recordOrphanTeardowns(
-                manifest: manifest,
-                projectName: projectName,
-                composeFile: composeFile
-            )
-        }
-
-        let hooks = await manifest.makeUpHooks()
-        try await ServiceRunner.up(
-            layers: layers,
-            healthContext: healthContext,
-            hooks: hooks,
-            execution: execution,
-            beforeWave: { index in
-                await manifest.setUpWaveIndex(index)
-            }
-        )
-        await manifest.printLines()
-    }
-
-    private func recordOrphanTeardowns(
-        manifest: DryRunManifest,
-        projectName: String,
-        composeFile: ComposeFile
-    ) async throws {
-        let discovered: [DiscoveredContainer]
-        do {
-            discovered = try await ContainerDiscovery.containers(forProject: projectName)
-        } catch is CancellationError {
-            throw CancellationError()
-        } catch {
-            WorkspaceHygieneOutput.warnOrphanRemovalSkipped(
-                WorkspaceHygieneOutput.listContainersFailureMessage(error)
-            )
-            return
-        }
-        let orphans = OrphanRemoval.orphans(
-            in: discovered,
-            composeFile: composeFile,
-            policy: .beforeUp(activeProfiles: profileOptions.activeProfileSet)
-        )
-        for orphan in orphans {
-            await manifest.recordTeardown(orphan.name, reason: .orphan)
-        }
-    }
-
-    private func orchestrateStartup(
-        projectName: String,
-        composeFile: ComposeFile,
-        layers: [[ServicePlan]],
-        healthContext: HealthWaitContext
-    ) async throws {
-        let shouldRemoveOrphans = workspaceHygiene.shouldRemoveOrphans
-        let activeProfiles = profileOptions.activeProfileSet
-        let execution = WaveExecutionPolicy(maxConcurrent: parallelOptions.resolvedMaxConcurrent())
-        let orchestration = makeProgressOrchestration(
-            display: progressOptions.resolvedDisplay(),
-            phase: .starting
-        )
-        try await runOrchestrationCommand(
-            lines: orchestration.lines,
-            interruptedMessage: "Startup interrupted. Started containers are still running."
-        ) {
-            if shouldRemoveOrphans {
-                try await UpOrphanRemoval.removeBeforeStartupBestEffort(
-                    projectName: projectName,
-                    composeFile: composeFile,
-                    activeProfiles: activeProfiles,
-                    execution: execution
-                )
-            }
-            try await ServiceRunner.up(
-                layers: layers,
-                progress: orchestration.handlers,
-                healthContext: healthContext,
-                execution: execution
-            )
-        }
-    }
-
-    private func finishStartup(
-        plans: [ServicePlan],
-        projectName: String,
-        composeFile: ComposeFile,
-        fileURLs: [URL]
-    ) async throws {
-        for line in UpStartupSummary.lines(for: plans) {
-            print(line)
-        }
-        try await attachIfRequested(
-            projectName: projectName,
-            composeFile: composeFile,
-            fileURLs: fileURLs,
-            plans: plans
-        )
-    }
-
-    private func attachIfRequested(
-        projectName: String,
-        composeFile: ComposeFile,
-        fileURLs: [URL],
-        plans: [ServicePlan]
-    ) async throws {
-        guard attach else { return }
-        let shutdownContext = ProjectShutdownContext(
-            projectName: projectName,
-            composeFile: composeFile,
-            fileURLs: fileURLs,
-            options: shutdownTimeoutOptions.gracefulStopOptions()
-        )
-        try await AttachAfterUp.run(
-            plans: plans,
-            shutdownContext: shutdownContext,
-            mode: TerminalMode.resolve()
         )
     }
 }

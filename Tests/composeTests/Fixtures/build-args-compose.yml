@@ -1,0 +1,8 @@
+services:
+  web:
+    build:
+      context: ./build-fixture
+      dockerfile: Dockerfile
+      args:
+        APP_VERSION: "1.0.0"
+    command: sleep 300

@@ -7,9 +7,11 @@ extension ServicePlanner {
         service: ComposeService,
         options: RunPlanOptions
     ) throws -> ServicePlan {
-        guard let image = service.image, !image.isEmpty else {
-            throw ComposeError.missingImage(service: serviceName)
-        }
+        let image = try BuildImageResolver.resolvedImageTag(
+            projectName: context.projectName,
+            serviceName: serviceName,
+            service: service
+        )
 
         let baseName = runContainerBaseName(
             serviceName: serviceName,
@@ -59,9 +61,11 @@ extension ServicePlanner {
         service: ComposeService,
         replicaIndex: Int
     ) throws -> ServicePlan {
-        guard let image = service.image, !image.isEmpty else {
-            throw ComposeError.missingImage(service: serviceName)
-        }
+        let image = try BuildImageResolver.resolvedImageTag(
+            projectName: context.projectName,
+            serviceName: serviceName,
+            service: service
+        )
 
         let name = ReplicaPlanning.indexedContainerName(
             projectName: context.projectName,

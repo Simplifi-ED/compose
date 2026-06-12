@@ -1,0 +1,6 @@
+services:
+  web:
+    build: ./build-fixture
+    command: sleep 300
+    ports:
+      - "18081:80"

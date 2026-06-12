@@ -1,0 +1,9 @@
+services:
+  api:
+    build: ./build-fixture
+    command: sleep 300
+  web:
+    build: ./build-fixture
+    depends_on:
+      - api
+    command: sleep 300

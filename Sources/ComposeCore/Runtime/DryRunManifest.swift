@@ -29,6 +29,24 @@ public actor DryRunManifest {
         currentGroup = groupOrder
     }
 
+    public func recordBuild(
+        service: String,
+        tag: String,
+        context: String,
+        dockerfile: String?
+    ) {
+        append(
+            group: 0,
+            sortKey: "build:\(service)",
+            line: DryRunManifestFormatting.formatBuild(
+                service: service,
+                tag: tag,
+                context: context,
+                dockerfile: dockerfile
+            )
+        )
+    }
+
     public func recordCreate(_ plan: ServicePlan) {
         append(
             group: currentGroup,

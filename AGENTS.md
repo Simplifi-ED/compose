@@ -26,6 +26,7 @@ You are building a **Minimal Real Compose Plugin**—NOT a generic orchestration
 - `down -v` / `--volumes`: Phase 1 bind-mount purge for project-relative host paths only; symlink-safe allowlist [1].
 - Staged config/secret files under a project temp directory (`0600` secrets, `0644` configs); removed on container teardown and `down` [1].
 - Service-level `develop.watch` (`sync`, `sync+restart`); macOS FSEvents file sync into running containers via `compose watch` and `ContainerClient.copyIn`; path sandbox matches bind-mount rules; sync applies to all running replicas [1].
+- Service `build:` (short context path or object with `context`, `dockerfile`, `args`, `target`); image build during `up`/`run` init via `Application.BuildCommand` before startup waves; default tag `{project}_{service}` when `image` omitted; explicit `image` names build output when both set; context path sandbox matches bind-mount rules; build args never logged; no registry push [1].
 
 ### **Out of Scope (DO NOT CODE):**
 
@@ -33,7 +34,7 @@ You are building a **Minimal Real Compose Plugin**—NOT a generic orchestration
 - Named volume declarations, volume drivers, user `volumes:` `:ro` suffixes, and root-level `volumes:` blocks [1].
 - External secret/config managers (`external: true`, Vault, cloud SM) [1].
 - `depends_on` condition `service_completed_successfully`, restart policies, and HTTP health checks beyond exec/CMD probes [1].
-- Image-building lifecycles (no parsing of `build:` blocks or running Dockerfiles) [1].
+- Cross-arch `build.platform` without native translation; multi-stage cache export to remote registries; `develop.watch` `rebuild` action [1].
 
 ---
 
@@ -139,3 +140,4 @@ The output of the discovery command **must** show the `compose` plugin. If it do
 - Scaling: `ReplicaPlanning` is pure validation/naming; replica loops live in `ServicePlanner.startupLayers`; `up` names are always `{project}_{service}_{index}` (1-based); `container_name` errors on `up` via `validateForUp` but still keys `run` via `runContainerBaseName`; `deploy.replicas` must be >= 1 at decode; static host port + replicas > 1 fails at plan time; container-only ports (`80`, `:80`) parse but emit no `-p`; replicas carry `com.docker.compose.container-number`; log multiplex keys by container name and disambiguates replica prefixes.
 - `--remove-orphans` on `up`/`down` is opt-in; `OrphanRemoval` handles profile-aware detection. On `up`, discovery/removal failures warn and startup continues (`UpOrphanRemoval.removeBeforeStartupBestEffort`). `down -v` purges project-relative bind-mount paths only (`BindMountPurge`); named volumes deferred.
 - `develop.watch` via `compose watch`: FSEvents (`FileWatchMonitor`), debounced sync (`WatchDebouncer` + `ContainerFileSync.copyIn`), `sync+restart` via `ServiceRunnerRestart.restartPlans` (all replicas, no project teardown); path sandbox reuses `BindMountPathResolver`; Ctrl+C uses `.cancelOnly`. Scale/restart targets derive from running container discovery (no `--scale` on watch); container list refreshes before each apply and after restart.
+- Service `build:` via `BuildRunner` + `Application.BuildCommand` before startup waves on `up`/`run`; default tag `{project}_{service}`; `compose config` injects resolved `image:`; dry-run emits `[DRY-RUN] build image …`; context sandbox reuses `BindMountPathResolver`; build arg values never logged; `develop.watch` `rebuild` still deferred.

@@ -1,0 +1,4 @@
+services:
+  web:
+    build: ./missing-build-context
+    command: sleep 300
