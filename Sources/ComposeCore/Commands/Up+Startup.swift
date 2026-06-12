@@ -4,6 +4,7 @@ extension Up {
     struct LiveInput: Sendable {
         let buildPlans: [BuildRunner.Plan]
         let networkPlans: [NetworkPlanning.Plan]
+        let volumePlans: [VolumePlanning.Plan]
         let projectName: String
         let composeFile: ComposeFile
         let fileURLs: [URL]
@@ -21,6 +22,11 @@ extension Up {
         )
         try await NetworkRunner.createAll(
             input.networkPlans,
+            projectName: input.projectName,
+            machineContext: input.machineContext
+        )
+        try await VolumeRunner.createAll(
+            input.volumePlans,
             projectName: input.projectName,
             machineContext: input.machineContext
         )

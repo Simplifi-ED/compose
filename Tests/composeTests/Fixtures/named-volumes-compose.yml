@@ -1,0 +1,15 @@
+name: demo
+volumes:
+  mydata: {}
+
+services:
+  client:
+    image: docker.io/library/alpine:3.20
+    command: sleep 300
+    volumes:
+      - mydata:/app/data
+  server:
+    image: docker.io/library/alpine:3.20
+    command: sleep 300
+    volumes:
+      - mydata:/var/data

@@ -87,7 +87,8 @@ extension TestRunner {
 
         let volumeFlag = try ServicePlanner.volumeFlag(
             for: worker.volumes[0],
-            relativeTo: worker.projectDirectory(orDefault: rootURL.deletingLastPathComponent())
+            relativeTo: worker.projectDirectory(orDefault: rootURL.deletingLastPathComponent()),
+            projectName: "demo"
         )
         let expectedData = childDirectory.appendingPathComponent("data").standardizedFileURL.path
         expect(volumeFlag == "\(expectedData):/mnt/data", "relative volume resolves against included project_directory")
@@ -172,6 +173,21 @@ extension TestRunner {
             body: {
                 _ = try ComposeParser.parse(
                     fileURL: Self.fixtureURL("include-fixture/resource-conflict-config.yml")
+                )
+            }
+        )
+
+        expectComposeError(
+            "included volume conflicts with parent volume",
+            matching: {
+                if case .includeVolumeConflict(let name, _, _) = $0 {
+                    return name == "shared_volume"
+                }
+                return false
+            },
+            body: {
+                _ = try ComposeParser.parse(
+                    fileURL: Self.fixtureURL("include-fixture/resource-conflict-volume.yml")
                 )
             }
         )

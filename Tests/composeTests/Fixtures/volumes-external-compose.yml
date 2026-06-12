@@ -1,0 +1,10 @@
+volumes:
+  mydata:
+    external: true
+
+services:
+  web:
+    image: docker.io/library/alpine:3.20
+    command: sleep 300
+    volumes:
+      - mydata:/app/data

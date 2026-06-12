@@ -48,56 +48,30 @@ public struct Run: AsyncParsableCommand {
 
     public func run() async throws {
         try machineOptions.rejectIfUnsupported(commandName: "run")
-        let fileURLs = try projectOptions.resolvedFileURLs()
-        let composeFile = try ComposeParser.parse(fileURLs: fileURLs)
-        let projectName = try projectOptions.resolvedProjectName(
-            composeFile: composeFile,
-            fileURL: fileURLs[0]
-        )
-        guard let composeService = composeFile.services[service] else {
-            throw ComposeError.undefinedService(service: service)
-        }
-
-        let composeDirectory = fileURLs[0].deletingLastPathComponent()
-        let serviceDirectory = composeService.projectDirectory(orDefault: composeDirectory)
-        let buildPlans = try BuildRunner.runBuildPlans(
-            targetServiceName: service,
-            composeFile: composeFile,
-            projectName: projectName,
-            composeDirectory: composeDirectory
-        )
-
-        let plan = try makeRunPlan(
-            composeFile: composeFile,
-            projectName: projectName,
-            serviceDirectory: serviceDirectory,
-            composeService: composeService
-        )
-        let networkPlans = try NetworkPlanning.plans(
-            composeFile: composeFile,
-            projectName: projectName,
-            activeServiceNames: [service]
-        )
+        let resolved = try resolveRun()
 
         if dryRunOptions.isEnabled {
-            try await runDryRun(buildPlans: buildPlans, networkPlans: networkPlans, plan: plan)
+            try await runDryRun(
+                buildPlans: resolved.buildPlans,
+                networkPlans: resolved.networkPlans,
+                volumePlans: resolved.volumePlans,
+                plan: resolved.plan
+            )
             return
         }
 
-        if !buildPlans.isEmpty {
-            try await BuildRunner.buildAll(
-                buildPlans,
-                progress: progressOptions.progress,
-                dryRunManifest: nil
-            )
-        }
-        try await NetworkRunner.createAll(networkPlans, projectName: projectName)
+        try await prepareRunResources(
+            buildPlans: resolved.buildPlans,
+            networkPlans: resolved.networkPlans,
+            volumePlans: resolved.volumePlans,
+            projectName: resolved.projectName
+        )
 
         try await RunSession.run(
-            plan: plan,
+            plan: resolved.plan,
             shutdownContext: RunShutdownContext(
-                containerID: plan.name,
-                projectName: projectName,
+                containerID: resolved.plan.name,
+                projectName: resolved.projectName,
                 options: GracefulStopOptions(graceSeconds: timeout)
             ),
             useInteractivePTY: resolvedIOFlags().useInteractivePTY
@@ -112,7 +86,7 @@ public struct Run: AsyncParsableCommand {
         )
     }
 
-    private func makeRunPlan(
+    func makeRunPlan(
         composeFile: ComposeFile,
         projectName: String,
         serviceDirectory: URL,
@@ -143,6 +117,7 @@ public struct Run: AsyncParsableCommand {
     private func runDryRun(
         buildPlans: [BuildRunner.Plan],
         networkPlans: [NetworkPlanning.Plan],
+        volumePlans: [VolumePlanning.Plan],
         plan: ServicePlan
     ) async throws {
         let manifest = DryRunManifest()
@@ -155,6 +130,11 @@ public struct Run: AsyncParsableCommand {
         }
         try await NetworkRunner.createAll(
             networkPlans,
+            projectName: plan.projectName,
+            dryRunManifest: manifest
+        )
+        try await VolumeRunner.createAll(
+            volumePlans,
             projectName: plan.projectName,
             dryRunManifest: manifest
         )

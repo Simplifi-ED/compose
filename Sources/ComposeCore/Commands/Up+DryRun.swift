@@ -8,6 +8,7 @@ extension Up {
         let healthContext: HealthWaitContext
         let buildPlans: [BuildRunner.Plan]
         let networkPlans: [NetworkPlanning.Plan]
+        let volumePlans: [VolumePlanning.Plan]
         let machineContext: MachineContext
     }
 
@@ -22,6 +23,12 @@ extension Up {
         )
         try await NetworkRunner.createAll(
             input.networkPlans,
+            projectName: input.projectName,
+            dryRunManifest: manifest,
+            machineContext: input.machineContext
+        )
+        try await VolumeRunner.createAll(
+            input.volumePlans,
             projectName: input.projectName,
             dryRunManifest: manifest,
             machineContext: input.machineContext

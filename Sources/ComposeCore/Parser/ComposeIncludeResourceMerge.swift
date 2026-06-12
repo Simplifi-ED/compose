@@ -35,12 +35,19 @@ enum ComposeIncludeResourceMerge {
             includePath: includePath,
             definedIn: definedIn
         )
+        let volumes = try mergeVolumes(
+            into: model.volumes,
+            from: included.volumes,
+            includePath: includePath,
+            definedIn: definedIn
+        )
         model = ComposeFile(
             name: model.name,
             services: model.services,
             configs: configs,
             secrets: secrets,
-            networks: networks
+            networks: networks,
+            volumes: volumes
         )
     }
 
@@ -60,6 +67,26 @@ enum ComposeIncludeResourceMerge {
                 )
             }
             merged[name] = network
+        }
+        return merged
+    }
+
+    private static func mergeVolumes(
+        into target: [String: ComposeVolume],
+        from included: [String: ComposeVolume],
+        includePath: String,
+        definedIn: String
+    ) throws -> [String: ComposeVolume] {
+        var merged = target
+        for (name, volume) in included {
+            if merged[name] != nil {
+                throw ComposeError.includeVolumeConflict(
+                    name: name,
+                    includePath: includePath,
+                    definedIn: definedIn
+                )
+            }
+            merged[name] = volume
         }
         return merged
     }

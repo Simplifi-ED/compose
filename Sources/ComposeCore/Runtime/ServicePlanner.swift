@@ -54,6 +54,10 @@ public enum ServicePlanner {
             composeFile: composeFile,
             activeServiceNames: activeServiceNames
         )
+        try VolumePlanning.validate(
+            composeFile: composeFile,
+            activeServiceNames: activeServiceNames
+        )
         try ReplicaPlanning.validateScaleTargets(
             scaleOverrides: scaleOverrides,
             services: composeFile.services,
@@ -172,7 +176,15 @@ public enum ServicePlanner {
         try ServiceRunMapping.publishFlag(for: port)
     }
 
-    public static func volumeFlag(for volume: String, relativeTo composeDirectory: URL) throws -> String {
-        try ServiceRunMapping.volumeFlag(for: volume, relativeTo: composeDirectory)
+    public static func volumeFlag(
+        for volume: String,
+        relativeTo composeDirectory: URL,
+        projectName: String
+    ) throws -> String {
+        try ServiceRunMapping.volumeFlag(
+            for: volume,
+            relativeTo: composeDirectory,
+            projectName: projectName
+        )
     }
 }

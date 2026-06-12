@@ -7,6 +7,7 @@ extension ComposeFile: Encodable {
         case configs
         case secrets
         case networks
+        case volumes
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -25,6 +26,14 @@ extension ComposeFile: Encodable {
             for name in networks.keys.sorted() {
                 guard let network = networks[name] else { continue }
                 try nested.encode(network, forKey: ComposeSerializeCodingKey(stringValue: name)!)
+            }
+        }
+
+        if !volumes.isEmpty {
+            var nested = container.nestedContainer(keyedBy: ComposeSerializeCodingKey.self, forKey: .volumes)
+            for name in volumes.keys.sorted() {
+                guard let volume = volumes[name] else { continue }
+                try nested.encode(volume, forKey: ComposeSerializeCodingKey(stringValue: name)!)
             }
         }
 

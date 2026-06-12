@@ -47,6 +47,7 @@ package enum NetworkPlanning {
         projectName: String,
         activeServiceNames: Set<String>
     ) throws -> [Plan] {
+        try validate(composeFile: composeFile, activeServiceNames: activeServiceNames)
         var referenced: Set<String> = []
         for serviceName in activeServiceNames {
             guard let service = composeFile.services[serviceName] else { continue }

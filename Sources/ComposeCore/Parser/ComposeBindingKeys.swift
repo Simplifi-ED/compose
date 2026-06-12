@@ -14,13 +14,18 @@ package enum ComposeBindingKeys {
         }
     }
 
+    package enum VolumeSource: Equatable, Sendable {
+        case bindMount(hostPath: String)
+        case named(logicalName: String)
+    }
+
     package struct VolumeSpec: Equatable, Sendable {
-        package let hostPath: String
+        package let source: VolumeSource
         package let containerPath: String
         package let options: [String]
 
-        package init(hostPath: String, containerPath: String, options: [String]) {
-            self.hostPath = hostPath
+        package init(source: VolumeSource, containerPath: String, options: [String]) {
+            self.source = source
             self.containerPath = containerPath
             self.options = options
         }
@@ -28,16 +33,24 @@ package enum ComposeBindingKeys {
         /// Container path only; mount options do not affect merge identity.
         package var mergeKey: String { containerPath }
 
-        package func formattedMount(resolvedHostPath: String) -> String {
+        package var isNamed: Bool {
+            if case .named = source { return true }
+            return false
+        }
+
+        package func formattedMount(mountSource: String) -> String {
             guard !options.isEmpty else {
-                return "\(resolvedHostPath):\(containerPath)"
+                return "\(mountSource):\(containerPath)"
             }
-            return "\(resolvedHostPath):\(containerPath):\(options.joined(separator: ","))"
+            return "\(mountSource):\(containerPath):\(options.joined(separator: ","))"
         }
 
         package static func readOnlyMount(resolvedHostPath: String, containerPath: String) -> String {
-            VolumeSpec(hostPath: resolvedHostPath, containerPath: containerPath, options: ["ro"])
-                .formattedMount(resolvedHostPath: resolvedHostPath)
+            VolumeSpec(
+                source: .bindMount(hostPath: resolvedHostPath),
+                containerPath: containerPath,
+                options: ["ro"]
+            ).formattedMount(mountSource: resolvedHostPath)
         }
     }
 
@@ -108,11 +121,14 @@ package enum ComposeBindingKeys {
         }
 
         let isBindMountSource = hostPath.contains("/") || hostPath == "." || hostPath == ".."
-        guard isBindMountSource else {
-            throw ComposeError.unsupportedNamedVolume(volume)
+        let source: VolumeSource
+        if isBindMountSource {
+            source = .bindMount(hostPath: hostPath)
+        } else {
+            source = .named(logicalName: hostPath)
         }
 
-        return VolumeSpec(hostPath: hostPath, containerPath: containerPath, options: options)
+        return VolumeSpec(source: source, containerPath: containerPath, options: options)
     }
 
     package static func portMergeKey(for port: String) -> String? {

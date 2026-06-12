@@ -367,11 +367,11 @@ include:
 # Remove containers no longer in the compose file
 container compose up --remove-orphans
 
-# Remove containers + local bind-mount directories
+# Remove containers + project bind-mount directories and named volumes
 container compose down -v
 ```
 
-`down -v` only removes **relative** bind-mount paths (e.g. `./data:/app`). Absolute paths and named volumes are not touched.
+`down -v` removes **relative** bind-mount paths (e.g. `./data:/app`) and project-scoped named volumes created by compose. Absolute bind-mount paths are not touched.
 
 ---
 
@@ -395,9 +395,41 @@ services:
 | `:z` | Accepted and passed through to the runtime (macOS has no SELinux relabeling; compose does not enforce extra semantics) |
 | `:ro,z` / `:z,ro` | Comma-separated; order normalized |
 
-**Not supported:** named volumes, root-level `volumes:` blocks, long-form `read_only: true`, explicit `:rw`.
+**Not supported:** long-form `read_only: true`, explicit `:rw`.
 
 Multi-file `-f` merge replaces bind mounts by host+container path key — an override can change options (for example writable → `:ro`).
+
+---
+
+## Named volumes
+
+Declare volumes at the root and mount them in services with short syntax. Each volume becomes a project-scoped engine volume named `{project}_{volume}`, created before startup and removed on `down -v`.
+
+```yaml
+volumes:
+  mydata: {}
+
+services:
+  api:
+    image: nginx:1.27
+    volumes:
+      - mydata:/app/data
+  worker:
+    image: alpine:3.20
+    volumes:
+      - mydata:/var/data:ro
+```
+
+| Behavior | Detail |
+|----------|--------|
+| Naming | `mydata` in project `demo` → `demo_mydata` |
+| Persistence | `compose down` keeps named volumes; `compose down -v` removes project-labeled volumes |
+| Validation | Service refs must exist in root `volumes:` |
+| Cleanup | `-p`-only `down` (no compose file) cannot name volumes — remove with `container volume rm` |
+
+**Not supported:** volume drivers, NFS/cloud storage, `external: true`, cross-project sharing.
+
+Multi-file `-f` merge: override wins per root volume name; service volume lists union by container path.
 
 ---
 

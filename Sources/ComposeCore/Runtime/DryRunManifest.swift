@@ -58,6 +58,14 @@ public actor DryRunManifest {
         )
     }
 
+    public func recordVolumeCreate(name: String) {
+        append(
+            group: 0,
+            sortKey: "volume:\(name)",
+            line: DryRunManifestFormatting.formatVolumeCreate(name: name)
+        )
+    }
+
     public func recordNetworkRemovals(names: [String]) {
         guard !names.isEmpty else { return }
         groupOrder += 1
@@ -129,6 +137,19 @@ public actor DryRunManifest {
                 destination: destination
             )
         )
+    }
+
+    public func recordVolumeRemovals(names: [String]) {
+        guard !names.isEmpty else { return }
+        groupOrder += 1
+        currentGroup = groupOrder
+        for name in names.sorted() {
+            append(
+                group: currentGroup,
+                sortKey: name,
+                line: DryRunManifestFormatting.formatVolumeRemove(name: name)
+            )
+        }
     }
 
     public func recordPurge(paths: [String]) {
