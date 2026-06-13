@@ -6,8 +6,8 @@ public struct ParallelOptions: ParsableArguments {
     @Option(
         name: .customLong("parallel"),
         help: """
-        Maximum containers started or stopped at once within each dependency wave. \
-        Default: no limit.
+        Maximum containers started, stopped, paused, or unpaused at once within each \
+        dependency wave (or a single batch for pause/unpause). Default: no limit.
         """
     )
     var parallel: Int?

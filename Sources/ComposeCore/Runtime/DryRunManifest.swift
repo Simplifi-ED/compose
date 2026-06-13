@@ -109,6 +109,22 @@ public actor DryRunManifest {
         )
     }
 
+    public func recordPause(_ name: String) {
+        append(
+            group: currentGroup,
+            sortKey: name,
+            line: DryRunManifestFormatting.formatPause(name)
+        )
+    }
+
+    public func recordUnpause(_ name: String) {
+        append(
+            group: currentGroup,
+            sortKey: name,
+            line: DryRunManifestFormatting.formatUnpause(name)
+        )
+    }
+
     public func recordExec(container: String, command: [String]) {
         groupOrder += 1
         currentGroup = groupOrder

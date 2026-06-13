@@ -92,6 +92,14 @@ package enum DryRunManifestFormatting {
         "[DRY-RUN] exec container \"\(container)\" command=\(formatStringArray(command))"
     }
 
+    package static func formatPause(_ name: String) -> String {
+        "[DRY-RUN] pause container \"\(name)\""
+    }
+
+    package static func formatUnpause(_ name: String) -> String {
+        "[DRY-RUN] unpause container \"\(name)\""
+    }
+
     package static func formatPurge(path: String) -> String {
         "[DRY-RUN] purge bind-mount path \"\(path)\""
     }

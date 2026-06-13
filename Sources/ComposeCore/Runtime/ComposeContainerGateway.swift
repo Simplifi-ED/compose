@@ -69,6 +69,26 @@ package enum ComposeContainerGateway {
         try await ServiceRunner.runContainerWithFileMounts(plan, machineContext: machineContext)
     }
 
+    /// PR-2: replace stub with `ContainerClient().pause(id:)` / in-VM `container pause`.
+    package static func pause(
+        id: String,
+        machineContext: MachineContext = .applicationSandbox
+    ) async throws {
+        _ = id
+        _ = machineContext
+        throw ComposeError.pauseUnsupported(operation: "pause")
+    }
+
+    /// PR-2: replace stub with `ContainerClient().unpause(id:)` / in-VM `container unpause`.
+    package static func unpause(
+        id: String,
+        machineContext: MachineContext = .applicationSandbox
+    ) async throws {
+        _ = id
+        _ = machineContext
+        throw ComposeError.pauseUnsupported(operation: "unpause")
+    }
+
     package static func stop(
         id: String,
         opts: ContainerStopOptions? = nil,

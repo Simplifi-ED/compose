@@ -79,4 +79,5 @@ public enum ComposeError: LocalizedError, Sendable {
     case archiveUnsupportedVersion(found: Int, supported: Int)
     case archiveWriteFailed(path: String, underlying: Error)
     case archiveReadFailed(path: String, underlying: Error)
+    case pauseUnsupported(operation: String)
 }

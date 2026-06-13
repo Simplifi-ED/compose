@@ -8,8 +8,9 @@ public struct ProfileOptions: ParsableArguments {
         help: """
         Profile to enable or filter by. Repeat for multiple profiles (OR). Also set COMPOSE_PROFILES \
         (comma-separated); CLI flags add to the env set. On up, enables matching services; services \
-        without profiles always start. On ps, logs, top, config, watch, and down, limits to services \
-        without profiles plus matching services. On down, pass "*" to stop every project container.
+        without profiles always start. On ps, logs, top, config, watch, pause, unpause, and down, limits \
+        to services without profiles plus matching services. On down, pass "*" to stop every project \
+        container.
         """
     )
     var profiles: [String] = []

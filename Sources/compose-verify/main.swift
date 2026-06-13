@@ -208,6 +208,7 @@ do {
     try runner.runNetworkTests()
     try runner.runNamedVolumeTests()
     try runner.runDryRunTests()
+    try runner.runPauseTests()
     try runner.runBuildTests()
     runner.runLabelTests()
     runner.runRollbackTests()

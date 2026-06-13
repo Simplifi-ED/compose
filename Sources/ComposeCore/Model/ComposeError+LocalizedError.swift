@@ -210,6 +210,9 @@ extension ComposeError {
             return "Couldn't write archive '\(path)': \(underlying.localizedDescription)"
         case .archiveReadFailed(let path, let underlying):
             return "Couldn't read archive '\(path)': \(underlying.localizedDescription)"
+        case .pauseUnsupported(let operation):
+            return "container \(operation) isn't available in this container CLI version. "
+                + "Upgrade container to a release with pause support, then try again."
         }
     }
 
