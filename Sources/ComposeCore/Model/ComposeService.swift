@@ -11,7 +11,8 @@ public enum ComposeEnvironment: Sendable, Equatable {
 }
 
 public struct ComposeService: Sendable, Equatable {
-    // MERGE: update ComposeFileMerge and Parser/Compose*Encodable.swift when adding stored properties.
+    // MERGE: update ComposeFileMerge, Parser/Compose*Encodable.swift, and with* copy methods
+    // when adding stored properties.
     public let image: String?
     public let build: ComposeBuild?
     public let command: ComposeCommandValue?
@@ -32,6 +33,8 @@ public struct ComposeService: Sendable, Equatable {
     package let networkNullRemovals: Set<String>
     /// Base directory for relative bind-mount paths; nil uses the CLI compose file directory.
     public let projectDirectory: URL?
+    /// Tri-state compose `init:`; nil means unspecified in this file (merge inherits from base).
+    public let useInit: Bool?
 
     public init(
         image: String?,
@@ -50,7 +53,8 @@ public struct ComposeService: Sendable, Equatable {
         develop: ComposeDevelop? = nil,
         networks: [String] = [],
         networkNullRemovals: Set<String> = [],
-        projectDirectory: URL? = nil
+        projectDirectory: URL? = nil,
+        useInit: Bool? = nil
     ) {
         self.image = image
         self.build = build
@@ -69,6 +73,7 @@ public struct ComposeService: Sendable, Equatable {
         self.networks = networks
         self.networkNullRemovals = networkNullRemovals
         self.projectDirectory = projectDirectory
+        self.useInit = useInit
     }
 
     /// Resolved bind-mount / relative-path root; uses `defaultDirectory` when unset (CLI compose file dir).
@@ -94,7 +99,8 @@ public struct ComposeService: Sendable, Equatable {
             develop: develop,
             networks: networks,
             networkNullRemovals: networkNullRemovals,
-            projectDirectory: projectDirectory
+            projectDirectory: projectDirectory,
+            useInit: useInit
         )
     }
 
@@ -116,7 +122,8 @@ public struct ComposeService: Sendable, Equatable {
             develop: develop,
             networks: networks,
             networkNullRemovals: networkNullRemovals,
-            projectDirectory: directory
+            projectDirectory: directory,
+            useInit: useInit
         )
     }
 
@@ -138,7 +145,8 @@ public struct ComposeService: Sendable, Equatable {
             develop: develop,
             networks: networks,
             networkNullRemovals: networkNullRemovals,
-            projectDirectory: projectDirectory
+            projectDirectory: projectDirectory,
+            useInit: useInit
         )
     }
 
@@ -160,7 +168,8 @@ public struct ComposeService: Sendable, Equatable {
             develop: develop,
             networks: networks,
             networkNullRemovals: networkNullRemovals,
-            projectDirectory: projectDirectory
+            projectDirectory: projectDirectory,
+            useInit: useInit
         )
     }
 }

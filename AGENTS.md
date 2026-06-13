@@ -15,7 +15,7 @@ You are building a **Minimal Real Compose Plugin**—NOT a generic orchestration
 - Project naming: `-p`, `COMPOSE_PROJECT_NAME`, compose `name:`, first-file parent directory [1].
 - Instantiating and mapping configuration directly into Apple's programmatic `ContainerCommands` API [1].
 - Basic container lifecycles: Starting (via `ContainerRun`) and Stopping (via `ContainerStop`) [1].
-- Attributes to map: `image`, `command`, `environment`, standard host-to-container `ports`, short-syntax bind-mount `volumes` (`host:container`, `host:container:ro`, comma options such as `host:container:ro,z`), short-form `depends_on` (list of service names), long-form `depends_on` with `condition: service_started` / `service_healthy` / `service_completed_successfully`, `healthcheck` (`test`, `interval`, `timeout`, `retries`, `start_period`), `profiles`, and `deploy.replicas` [1].
+- Attributes to map: `image`, `command`, `environment`, standard host-to-container `ports`, short-syntax bind-mount `volumes` (`host:container`, `host:container:ro`, comma options such as `host:container:ro,z`), short-form `depends_on` (list of service names), long-form `depends_on` with `condition: service_started` / `service_healthy` / `service_completed_successfully`, `healthcheck` (`test`, `interval`, `timeout`, `retries`, `start_period`), `init`, `profiles`, and `deploy.replicas` [1].
 - Profile activation: `--profile` (repeatable, OR) merged with process `COMPOSE_PROFILES` (comma-separated); applies on `up`, `down`, `ps`, `logs`, `top`, `config`, `watch` [1].
 - Health-gated startup: between topological waves, wait for `service_started` (runtime `running`), `service_healthy` (compose-side probe via `createProcess` — container 1.0.0 has no native per-container health on `ContainerSnapshot`), or `service_completed_successfully` (init process exit code 0 via `ContainerClient.bootstrap` + `ClientProcess.wait`; host sandbox only — errors on `--machine`) [1].
 - Service scaling: `deploy.replicas` and `up --scale SERVICE=COUNT` (CLI wins) with uniform `{project}_{service}_{index}` container naming [1].
@@ -121,17 +121,17 @@ The output of the discovery command **must** show the `compose` plugin. If it do
 You must actively resolve the three core gaps in the VM hypervisor boundary instead of leaving them as documented constraints:
 
 1. **In-VM Image Builds:**
-   * Do not run `BuildRunner` on the macOS host when `--machine <name>` is set [2.1].
-   * Run `container build` inside the machine via `MachineInVMRunner` so image construction uses the VM image store [2.1].
+   - Do not run `BuildRunner` on the macOS host when `--machine <name>` is set [2.1].
+   - Run `container build` inside the machine via `MachineInVMRunner` so image construction uses the VM image store [2.1].
 
 2. **Home-Relative File Staging:**
-   * Refactor `ComposeFileStaging.swift` to use `FileManager.default.homeDirectoryForCurrentUser` instead of `NSTemporaryDirectory()` [2.2].
-   * Ensure configs and secrets are staged at `~/.config/container-compose/...` so they fall within the automatically mounted `$HOME` directory inside the VM [2.2].
+   - Refactor `ComposeFileStaging.swift` to use `FileManager.default.homeDirectoryForCurrentUser` instead of `NSTemporaryDirectory()` [2.2].
+   - Ensure configs and secrets are staged at `~/.config/container-compose/...` so they fall within the automatically mounted `$HOME` directory inside the VM [2.2].
 
 3. **Lazy VM Booting:**
-   * Remove aggressive `MachineClient.boot` calls from eager context initialization [2.3].
-   * Prevent `ps`, `logs`, and `config` / `--dry-run` commands from booting a stopped VM [2.3]. If the target machine is stopped, `ps`/`logs` must exit gracefully with a "Machine stopped" message [2.3].
-   * Call `ensureBooted()` lazily only inside `Up` immediately before dispatching container executions (including in-VM builds) [2.3].
+   - Remove aggressive `MachineClient.boot` calls from eager context initialization [2.3].
+   - Prevent `ps`, `logs`, and `config` / `--dry-run` commands from booting a stopped VM [2.3]. If the target machine is stopped, `ps`/`logs` must exit gracefully with a "Machine stopped" message [2.3].
+   - Call `ensureBooted()` lazily only inside `Up` immediately before dispatching container executions (including in-VM builds) [2.3].
 
 ---
 

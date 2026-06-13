@@ -56,6 +56,7 @@ extension ComposeService: Encodable {
         case secrets
         case develop
         case networks
+        case useInit = "init"
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -92,6 +93,9 @@ extension ComposeService: Encodable {
         }
         if !networks.isEmpty {
             try container.encode(networks, forKey: .networks)
+        }
+        if useInit == true {
+            try container.encode(true, forKey: .useInit)
         }
     }
 

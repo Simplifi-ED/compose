@@ -1,0 +1,4 @@
+services:
+  web:
+    image: docker.io/library/alpine:3.24
+    init: true

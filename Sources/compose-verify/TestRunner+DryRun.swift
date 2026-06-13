@@ -4,6 +4,7 @@ import Foundation
 extension TestRunner {
     mutating func runDryRunTests() throws {
         try runDryRunUpTests()
+        try runDryRunInitTests()
         try runDryRunHealthWaitTests()
         try runDryRunScaleTests()
         try runDryRunOrphanTests()

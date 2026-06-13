@@ -49,6 +49,18 @@ extension TestRunner {
         )
 
         try runMergeExtendedTests(mergeDirectory: mergeDirectory, baseURL: baseURL, overrideURL: overrideURL)
+        try runMergeInitTests(mergeDirectory: mergeDirectory)
+    }
+
+    mutating func runMergeInitTests(mergeDirectory: URL) throws {
+        let baseInitURL = mergeDirectory.appendingPathComponent("base-init.yml")
+        let inheritURL = mergeDirectory.appendingPathComponent("override-init-inherit.yml")
+        let inherited = try ComposeParser.parse(fileURLs: [baseInitURL, inheritURL])
+        expect(inherited.services["web"]?.useInit == true, "merge inherits init when override omits")
+
+        let falseURL = mergeDirectory.appendingPathComponent("override-init-false.yml")
+        let disabled = try ComposeParser.parse(fileURLs: [baseInitURL, falseURL])
+        expect(disabled.services["web"]?.useInit == false, "merge override init false wins")
     }
 
     mutating func runMergeExtendedTests(

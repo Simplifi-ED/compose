@@ -111,6 +111,22 @@ extension TestRunner {
                 "machine label on startup plan"
             )
         }
+
+        let initCompose = try ComposeParser.parse(fileURL: Self.fixtureURL("init-compose.yml"))
+        let initLayers = try ServicePlanner.startupLayers(
+            for: initCompose,
+            projectName: "demo",
+            composeDirectory: fixturesDirectory,
+            machineName: "dev"
+        )
+        let initPlan = initLayers.flatMap { $0 }.first
+        expect(initPlan?.runArguments.contains("--init") == true, "machine startup plan passes --init")
+        if let initPlan {
+            expect(
+                initPlan.runArguments.contains("\(ComposeLabels.machine)=dev"),
+                "machine init plan keeps machine label"
+            )
+        }
     }
 
     private mutating func runMachineUnsupportedCommandTests() {

@@ -168,6 +168,7 @@ Services start in **dependency waves** — all services in a wave start in paral
 - `depends_on` with `condition: service_started` → waits for the dependency container to reach running state before starting dependents
 - `depends_on` with `condition: service_healthy` → waits for the healthcheck probe to pass before starting dependents
 - `depends_on` with `condition: service_completed_successfully` → waits for a one-shot dependency to exit with code 0 (init/migration services); host sandbox only (not `--machine`); long-running daemons time out on exit wait
+- `init: true` → runs Apple's lightweight PID-1 init via `container run --init`; does not change how `service_completed_successfully` detects exit code 0 (both can apply to the same service)
 - If a wave fails, containers from earlier waves are rolled back automatically
 
 ```yaml
@@ -550,6 +551,7 @@ Exit codes: `0` = all services stopped cleanly · `130` = SIGINT · `143` = SIGT
 | Field | Status |
 |-------|--------|
 | `image`, `command`, `ports`, `environment` | ✅ |
+| `init` | ✅ |
 | `volumes` (bind mounts; `:ro`, `:z`, `:ro,z`) | ✅ |
 | `depends_on` (list; long-form `service_started`, `service_healthy`, `service_completed_successfully`†) | ✅ |
 | `healthcheck` | ✅ |
