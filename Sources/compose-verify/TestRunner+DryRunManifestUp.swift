@@ -25,6 +25,14 @@ extension TestRunner {
         expect(lines[0].contains("detach=true"), "dry-run up detached create")
     }
 
+    mutating func runDryRunInitTests() throws {
+        let composeDirectory = Self.fixtureURL("minimal-compose.yml").deletingLastPathComponent()
+        let plan = try makeInitUpPlan(fixturesDirectory: composeDirectory)
+        let line = DryRunManifestFormatting.formatCreate(plan)
+        expect(line.contains("init=true"), "dry-run create shows init=true")
+        expect(plan.runArguments.contains("--init"), "dry-run plan includes --init flag")
+    }
+
     mutating func runDryRunHealthWaitTests() throws {
         let services = Self.healthFixtureServices(retries: 1)
         let composeFile = ComposeFile(name: nil, services: services)

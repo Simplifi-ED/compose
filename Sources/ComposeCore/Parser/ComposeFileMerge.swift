@@ -59,7 +59,8 @@ enum ComposeFileMerge {
             ),
             develop: override.develop ?? base.develop,
             networks: mergeServiceNetworks(base: base, override: override),
-            projectDirectory: override.projectDirectory ?? base.projectDirectory
+            projectDirectory: override.projectDirectory ?? base.projectDirectory,
+            useInit: override.useInit ?? base.useInit
         )
     }
 

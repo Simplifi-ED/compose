@@ -11,6 +11,7 @@ extension TestRunner {
         try runPlannerPublishTests(fixturesDirectory: fixturesDirectory)
         try runPlannerVolumeTests(fixturesDirectory: fixturesDirectory)
         try runPlannerVolumeErrorTests(fixturesDirectory: fixturesDirectory)
+        try runPlannerInitTests(fixturesDirectory: fixturesDirectory)
     }
 
     mutating func runPlannerRunPlanTests(fixturesDirectory: URL) throws {

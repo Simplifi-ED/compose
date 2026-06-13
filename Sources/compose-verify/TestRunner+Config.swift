@@ -12,6 +12,7 @@ extension TestRunner {
         try runConfigIncludeTests()
         try runConfigQuietOutputTests()
         try runConfigHealthcheckExportTests()
+        try runConfigInitTests()
     }
 
     private mutating func runConfigMergeTests() throws {
@@ -195,6 +196,35 @@ extension TestRunner {
         )
         expect(fullYAML.contains("interval: 1s"), "healthcheck export keeps explicit interval")
         expect(fullYAML.contains("retries: 2"), "healthcheck export keeps explicit retries")
+    }
+
+    private mutating func runConfigInitTests() throws {
+        try runConfigInitExportTests()
+    }
+
+    private mutating func runConfigInitExportTests() throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("compose-verify-config-init-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let composePath = tempDir.appendingPathComponent("compose.yml")
+        try """
+        services:
+          web:
+            image: docker.io/library/alpine:3.24
+            init: true
+        """.write(to: composePath, atomically: true, encoding: .utf8)
+
+        let resolved = try ComposeConfigResolver.resolve(
+            fileURLs: [composePath],
+            activeProfiles: [],
+            scaleOverrides: [:]
+        )
+        expect(resolved.services["web"]?.useInit == true, "config resolves init true")
+
+        let yaml = try ComposeSerializer.yamlString(from: resolved)
+        expect(yaml.contains("init: true"), "config yaml exports init true")
     }
 
     private mutating func runConfigMinimalFixtureTests() throws {

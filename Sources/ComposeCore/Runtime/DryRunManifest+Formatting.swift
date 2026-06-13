@@ -11,6 +11,7 @@ package enum DryRunManifestFormatting {
         var interactive = false
         var tty = false
         var remove = false
+        var useInit = false
     }
 
     package static func formatBuild(
@@ -162,6 +163,8 @@ package enum DryRunManifestFormatting {
             parsed.tty = true
         case "--rm":
             parsed.remove = true
+        case "--init":
+            parsed.useInit = true
         default:
             break
         }
@@ -180,6 +183,7 @@ package enum DryRunManifestFormatting {
         if parsed.interactive { flags.append("interactive=true") }
         if parsed.tty { flags.append("tty=true") }
         if parsed.remove { flags.append("remove=true") }
+        if parsed.useInit { flags.append("init=true") }
         return flags.joined(separator: " ")
     }
 

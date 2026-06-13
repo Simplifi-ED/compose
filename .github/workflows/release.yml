@@ -60,6 +60,8 @@ jobs:
   bump-homebrew-formula:
     needs: release
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Checkout Homebrew Tap
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
@@ -72,22 +74,29 @@ jobs:
           TAG: ${{ github.ref_name }}
           REPO: ${{ github.repository }}
         run: |
+          set -euo pipefail
           URL="https://github.com/${REPO}/releases/download/${TAG}/compose-plugin.tar.gz"
-          curl -fsSL "$URL" -o compose-plugin.tar.gz
-          SHA256="$(shasum -a 256 compose-plugin.tar.gz | awk '{print $1}')"
+          SHA256="$(curl --retry 6 --retry-all-errors --retry-delay 2 --retry-connrefused -fsSL "$URL" | shasum -a 256 | awk '{print $1}')"
+          if [ -z "$SHA256" ]; then
+            echo "error: failed to compute SHA256 for ${URL}" >&2
+            exit 1
+          fi
           FORMULA="Formula/container-compose.rb"
           sed -i "s|url \".*\"|url \"${URL}\"|" "$FORMULA"
           sed -i "s|sha256 \".*\"|sha256 \"${SHA256}\"|" "$FORMULA"
+          grep -Fq "$URL" "$FORMULA"
+          grep -Fq "$SHA256" "$FORMULA"
 
-      - name: Open Formula Pull Request
-        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
-        with:
-          token: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
-          branch: bump-container-compose-${{ github.ref_name }}
-          title: container-compose ${{ github.ref_name }}
-          commit-message: container-compose ${{ github.ref_name }}
-          body: |
-            Automated bump for [${{ github.ref_name }}](https://github.com/${{ github.repository }}/releases/tag/${{ github.ref_name }}).
-          author: github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>
-          committer: github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>
-          delete-branch: true
+      - name: Push formula bump to tap main
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Formula/container-compose.rb
+          if git diff --staged --quiet; then
+            echo "Formula already at ${TAG}"
+            exit 0
+          fi
+          git commit -m "container-compose ${TAG}"
+          git push origin HEAD:main

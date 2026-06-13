@@ -42,6 +42,9 @@ enum ServiceRunMapping {
             service: configuration.service,
             projectName: configuration.projectName
         ))
+        if configuration.service.useInit == true {
+            arguments.append("--init")
+        }
         arguments.append(configuration.image)
         arguments.append(contentsOf: configuration.command)
     }

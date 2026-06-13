@@ -1,0 +1,10 @@
+secrets:
+  db_password:
+    file: ./secrets/db_password.txt
+services:
+  app:
+    image: docker.io/library/alpine:3.24
+    command: ["cat", "/run/secrets/db_password"]
+    init: true
+    secrets:
+      - db_password
