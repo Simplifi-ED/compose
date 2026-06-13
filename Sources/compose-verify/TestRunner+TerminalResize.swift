@@ -1,4 +1,3 @@
-import ComposeCore
 import ContainerAPIClient
 import ContainerizationOS
 import Foundation
@@ -27,6 +26,7 @@ extension TestRunner {
                 )
             }
 
+            await Task.yield()
             continuation.yield(())
             continuation.finish()
             await loop.value
