@@ -1,3 +1,5 @@
+import ContainerAPIClient
+import ContainerizationOS
 import Foundation
 
 #if canImport(Darwin)
@@ -88,4 +90,45 @@ private final class BlockingResultBox<T>: @unchecked Sendable {
 func runArgumentValue(_ arguments: [String], flag: String) -> String? {
     guard let index = arguments.firstIndex(of: flag), index + 1 < arguments.count else { return nil }
     return arguments[index + 1]
+}
+
+struct RecordingMockClientProcess: ClientProcess {
+    let id = "mock-process"
+    let exitCode: Int32
+
+    private let recorder = ResizeCallRecorder()
+
+    var resizeCalls: [Terminal.Size] {
+        get async {
+            await recorder.calls()
+        }
+    }
+
+    init(exitCode: Int32) {
+        self.exitCode = exitCode
+    }
+
+    func start() async throws {}
+
+    func resize(_ size: Terminal.Size) async throws {
+        await recorder.record(size)
+    }
+
+    func kill(_ signal: Int32) async throws {}
+
+    func wait() async throws -> Int32 {
+        exitCode
+    }
+}
+
+private actor ResizeCallRecorder {
+    private var storage: [Terminal.Size] = []
+
+    func record(_ size: Terminal.Size) {
+        storage.append(size)
+    }
+
+    func calls() -> [Terminal.Size] {
+        storage
+    }
 }

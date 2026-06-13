@@ -219,6 +219,7 @@ do {
     runner.runTopTests()
     try runner.runAttachTests()
     runner.runExecTests()
+    runner.runTerminalResizeTests()
     runner.runCpTests()
     runner.runMachineTests()
     runner.runRunTests()

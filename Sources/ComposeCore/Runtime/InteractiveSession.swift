@@ -64,6 +64,10 @@ package enum InteractiveSession {
         )
     }
 
+    /// Waits for a foreground process to exit.
+    /// Interactive PTY (`useInteractivePTY`): upstream `ProcessIO.handleProcess` forwards SIGWINCH
+    /// to `ClientProcess.resize` and owns raw-mode terminal I/O. Compose owns SIGINT/SIGTERM via
+    /// `SignalForwarding` in `runUntilExit`.
     package static func waitForProcess(
         process: any ClientProcess,
         processIO: ProcessIO,
