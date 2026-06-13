@@ -136,6 +136,7 @@ extension TestRunner {
     }
 
     private mutating func runExecIOFlagsTests() {
+        // `useInteractivePTY` gates upstream `ProcessIO.handleProcess` SIGWINCH → resize (#74).
         let explicit = InteractiveSession.IOFlags.resolve(
             explicitInteractive: true,
             explicitTTY: false,
