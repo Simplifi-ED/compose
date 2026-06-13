@@ -8,7 +8,7 @@ Maintained by [Omnivya](https://www.omnivya.fr) · [Simplifi-ED](https://github.
 
 ## Requirements
 
-- macOS 15+ on Apple Silicon (macOS 26+ for container machines / `--machine`)
+- macOS 15+ on Apple Silicon (macOS 26+ for container machines / `--machine` and custom `networks:`)
 - [`container`](https://github.com/apple/container) CLI 1.0.0+
 - Swift 6.2+ — only needed if building from source
 
@@ -16,7 +16,15 @@ Maintained by [Omnivya](https://www.omnivya.fr) · [Simplifi-ED](https://github.
 
 ## Install
 
-**Homebrew (recommended)**
+Pick one path:
+
+1. **Homebrew (recommended)** — tap installs and upgrades the plugin
+2. **Pre-built binary** — download the release zip (no Swift toolchain)
+3. **From source** — clone and run `./scripts/install.sh`
+
+After install, run `which container` — if it prints `/usr/local/bin/container`, use the PKG symlink block under Homebrew; if it is under Homebrew's prefix, use the **Caveats** path from `brew info container-compose`.
+
+## Homebrew (recommended)
 
 `container-compose` also exists in Homebrew core (a different project). Install from this tap using the **fully qualified** formula name:
 
@@ -44,15 +52,22 @@ container compose --help
 container --help | grep -A2 PLUGINS
 ```
 
-**Pre-built binary**
+## Pre-built binary
+
+The release zip contains only the plugin (`bin/compose`, `config.toml`) — not `scripts/install.sh`.
 
 ```bash
 curl -fsSLO https://github.com/Simplifi-ED/compose/releases/latest/download/container-compose-macos-arm64.zip
 unzip container-compose-macos-arm64.zip -d container-compose
-./scripts/install.sh
+INSTALL_ROOT="$(dirname "$(dirname "$(command -v container)")")"
+sudo mkdir -p "$INSTALL_ROOT/libexec/container-plugins/compose"
+sudo cp -R container-compose/* "$INSTALL_ROOT/libexec/container-plugins/compose/"
+sudo chmod 755 "$INSTALL_ROOT/libexec/container-plugins/compose/bin/compose"
 ```
 
-**From source**
+If `container` is from Homebrew (`brew install container`), set `INSTALL_ROOT="$(brew --prefix container)/opt/container"` instead. Override with `CONTAINER_INSTALL_ROOT`.
+
+## From source
 
 ```bash
 git clone https://github.com/Simplifi-ED/compose.git && cd compose
@@ -131,13 +146,20 @@ container compose up -f compose.yaml
 
 Run a project inside an existing [container machine](https://github.com/apple/container/blob/main/Documentation/Container-Machines.md) instead of the application sandbox.
 
-**Prerequisites**
+## Prerequisites
 
 1. macOS 26+ with container machines enabled.
 2. Create and name a machine outside compose: `container machine create --name dev` (see `container machine --help`).
-3. The machine must already exist; `compose up` boots it when stopped. Read-only commands (`ps`, `logs`, `--dry-run`) do not boot a stopped machine.
+3. The machine must already exist. Which commands boot a stopped machine:
 
-**Examples**
+| Action | Boots stopped machine? |
+|--------|------------------------|
+| `up`, `down` | Yes (mutating commands) |
+| `ps`, `logs` | No — exits gracefully with "Machine stopped" |
+| `--dry-run` | No |
+| `exec`, `cp` | No — requires an already-running machine |
+
+## Examples
 
 ```bash
 container machine list
@@ -151,12 +173,16 @@ container compose down --machine dev -p demo
 
 Compose prints the active context on stderr once per command (`Execution context: application sandbox` or `Execution context: container machine 'dev'`).
 
-**Volumes and bind mounts**
+## Volumes and bind mounts
 
 - Machine home mount (`home-mount` on the machine) maps your macOS `$HOME` into the VM at the same path. Compose-relative bind mounts still resolve against the compose file directory on the host; those paths must be visible inside the machine at the same absolute path when home is mounted. Short-syntax options (`:ro`, `:z`, `:ro,z`) apply the same way as in the application sandbox.
 - Image builds (`build:`) run inside the machine during `compose up --machine` via the in-VM `container build` CLI. Build context paths must be visible inside the machine (typically under `$HOME`).
 - Staged `configs:` / `secrets:` files are written under `~/.config/container-compose/<project>/`, which is inside the mounted home directory.
 - A project runs entirely in one context (sandbox or one machine); mixed mode is not supported.
+
+## Limits
+
+- `depends_on: service_completed_successfully` is not supported with `--machine` (plan-time error). Run migrations in the application sandbox or use `compose run` inside the VM. See [How startup works](#how-startup-works).
 
 ---
 
@@ -167,8 +193,8 @@ Services start in **dependency waves** — all services in a wave start in paral
 - `depends_on` (list form) → ordering only; no readiness wait
 - `depends_on` with `condition: service_started` → waits for the dependency container to reach running state before starting dependents
 - `depends_on` with `condition: service_healthy` → waits for the healthcheck probe to pass before starting dependents
-- `depends_on` with `condition: service_completed_successfully` → waits for a one-shot dependency to exit with code 0 (init/migration services); host sandbox only (not `--machine`); long-running daemons time out on exit wait
-- `init: true` → runs Apple's lightweight PID-1 init via `container run --init`; does not change how `service_completed_successfully` detects exit code 0 (both can apply to the same service)
+- `depends_on` with `condition: service_completed_successfully` → waits for a one-shot dependency to exit with code 0 (one-shot / migration services; unrelated to the `init:` service key); host sandbox only (not `--machine`); long-running daemons time out on exit wait
+- `init: true` → see [Init (`init: true`)](#init-init-true) below
 - If a wave fails, containers from earlier waves are rolled back automatically
 
 ```yaml
@@ -190,6 +216,48 @@ services:
 
 ---
 
+## Init (`init: true`)
+
+Apple's container runtime can run a lightweight PID-1 init process that reaps zombie processes and forwards signals. Enable it per service when your container runs shell scripts or other workloads that spawn child processes.
+
+```yaml
+services:
+  web:
+    image: myapp:latest
+    init: true
+```
+
+| Behavior | Detail |
+|----------|--------|
+| Mapping | `init: true` → `container run --init` on `up` and `run` |
+| When to skip | Single-process images that exit cleanly without extra reaping |
+| Multi-file `-f` merge | Later file's explicit `init` wins; omitted `init` inherits from the base file. `init: false` disables `init: true` from a base file |
+
+`init: true` composes with other keys (including `depends_on: service_completed_successfully` on the same service).
+
+### Init vs one-shot dependencies
+
+| Goal | Approach |
+|------|----------|
+| Reap zombies / signal handling on long-running services | `init: true` on the service |
+| Run a migration before the app during `up` | Separate one-shot service + `depends_on: condition: service_completed_successfully` |
+| Ad hoc migration or debug task | `compose run --rm SERVICE …` (does not change the running stack) |
+
+```yaml
+services:
+  migrate:
+    image: alpine:3.24
+    command: ["sh", "-c", "exit 0"]
+  app:
+    image: alpine:3.24
+    command: ["sleep", "300"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+```
+
+---
+
 ## Project naming
 
 Every set of containers belongs to a **project**. The name is resolved in this order:
@@ -205,12 +273,12 @@ Use the same project name for `up` and `down`, or containers won't be found.
 
 ## Compose file resolution
 
-When you don't pass `-f`, the plugin looks for a compose file in this order:
+When you don't pass `-f`, the plugin resolves compose files in this order:
 
-1. `compose.yaml` / `compose.yml` / `docker-compose.yaml` / `docker-compose.yml`
-2. A paired override file (e.g. `compose.override.yaml`) if present
-3. `COMPOSE_FILE` env var (colon-separated paths)
-4. Fallback: `docker-compose.yml`
+1. `COMPOSE_FILE` env var (colon-separated paths), when set
+2. First discovered standard name in the working directory: `compose.yaml`, `compose.yml`, `docker-compose.yaml`, or `docker-compose.yml`
+3. A paired override file for that base (e.g. `compose.override.yaml`) when present
+4. Implicit `docker-compose.yml` (may be absent — allows `-p`-only commands such as `down` without a compose file on disk)
 
 Pass `-f` multiple times to merge files — later files override earlier ones:
 
@@ -552,20 +620,23 @@ Exit codes: `0` = all services stopped cleanly · `130` = SIGINT · `143` = SIGT
 |-------|--------|
 | `image`, `command`, `ports`, `environment` | ✅ |
 | `init` | ✅ |
-| `volumes` (bind mounts; `:ro`, `:z`, `:ro,z`) | ✅ |
+| `volumes` (bind mounts; named short syntax; `:ro`, `:z`, `:ro,z` on bind mounts) | ✅ |
 | `depends_on` (list; long-form `service_started`, `service_healthy`, `service_completed_successfully`†) | ✅ |
 | `healthcheck` | ✅ |
 | `profiles`, `deploy.replicas` | ✅ |
 | `configs`, `secrets` (local `file:`) | ✅ |
 | `develop.watch` | ✅ |
+| `name:` (project name; overridden by `-p` / `COMPOSE_PROJECT_NAME`) | ✅ |
 | `-f` merge, `include:`, `COMPOSE_FILE` | ✅ |
 | `build` (`context`, `dockerfile`, `args`, `target`) | ✅ |
-| `networks` (project-scoped subnets; container-name DNS) | ✅ |
-| named volumes | ❌ v1 deferred |
+| `networks` (project-scoped subnets; container-name DNS) ‡ | ✅ |
+| named volumes (project-scoped; short syntax) | ✅ |
 | long-form `read_only: true`, explicit `:rw` | ❌ v1 deferred |
 | `COMPOSE_PROFILES` env var | ✅ (process env; `.env` file deferred) |
 
 † `service_completed_successfully` is supported in the application sandbox only; `compose up --machine` rejects it at plan time.
+
+‡ Custom declared networks require macOS 26+; default network behavior is unchanged on macOS 15+.
 
 ---
 
@@ -599,6 +670,7 @@ make dist           # produces dist/compose/, compose-plugin.tar.gz, and .zip
 ```
 
 Without Make:
+
 ```bash
 swift build -c release
 swift run -c release compose-verify
