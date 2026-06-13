@@ -12,6 +12,8 @@ package enum DryRunManifestFormatting {
         var tty = false
         var remove = false
         var useInit = false
+        var cpu: String?
+        var memory: String?
     }
 
     package static func formatBuild(
@@ -43,6 +45,12 @@ package enum DryRunManifestFormatting {
         var details = "ports=\(ports) labels=\(labels) volumes=\(volumes) env=\(env)"
         if !parsed.networks.isEmpty {
             details += " networks=\(formatStringArray(parsed.networks.sorted()))"
+        }
+        if let cpu = parsed.cpu {
+            details += " cpu=\"\(cpu)\""
+        }
+        if let memory = parsed.memory {
+            details += " memory=\"\(memory)\""
         }
         return flags.isEmpty ? "\(header) \(details)" : "\(header) \(details) \(flags)"
     }
@@ -147,6 +155,10 @@ package enum DryRunManifestFormatting {
             parsed.env.append(value)
         case "--network":
             parsed.networks.append(value)
+        case "--cpus", "-c":
+            parsed.cpu = value
+        case "--memory", "-m":
+            parsed.memory = value
         default:
             return nil
         }

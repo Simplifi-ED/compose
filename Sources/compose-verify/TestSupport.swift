@@ -84,3 +84,8 @@ func blockingAwait<T>(_ body: @escaping @Sendable () async -> T) -> T {
 private final class BlockingResultBox<T>: @unchecked Sendable {
     var value: T!
 }
+
+func runArgumentValue(_ arguments: [String], flag: String) -> String? {
+    guard let index = arguments.firstIndex(of: flag), index + 1 < arguments.count else { return nil }
+    return arguments[index + 1]
+}

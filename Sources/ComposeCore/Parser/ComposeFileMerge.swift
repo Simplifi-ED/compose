@@ -120,7 +120,31 @@ enum ComposeFileMerge {
         case (nil, let override?):
             return override
         case (let base?, let override?):
-            return ComposeDeploy(replicas: override.replicas ?? base.replicas)
+            return ComposeDeploy(
+                replicas: override.replicas ?? base.replicas,
+                resources: mergeDeployResources(base: base.resources, override: override.resources)
+            )
+        }
+    }
+
+    static func mergeDeployResources(
+        base: ComposeDeployResources?,
+        override: ComposeDeployResources?
+    ) -> ComposeDeployResources? {
+        switch (base?.limits, override?.limits) {
+        case (nil, nil):
+            return nil
+        case (let baseLimits?, nil):
+            return ComposeDeployResources(limits: baseLimits)
+        case (nil, let overrideLimits?):
+            return ComposeDeployResources(limits: overrideLimits)
+        case (let baseLimits?, let overrideLimits?):
+            return ComposeDeployResources(
+                limits: ComposeResourceLimits(
+                    cpus: overrideLimits.cpus ?? baseLimits.cpus,
+                    memory: overrideLimits.memory ?? baseLimits.memory
+                )
+            )
         }
     }
 

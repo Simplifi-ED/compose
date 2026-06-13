@@ -311,6 +311,29 @@ container compose up --parallel 2    # start at most 2 containers per wave
 
 Containers are always named `{project}_{service}_{index}` (e.g. `demo_web_1`, `demo_web_2`).
 
+### Resource limits
+
+Set per-service CPU and memory caps under `deploy.resources.limits`:
+
+```yaml
+services:
+  web:
+    image: docker.io/library/alpine:3.24
+    deploy:
+      resources:
+        limits:
+          cpus: "2"
+          memory: 512M
+```
+
+**CPU:** whole integers only (`1`, `2`, …). Values like `2.0` normalize to whole cores. Zero, empty, fractional decimals (`0.5`), and millicore notation (`50m`) are rejected at plan time — Apple’s container hypervisor allocates whole cores via Virtualization.framework.
+
+**Omit `cpus` for lightweight services:** when a container does not need a dedicated core, leave the limit unset. The host macOS scheduler distributes work across efficiency (E) and performance (P) cores; idle containers stay low-power.
+
+**Memory:** compose size strings (`512M`, `1G`, bare byte counts). Invalid values fail at plan time.
+
+Limits apply to every replica when scaling. `compose config` (including `--quiet`) validates limits the same way as `up` and `run` — invalid values error before any container starts.
+
 ---
 
 ## Profiles
@@ -623,7 +646,7 @@ Exit codes: `0` = all services stopped cleanly · `130` = SIGINT · `143` = SIGT
 | `volumes` (bind mounts; named short syntax; `:ro`, `:z`, `:ro,z` on bind mounts) | ✅ |
 | `depends_on` (list; long-form `service_started`, `service_healthy`, `service_completed_successfully`†) | ✅ |
 | `healthcheck` | ✅ |
-| `profiles`, `deploy.replicas` | ✅ |
+| `profiles`, `deploy.replicas`, `deploy.resources.limits` (`cpus`, `memory`) | ✅ |
 | `configs`, `secrets` (local `file:`) | ✅ |
 | `develop.watch` | ✅ |
 | `name:` (project name; overridden by `-p` / `COMPOSE_PROJECT_NAME`) | ✅ |

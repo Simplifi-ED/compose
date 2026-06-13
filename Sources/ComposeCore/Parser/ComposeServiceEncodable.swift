@@ -30,12 +30,16 @@ extension ComposeEnvironment: Encodable {
 extension ComposeDeploy: Encodable {
     private enum CodingKeys: String, CodingKey {
         case replicas
+        case resources
     }
 
     public func encode(to encoder: Encoder) throws {
-        guard let replicas else { return }
+        guard hasExportableContent else { return }
         var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(replicas, forKey: .replicas)
+        try container.encodeIfPresent(replicas, forKey: .replicas)
+        if let resources, resources.limits?.hasContent == true {
+            try container.encode(resources, forKey: .resources)
+        }
     }
 }
 
@@ -78,7 +82,7 @@ extension ComposeService: Encodable {
         if !profiles.isEmpty {
             try container.encode(profiles, forKey: .profiles)
         }
-        if let deploy, deploy.replicas != nil {
+        if let deploy, deploy.hasExportableContent {
             try container.encode(deploy, forKey: .deploy)
         }
         try container.encodeIfPresent(healthcheck, forKey: .healthcheck)

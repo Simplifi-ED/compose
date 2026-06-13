@@ -95,6 +95,12 @@ extension TestRunner {
     }
 
     private mutating func runMachinePlannerTests() throws {
+        try runMachineMinimalPlannerTests()
+        try runMachineInitPlannerTests()
+        try runMachineResourceLimitsPlannerTests()
+    }
+
+    private mutating func runMachineMinimalPlannerTests() throws {
         let fixturesDirectory = Self.fixtureURL("minimal-compose.yml").deletingLastPathComponent()
         let composeFile = try ComposeParser.parse(fileURL: Self.fixtureURL("minimal-compose.yml"))
         let layers = try ServicePlanner.startupLayers(
@@ -111,7 +117,10 @@ extension TestRunner {
                 "machine label on startup plan"
             )
         }
+    }
 
+    private mutating func runMachineInitPlannerTests() throws {
+        let fixturesDirectory = Self.fixtureURL("minimal-compose.yml").deletingLastPathComponent()
         let initCompose = try ComposeParser.parse(fileURL: Self.fixtureURL("init-compose.yml"))
         let initLayers = try ServicePlanner.startupLayers(
             for: initCompose,
@@ -125,6 +134,30 @@ extension TestRunner {
             expect(
                 initPlan.runArguments.contains("\(ComposeLabels.machine)=dev"),
                 "machine init plan keeps machine label"
+            )
+        }
+    }
+
+    private mutating func runMachineResourceLimitsPlannerTests() throws {
+        let fixturesDirectory = Self.fixtureURL("minimal-compose.yml").deletingLastPathComponent()
+        let limitsCompose = try ComposeParser.parse(fileURL: Self.fixtureURL("resources-limits-compose.yml"))
+        let limitsLayers = try ServicePlanner.startupLayers(
+            for: limitsCompose,
+            projectName: "demo",
+            composeDirectory: fixturesDirectory,
+            machineName: "dev"
+        )
+        let limitsPlan = limitsLayers.flatMap(\.self).first
+        expect(limitsPlan != nil, "machine planner emits resource-limits plan")
+        if let limitsPlan {
+            expect(runArgumentValue(limitsPlan.runArguments, flag: "--cpus") == "2", "machine plan passes --cpus")
+            expect(
+                runArgumentValue(limitsPlan.runArguments, flag: "--memory") == "512M",
+                "machine plan passes --memory"
+            )
+            expect(
+                limitsPlan.runArguments.contains("\(ComposeLabels.machine)=dev"),
+                "machine resource plan keeps machine label"
             )
         }
     }

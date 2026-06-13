@@ -93,6 +93,9 @@ public enum ComposeConfigResolver {
                 service: scaled,
                 replicas: replicas
             )
+            try DeployResourceLimitsPlanning.validateLimits(
+                scaled.deploy?.resources?.limits
+            )
             adjusted[serviceName] = scaled
         }
         return adjusted
