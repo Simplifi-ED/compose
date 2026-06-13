@@ -192,6 +192,7 @@ do {
     try runner.runHealthcheckTests()
     try runner.runProfileTests()
     try runner.runScaleTests()
+    try runner.runResourceLimitsTests()
     runner.runParallelTests()
     try runner.runMergeTests()
     try runner.runConfigTests()

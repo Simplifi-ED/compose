@@ -18,6 +18,7 @@ extension TestRunner {
     private mutating func runScaleDecodeTests() throws {
         let fixture = try ComposeParser.parse(fileURL: Self.fixtureURL("scale-compose.yml"))
         expect(fixture.services["web"]?.deploy?.replicas == 2, "deploy.replicas decode")
+        expect(fixture.services["web"]?.deploy?.resources?.limits?.cpus == "2", "deploy.resources.limits.cpus decode")
         expect(fixture.services["db"]?.deploy == nil, "deploy default nil")
 
         expectComposeError(

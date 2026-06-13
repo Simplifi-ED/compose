@@ -1,0 +1,8 @@
+services:
+  web:
+    image: docker.io/library/alpine:3.24
+    command: sleep 300
+    deploy:
+      resources:
+        limits:
+          memory: not-a-size
