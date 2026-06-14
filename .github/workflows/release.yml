@@ -60,6 +60,7 @@ jobs:
   bump-homebrew-formula:
     needs: release
     runs-on: ubuntu-latest
+    environment: release
     permissions:
       contents: write
     steps:
