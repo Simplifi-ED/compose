@@ -1,0 +1,9 @@
+# Default review for all changes
+* @Simplifi-ED/dev
+
+# CI, release, packaging, and agent steering — admin review required
+/.github/ @Simplifi-ED/admin
+/scripts/ @Simplifi-ED/admin
+/Makefile @Simplifi-ED/admin
+/Package.swift @Simplifi-ED/admin
+/AGENTS.md @Simplifi-ED/admin
