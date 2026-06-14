@@ -217,6 +217,7 @@ do {
     runner.runProgressTests()
     runner.runPsTests()
     runner.runLogsTests()
+    runner.runEventsTests()
     runner.runTopTests()
     try runner.runAttachTests()
     runner.runExecTests()

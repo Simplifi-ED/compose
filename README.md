@@ -97,6 +97,7 @@ container compose down -f fixtures/minimal-compose.yml -p demo
 | `down` | Stop and remove project containers. |
 | `ps` | List running containers for the project. |
 | `logs` | Stream or print service logs. |
+| `events` | Stream container start/die events (foreground polling). |
 | `exec SERVICE CMD` | Run a command inside a running service container. |
 | `cp SRC DEST` | Copy files between the host and a running service container. |
 | `run SERVICE [CMD]` | Start a one-off container from a service definition. |
@@ -106,13 +107,33 @@ container compose down -f fixtures/minimal-compose.yml -p demo
 | `save` | Export service images and resolved compose YAML to a portable archive. |
 | `load` | Import images from a stack archive into the local image store. |
 
-Supported on `up`, `down`, `ps`, `logs`, `exec`, and `cp`:
+Supported on `up`, `down`, `ps`, `logs`, `events`, `exec`, and `cp`:
 
 ```bash
 container compose up --machine dev -f compose.yaml
 ```
 
 `watch`, `run`, `top`, `config`, `save`, and `load` reject `--machine`.
+
+### Events (`compose events`)
+
+Streams **start** and **die** lifecycle lines for project containers using a **foreground polling loop** (default **1.5s** interval). There is no background daemon — polling runs only while the command is active.
+
+Without `--follow`, prints a **one-shot snapshot** of currently running containers. Use `--follow` for a continuous stream until interrupted.
+
+```bash
+container compose events -p demo --follow
+container compose events -f compose.yaml web db --follow --timeout 120
+```
+
+Output shape:
+
+```text
+[2026-06-13T12:00:00.000Z] container start demo_web_1 (demo_web_1)
+[2026-06-13T12:00:03.500Z] container die demo_web_1 (demo_web_1)
+```
+
+**Limitations:** polling is not a native engine event stream. Containers that start and stop in **under ~1 second** may never appear in a list tick and will not emit events. Worst-case detection latency is roughly one poll interval. Event types **oom** and **health** are not available in container 1.0.0.
 
 ---
 

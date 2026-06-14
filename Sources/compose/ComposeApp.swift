@@ -7,7 +7,7 @@ struct ComposeCommand: AsyncParsableCommand {
         commandName: "compose",
         abstract: "Define and run multi-container applications with Apple container.",
         subcommands: [
-            Up.self, Down.self, Pause.self, Unpause.self, Ps.self, Logs.self, Exec.self, Cp.self, Run.self,
+            Up.self, Down.self, Pause.self, Unpause.self, Ps.self, Logs.self, Events.self, Exec.self, Cp.self, Run.self,
             Top.self, Config.self, Watch.self,
             Save.self, Load.self
         ]
