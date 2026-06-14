@@ -761,6 +761,35 @@ Exit codes: `0` = all services stopped cleanly · `130` = SIGINT · `143` = SIGT
 
 ---
 
+## Security & distribution
+
+Release builds of `bin/compose` are **ad-hoc signed** (`codesign -s -`) with embedded entitlements from [`entitlements.plist`](entitlements.plist):
+
+- `com.apple.security.hypervisor` — Virtualization.framework path used by the `container` API in application-sandbox mode
+- `com.apple.security.network.client` — outbound API traffic to the `container` daemon
+
+**App Sandbox is not enabled in v1.** The release plist does not include `com.apple.security.app-sandbox`. Capability entitlements alone do not isolate the process; they document least-privilege intent for a future Developer ID signing pipeline.
+
+**Not included (by design):**
+
+- `com.apple.security.network.server` — compose does not bind or listen; port publishing is handled by the `container` runtime
+- `com.apple.security.files.user-selected.read-write` — powerbox access only; does not cover headless CLI paths or bind mounts
+
+For the full entitlement matrix, sandbox blocker register, and spike results, see [`docs/entitlements-audit.md`](docs/entitlements-audit.md). Opt-in sandbox spike: `./scripts/smoke-sandbox-entitlements.sh`.
+
+**Ad-hoc vs Developer ID:** GitHub releases and the Homebrew tap ship ad-hoc signed binaries. Corporate Developer ID signing and notarization are follow-up work (out of scope for the current release pipeline).
+
+**Verify a local release build:**
+
+```bash
+make verify-codesign
+codesign -d --entitlements :- dist/compose/bin/compose
+```
+
+Embedded entitlements are not the same as notarization. Gatekeeper may still quarantine downloaded artifacts — see Troubleshooting.
+
+---
+
 ## Troubleshooting
 
 | Problem | Fix |
@@ -823,6 +852,7 @@ make test    # runs compose-verify
 make smoke          # end-to-end: install → up → curl → down (requires runtime)
 make smoke-volumes  # install + live :ro/:z bind-mount runtime checks
 make dist           # produces dist/compose/, compose-plugin.tar.gz, and .zip
+make verify-codesign   # release build + entitlements gate (see entitlements.plist)
 ```
 
 Without Make:
@@ -831,6 +861,8 @@ Without Make:
 swift build -c release
 swift run -c release compose-verify
 ./scripts/build-release.sh
+./scripts/verify-codesign.sh dist/compose/bin/compose entitlements.plist
+./scripts/smoke-sandbox-entitlements.sh   # opt-in app-sandbox spike (not CI)
 ```
 
 ---

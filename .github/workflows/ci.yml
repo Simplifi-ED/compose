@@ -48,10 +48,8 @@ jobs:
 
       - name: Verify Release Build
         run: |
-          ./scripts/build-release.sh
+          make verify-codesign
           file dist/compose/bin/compose | grep -q arm64
-          codesign -v dist/compose/bin/compose
-          codesign -dvvv dist/compose/bin/compose
 
   smoke:
     if: github.event.inputs.run_smoke == 'true'

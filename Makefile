@@ -3,7 +3,7 @@ WARNINGS_AS_ERRORS ?= true
 SWIFT ?= /usr/bin/swift
 SWIFT_FLAGS := $(if $(filter-out false,$(WARNINGS_AS_ERRORS)),-Xswiftc -warnings-as-errors)
 
-.PHONY: build lint test dist smoke smoke-volumes smoke-volumes-named smoke-networks clean
+.PHONY: build lint test dist verify-codesign smoke smoke-volumes smoke-volumes-named smoke-networks clean
 
 build:
 	$(SWIFT) build -c $(BUILD_CONFIGURATION) $(SWIFT_FLAGS)
@@ -18,6 +18,9 @@ dist:
 	./scripts/package.sh
 	tar -czf dist/compose-plugin.tar.gz -C dist/compose .
 	cd dist/compose && zip -r ../container-compose-macos-arm64.zip .
+
+verify-codesign:
+	./scripts/build-release.sh
 
 smoke:
 	./scripts/smoke-test.sh
