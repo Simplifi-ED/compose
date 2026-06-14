@@ -42,6 +42,9 @@ jobs:
       - name: Package Release Artifacts
         run: make dist
 
+      - name: Verify Release Codesign
+        run: ./scripts/verify-codesign.sh dist/compose/bin/compose entitlements.plist
+
       - name: Write SHA256 Checksums
         run: |
           shasum -a 256 dist/compose-plugin.tar.gz | awk '{print $1}' > dist/compose-plugin.tar.gz.sha256

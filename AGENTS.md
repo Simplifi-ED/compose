@@ -62,6 +62,8 @@ You are building a **Minimal Real Compose Plugin**—NOT a generic orchestration
    swift build -c release
    ```
 
+   Release packaging must embed entitlements: [`entitlements.plist`](entitlements.plist) is applied in [`scripts/build-release.sh`](scripts/build-release.sh) and validated by [`scripts/verify-codesign.sh`](scripts/verify-codesign.sh) (`make verify-codesign`). See [`docs/entitlements-audit.md`](docs/entitlements-audit.md) before adding `com.apple.security.app-sandbox` or other keys.
+
 3. **No Hardcoded Mocks:**
    Do not introduce mock runtimes, hardcoded system states, or static stub YAML files inside the production codebase. The plugin must talk directly to the real system loop.
 

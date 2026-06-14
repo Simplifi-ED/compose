@@ -40,3 +40,6 @@ jobs:
 
       - name: Run Integration Checks
         run: make test
+
+      - name: Verify Release Codesign
+        run: make verify-codesign
