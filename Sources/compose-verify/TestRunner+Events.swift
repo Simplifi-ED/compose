@@ -5,9 +5,11 @@ import Foundation
 extension TestRunner {
     mutating func runEventsTests() {
         runProjectEventsDiffTests()
+        runProjectEventsFilterTests()
         runProjectEventFormatTests()
         runProjectEventsSessionTests()
         runProjectEventsPollingEmitTests()
+        runProjectEventsSignalPolicyTests()
     }
 
     private mutating func runProjectEventsDiffTests() {
@@ -62,6 +64,28 @@ extension TestRunner {
         expect(snapshot[0].containerID == "demo_web_1", "snapshot start id")
     }
 
+    private mutating func runProjectEventsFilterTests() {
+        let containers = [
+            ProjectContainer(name: "demo_web_1", serviceName: "web", status: .running, publishedPorts: []),
+            ProjectContainer(name: "demo_db_1", serviceName: "db", status: .running, publishedPorts: []),
+            ProjectContainer(name: "legacy_1", serviceName: nil, status: .running, publishedPorts: [])
+        ]
+
+        let all = ProjectEventsDiff.statusMap(from: containers, serviceFilter: nil)
+        expect(all.count == 3, "events status map includes all containers without filter")
+
+        let webOnly = ProjectEventsDiff.statusMap(from: containers, serviceFilter: ["web"])
+        expect(webOnly.count == 1, "events service filter limits status map")
+        expect(webOnly["demo_web_1"] == .running, "events filtered map keeps web container")
+
+        let missing = ProjectEventsDiff.statusMap(from: containers, serviceFilter: ["cache"])
+        expect(missing.isEmpty, "events unknown service filter yields empty status map")
+
+        let filteredSnapshot = ProjectEventsDiff.snapshotStarts(current: webOnly)
+        expect(filteredSnapshot.count == 1, "filtered snapshot emits only matching running containers")
+        expect(filteredSnapshot[0].containerID == "demo_web_1", "filtered snapshot names web replica")
+    }
+
     private mutating func runProjectEventFormatTests() {
         let transition = ProjectEventTransition(
             kind: .start,
@@ -86,6 +110,13 @@ extension TestRunner {
         expect(!session.isEnded, "new session is active")
         session.end()
         expect(session.isEnded, "end() marks session closed")
+
+        let afterEnd: [ProjectContainer]? = blockingAwait {
+            var session = ContainerListClientSession(machineContext: .applicationSandbox)
+            session.end()
+            return try? await session.projectContainers(forProject: "demo")
+        }
+        expect(afterEnd?.isEmpty == true, "ended session returns no containers")
     }
 
     private mutating func runProjectEventsTimeoutTests() {
@@ -147,5 +178,12 @@ extension TestRunner {
         expect(capture.emitted.count == 1, "snapshot poll emits one start")
         expect(capture.emitted[0].kind == .start, "snapshot event is start")
         expect(capture.emitted[0].containerID == "demo_web_1", "snapshot event names container")
+    }
+
+    private mutating func runProjectEventsSignalPolicyTests() {
+        let outcome = blockingAwait {
+            try? await SignalForwarding.interruptedOutcome(policy: .cancelOnly, signal: InterruptSignal(number: 2))
+        }
+        expect(outcome == .cancelledQuietly, "events interrupt policy exits quietly")
     }
 }
