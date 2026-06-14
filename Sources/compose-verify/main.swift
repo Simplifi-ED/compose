@@ -227,6 +227,7 @@ do {
     runner.runMachineTests()
     runner.runRunTests()
     runner.runSignalsTests()
+    runner.runOsLogConfigurationTests()
 } catch {
     fputs("FAIL: unexpected error: \(error)\n", stderr)
     runner.failures += 1

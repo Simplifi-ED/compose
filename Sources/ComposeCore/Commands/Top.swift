@@ -17,10 +17,14 @@ public struct Top: AsyncParsableCommand {
     @OptionGroup
     var machineOptions: MachineOptions
 
+    @OptionGroup
+    var osLogOptions: OsLogOptions
+
     @Argument(help: "Limit output to these service names.")
     var services: [String] = []
 
     public func run() async throws {
+        OsLogConfiguration.apply(cliNoOslog: osLogOptions.isDisabled)
         try machineOptions.rejectIfUnsupported(commandName: "top")
         let context = try projectOptions.resolvedLabelCommandContext(
             skipComposeFileOnExplicitProject: true,

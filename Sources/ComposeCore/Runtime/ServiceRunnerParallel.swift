@@ -47,58 +47,6 @@ extension ServiceRunner {
         }
     }
 
-    package static func runContainerWaves(
-        layers: [[DiscoveredContainer]],
-        progress: WaveProgressHandlers?,
-        failFast: Bool,
-        execution: WaveExecutionPolicy = .unlimited,
-        beforeWave: (@Sendable (Int) async -> Void)? = nil,
-        work: @escaping @Sendable (DiscoveredContainer) async throws -> Void,
-        onWaveComplete: @escaping @Sendable ([DiscoveredContainer]) async -> Void
-    ) async throws -> [(name: String, error: Error)] {
-        var collectedFailures: [(name: String, error: Error)] = []
-
-        for (index, layer) in layers.enumerated() {
-            try Task.checkCancellation()
-            await beforeWave?(index)
-            await progress?.onWaveStart?(index + 1, layers.count, layer.map(\.name))
-            let result = await parallelRun(
-                layer.map { ParallelRunItem(label: $0.name, collectOnSuccess: nil, value: $0) },
-                maxConcurrent: execution.maxConcurrent,
-                onCompletion: progress?.onServiceComplete
-            ) { container in
-                try await work(container)
-            }
-            if result.wasInterrupted {
-                let removed = layer.filter { result.completed.contains($0.name) }
-                if !removed.isEmpty {
-                    await onWaveComplete(removed)
-                }
-                throw CancellationError()
-            }
-            if !result.failures.isEmpty {
-                if failFast {
-                    let remaining = layers.count - index - 1
-                    if remaining > 0 {
-                        fputs(
-                            """
-                            Warning: compose down failed in wave \(index + 1) of \(layers.count); \
-                            \(remaining) later wave(s) were not run.\n
-                            """,
-                            stderr
-                        )
-                    }
-                    throw ComposeError.multipleServiceFailures(result.failures)
-                }
-                collectedFailures.append(contentsOf: result.failures.map { (name: $0.service, error: $0.error) })
-            }
-            await progress?.onWaveComplete?(index + 1)
-            await onWaveComplete(layer)
-        }
-
-        return collectedFailures
-    }
-
     private static func runParallelItem<T: Sendable>(
         _ item: ParallelRunItem<T>,
         work: @escaping @Sendable (T) async throws -> Void

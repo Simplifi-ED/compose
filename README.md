@@ -398,7 +398,20 @@ Variables are substituted in compose files before parsing. Each `-f` file loads 
 | `${VAR-default}` | Uses `default` only if unset |
 | `$$` | Literal `$` |
 
-Process environment (not compose `${}` substitution): `COMPOSE_FILE`, `COMPOSE_PROJECT_NAME`, and `COMPOSE_PROFILES` (comma-separated; merged with `--profile`).
+Process environment (not compose `${}` substitution): `COMPOSE_FILE`, `COMPOSE_PROJECT_NAME`, `COMPOSE_PROFILES` (comma-separated; merged with `--profile`), and `COMPOSE_OSLOG` (set to `0` to disable Unified Logging telemetry).
+
+### Unified Logging
+
+Orchestration events (container start/stop, startup waves, rollbacks, builds, volumes, networks, signals) are emitted to macOS Unified Logging under subsystem `com.simplifi-ed.container-compose`. Filter in Console.app or from the terminal:
+
+```bash
+log stream --predicate 'subsystem == "com.simplifi-ed.container-compose" AND category == "orchestration"'
+log show --last 5m --info --predicate 'subsystem == "com.simplifi-ed.container-compose" AND eventMessage CONTAINS "rollback"'
+```
+
+Categories: `orchestration`, `lifecycle`, `signals`, `volumes`, `networks`, `build`.
+
+Disable telemetry with `COMPOSE_OSLOG=0` or `--no-oslog` on `up`, `down`, `run`, and other commands that support the flag. `compose up --dry-run` does not emit lifecycle execution events. Secrets, environment values, and build args are never written to the unified log.
 
 ---
 

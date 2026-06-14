@@ -16,6 +16,9 @@ public struct Exec: AsyncParsableCommand {
     var dryRunOptions: DryRunOptions
 
     @OptionGroup
+    var osLogOptions: OsLogOptions
+
+    @OptionGroup
     var machineOptions: MachineOptions
 
     @Flag(name: .short, help: "Keep STDIN open even if not attached.")
@@ -44,6 +47,10 @@ public struct Exec: AsyncParsableCommand {
     }
 
     public func run() async throws {
+        OsLogConfiguration.apply(
+            cliNoOslog: osLogOptions.isDisabled,
+            dryRun: dryRunOptions.isEnabled
+        )
         let machineContext = try await machineOptions
             .resolveContext(stopped: .requireRunning)
             .machineContext
@@ -68,6 +75,18 @@ public struct Exec: AsyncParsableCommand {
             return
         }
 
+        try await runExecSession(
+            target: target,
+            context: context,
+            machineContext: machineContext
+        )
+    }
+
+    private func runExecSession(
+        target: ProjectContainer,
+        context: ProjectOptions.LabelCommandContext,
+        machineContext: MachineContext
+    ) async throws {
         let ioFlags = ExecSession.IOFlags.resolve(
             explicitInteractive: interactive,
             explicitTTY: tty,

@@ -86,21 +86,68 @@ package enum BuildRunner {
                 continue
             }
             do {
-                if machineContext.isMachineMode {
-                    let booted = try machineContext.bootedContext()
-                    let arguments = try buildArguments(for: plan, progress: progress)
-                    try await MachineInVMRunner.run(
-                        snapshot: booted.snapshot,
-                        containerArguments: ["build"] + arguments
-                    )
-                } else {
-                    let arguments = try buildArguments(for: plan, progress: progress)
-                    let command = try Application.BuildCommand.parse(arguments)
-                    try await command.run()
-                }
+                try await executeBuild(
+                    plan: plan,
+                    progress: progress,
+                    machineContext: machineContext
+                )
             } catch {
+                OsLogTelemetry.enabled {
+                    OsLogTelemetry.build.error(
+                        """
+                        event=build_failed service=\(plan.serviceName, privacy: .public) \
+                        error_type=\(String(describing: type(of: error)), privacy: .public)
+                        """
+                    )
+                }
                 throw ComposeError.buildFailed(service: plan.serviceName, underlying: error)
             }
+        }
+    }
+
+    private static func executeBuild(
+        plan: Plan,
+        progress: ProgressSetting?,
+        machineContext: MachineContext
+    ) async throws {
+        let machine = machineContext.machineName ?? "host"
+        OsLogTelemetry.enabled {
+            if let dockerfile = plan.dockerfile {
+                OsLogTelemetry.build.info(
+                    """
+                    event=build_start service=\(plan.serviceName, privacy: .public) \
+                    dockerfile=\(dockerfile, privacy: .private) \
+                    machine=\(machine, privacy: .public)
+                    """
+                )
+            } else {
+                OsLogTelemetry.build.info(
+                    """
+                    event=build_start service=\(plan.serviceName, privacy: .public) \
+                    machine=\(machine, privacy: .public)
+                    """
+                )
+            }
+        }
+        if machineContext.isMachineMode {
+            let booted = try machineContext.bootedContext()
+            let arguments = try buildArguments(for: plan, progress: progress)
+            try await MachineInVMRunner.run(
+                snapshot: booted.snapshot,
+                containerArguments: ["build"] + arguments
+            )
+        } else {
+            let arguments = try buildArguments(for: plan, progress: progress)
+            let command = try Application.BuildCommand.parse(arguments)
+            try await command.run()
+        }
+        OsLogTelemetry.enabled {
+            OsLogTelemetry.build.info(
+                """
+                event=build_success service=\(plan.serviceName, privacy: .public) \
+                machine=\(machine, privacy: .public)
+                """
+            )
         }
     }
 }

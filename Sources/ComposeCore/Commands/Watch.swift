@@ -19,10 +19,14 @@ public struct Watch: AsyncParsableCommand {
     @OptionGroup
     var machineOptions: MachineOptions
 
+    @OptionGroup
+    var osLogOptions: OsLogOptions
+
     @Argument(help: "Limit watching to these service names.")
     var services: [String] = []
 
     public func run() async throws {
+        OsLogConfiguration.apply(cliNoOslog: osLogOptions.isDisabled)
         try machineOptions.rejectIfUnsupported(commandName: "watch")
         let fileURLs = try projectOptions.resolvedFileURLs()
         let composeFile = try ComposeParser.parse(fileURLs: fileURLs)

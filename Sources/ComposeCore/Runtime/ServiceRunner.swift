@@ -84,6 +84,7 @@ public enum ServiceRunner {
         _ plan: ServicePlan,
         machineContext: MachineContext = .applicationSandbox
     ) async throws {
+        let machine = machineContext.machineName ?? "host"
         if machineContext.isMachineMode {
             try await ComposeContainerGateway.runDetached(plan: plan, machineContext: machineContext)
             return
@@ -98,64 +99,30 @@ public enum ServiceRunner {
                     projectName: plan.projectName,
                     containerName: plan.name
                 )
+                OsLogTelemetry.enabled {
+                    OsLogTelemetry.lifecycle.error(
+                        """
+                        event=container_start_failed project=\(plan.projectName, privacy: .public) \
+                        service=\(plan.serviceName, privacy: .public) \
+                        container=\(plan.name, privacy: .public) \
+                        error_type=\(String(describing: type(of: error)), privacy: .public)
+                        """
+                    )
+                }
                 throw error
             }
             try await command.run()
-        }
-    }
-
-    package static func orchestrateUp(
-        layers: [[ServicePlan]],
-        progress: WaveProgressHandlers?,
-        healthContext: HealthWaitContext?,
-        execution: WaveExecutionPolicy = .unlimited,
-        hooks: UpOperationHooks,
-        beforeWave: (@Sendable (Int) async -> Void)? = nil
-    ) async throws {
-        var startedWaves: [[String]] = []
-        do {
-            for (index, layer) in layers.enumerated() {
-                try Task.checkCancellation()
-                await beforeWave?(index)
-                // Progress keys on container names so replicas of one service stay distinct.
-                await progress?.onWaveStart?(index + 1, layers.count, layer.map(\.name))
-                let result = await parallelRun(
-                    layer.map { ParallelRunItem(label: $0.name, collectOnSuccess: $0.name, value: $0) },
-                    maxConcurrent: execution.maxConcurrent,
-                    onCompletion: progress?.onServiceComplete
-                ) { plan in
-                    try await hooks.runContainer(plan)
-                }
-                if result.wasInterrupted {
-                    handleInterruptedWave(result: result, startedWaves: &startedWaves, layers: layers)
-                    throw CancellationError()
-                }
-                if !result.succeeded.isEmpty {
-                    startedWaves.append(result.succeeded)
-                }
-                if !result.failures.isEmpty {
-                    throw ComposeError.multipleServiceFailures(result.failures)
-                }
-                await progress?.onWaveComplete?(index + 1)
-
-                if let healthContext, index + 1 < layers.count {
-                    let gates = try HealthWait.gatesForNextLayer(
-                        nextLayer: layers[index + 1],
-                        context: healthContext
-                    )
-                    try await hooks.waitForDependencies(gates, healthContext)
-                }
+            OsLogTelemetry.enabled {
+                OsLogTelemetry.lifecycle.info(
+                    """
+                    event=container_start project=\(plan.projectName, privacy: .public) \
+                    service=\(plan.serviceName, privacy: .public) \
+                    container=\(plan.name, privacy: .public) \
+                    replica=\(plan.replicaIndex, privacy: .public) \
+                    machine=\(machine, privacy: .public)
+                    """
+                )
             }
-        } catch is CancellationError {
-            throw CancellationError()
-        } catch {
-            try await handleUpOrchestrationFailure(
-                error: error,
-                startedWaves: startedWaves,
-                layers: layers,
-                execution: execution,
-                rollbackTeardown: hooks.rollbackTeardown
-            )
         }
     }
 
@@ -187,6 +154,7 @@ public enum ServiceRunner {
     ) async throws {
         try await orchestrateDown(
             layers: layers,
+            projectName: projectName ?? "",
             onRemoved: onRemoved,
             progress: progress,
             execution: execution,
@@ -207,6 +175,7 @@ public enum ServiceRunner {
 
     package static func orchestrateDown(
         layers: [[DiscoveredContainer]],
+        projectName: String = "",
         onRemoved: (@Sendable (String) -> Void)?,
         progress: WaveProgressHandlers?,
         execution: WaveExecutionPolicy = .unlimited,
@@ -215,6 +184,7 @@ public enum ServiceRunner {
     ) async throws {
         _ = try await runContainerWaves(
             layers: layers,
+            projectName: projectName,
             progress: progress,
             failFast: true,
             execution: execution,

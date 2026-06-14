@@ -33,6 +33,9 @@ public struct Up: AsyncParsableCommand {
     var dryRunOptions: DryRunOptions
 
     @OptionGroup
+    var osLogOptions: OsLogOptions
+
+    @OptionGroup
     var machineOptions: MachineOptions
 
     @Flag(
@@ -42,6 +45,10 @@ public struct Up: AsyncParsableCommand {
     var attach = false
 
     public func run() async throws {
+        OsLogConfiguration.apply(
+            cliNoOslog: osLogOptions.isDisabled,
+            dryRun: dryRunOptions.isEnabled
+        )
         try parallelOptions.validate()
         let machineContext = try await machineOptions.resolveContext().machineContext
         let startup = try resolveStartupPlan(machineName: machineOptions.resolvedMachineName)

@@ -21,9 +21,16 @@ public struct Unpause: AsyncParsableCommand {
     var dryRunOptions: DryRunOptions
 
     @OptionGroup
+    var osLogOptions: OsLogOptions
+
+    @OptionGroup
     var machineOptions: MachineOptions
 
     public func run() async throws {
+        OsLogConfiguration.apply(
+            cliNoOslog: osLogOptions.isDisabled,
+            dryRun: dryRunOptions.isEnabled
+        )
         try parallelOptions.validate()
         var machineContext = try await machineOptions.resolveContext().machineContext
         if machineContext.isMachineMode, !dryRunOptions.isEnabled, !machineContext.isMachineRunning {

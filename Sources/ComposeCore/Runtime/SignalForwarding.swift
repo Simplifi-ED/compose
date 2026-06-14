@@ -40,6 +40,11 @@ package enum SignalForwarding {
         case interrupted(InterruptSignal)
     }
 
+    private enum GroupResult: Sendable {
+        case bodyFinished
+        case signalled(InterruptSignal)
+    }
+
     package static func runUntilCancelled(
         policy: InterruptPolicy,
         terminalCleanup: @Sendable () async -> Void = {},
@@ -54,12 +59,32 @@ package enum SignalForwarding {
         let signalHandler = AsyncSignalHandler.create(notify: [SIGINT, SIGTERM])
         defer { signalHandler.cancel() }
 
-        enum GroupResult: Sendable {
-            case bodyFinished
-            case signalled(InterruptSignal)
-        }
+        let race: GroupResult = try await raceSignalsAndBody(
+            signalHandler: signalHandler,
+            policy: policy,
+            body: body
+        )
 
-        let race: GroupResult = try await withThrowingTaskGroup(of: GroupResult.self) { group in
+        switch race {
+        case .bodyFinished:
+            return .completed
+        case .signalled(let signal):
+            return try await interruptedOutcome(
+                policy: policy,
+                signal: signal,
+                terminalCleanup: terminalCleanup,
+                stopProject: stopProject,
+                stopRunContainer: stopRunContainer
+            )
+        }
+    }
+
+    private static func raceSignalsAndBody(
+        signalHandler: AsyncSignalHandler,
+        policy: InterruptPolicy,
+        body: @Sendable @escaping () async throws -> Void
+    ) async throws -> GroupResult {
+        return try await withThrowingTaskGroup(of: GroupResult.self) { group in
             group.addTask {
                 for await signal in signalHandler.signals {
                     return .signalled(InterruptSignal(number: signal))
@@ -88,21 +113,16 @@ package enum SignalForwarding {
                         throw error
                     }
                 }
+                OsLogTelemetry.enabled {
+                    OsLogTelemetry.signals.info(
+                        """
+                        event=signal_intercepted signal=\(signal.number, privacy: .public) \
+                        policy=\(policyLabel(policy), privacy: .public)
+                        """
+                    )
+                }
                 return .signalled(signal)
             }
-        }
-
-        switch race {
-        case .bodyFinished:
-            return .completed
-        case .signalled(let signal):
-            return try await interruptedOutcome(
-                policy: policy,
-                signal: signal,
-                terminalCleanup: terminalCleanup,
-                stopProject: stopProject,
-                stopRunContainer: stopRunContainer
-            )
         }
     }
 
@@ -125,31 +145,26 @@ package enum SignalForwarding {
         case .orchestration:
             return .interrupted(signal)
         case .stopProject(let context):
-            do {
-                try await stopProject(context)
-            } catch {
-                fputs(
-                    """
-                    Warning: couldn't stop all project containers after interrupt: \
-                    \(error.localizedDescription).\n
-                    """,
-                    stderr
-                )
-            }
-            return .interrupted(signal)
+            return await stopProjectAfterInterrupt(
+                context: context,
+                signal: signal,
+                stopProject: stopProject
+            )
         case .stopRunContainer(let context):
-            do {
-                try await stopRunContainer(context)
-            } catch {
-                fputs(
-                    """
-                    Warning: couldn't stop run container after interrupt: \
-                    \(error.localizedDescription).\n
-                    """,
-                    stderr
-                )
-            }
-            return .interrupted(signal)
+            return await stopRunContainerAfterInterrupt(
+                context: context,
+                signal: signal,
+                stopRunContainer: stopRunContainer
+            )
+        }
+    }
+
+    package static func policyLabel(_ policy: InterruptPolicy) -> String {
+        switch policy {
+        case .cancelOnly: "cancelOnly"
+        case .orchestration: "orchestration"
+        case .stopProject: "stopProject"
+        case .stopRunContainer: "stopRunContainer"
         }
     }
 }
