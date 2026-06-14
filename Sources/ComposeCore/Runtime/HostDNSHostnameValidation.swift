@@ -35,6 +35,18 @@ package enum HostDNSHostnameValidation {
         if trimmed.hasPrefix(".") || trimmed.hasSuffix(".") {
             return "hostname must not start or end with '.'"
         }
+        if trimmed.count > 253 {
+            return "hostname must not exceed 253 characters"
+        }
+        let labels = trimmed.split(separator: ".", omittingEmptySubsequences: false)
+        for label in labels {
+            if label.hasPrefix("-") || label.hasSuffix("-") {
+                return "hostname labels must not start or end with '-'"
+            }
+            if label.count > 63 {
+                return "hostname labels must not exceed 63 characters"
+            }
+        }
         let allowed = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.-")
         if trimmed.unicodeScalars.contains(where: { !allowed.contains($0) }) {
             return "hostname contains invalid characters"

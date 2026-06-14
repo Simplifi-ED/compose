@@ -117,8 +117,8 @@ extension HostsFileEditor {
         process.standardOutput = FileHandle.nullDevice
         process.standardError = pipe
         try process.run()
-        process.waitUntilExit()
         let stderrData = pipe.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
         return ProcessResult(
             exitCode: process.terminationStatus,
             stderr: String(data: stderrData, encoding: .utf8) ?? ""

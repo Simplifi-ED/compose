@@ -56,6 +56,10 @@ extension TestRunner {
             activeServiceNames: ["web"]
         )
         expect(publicWarnings.count == 1, "public suffix warning")
+        expect(
+            HostDNSPlanning.invalidHostnameReason("-bad.local") != nil,
+            "reject label starting with hyphen"
+        )
         try runHostDNSPlanningStrictTests()
     }
 
