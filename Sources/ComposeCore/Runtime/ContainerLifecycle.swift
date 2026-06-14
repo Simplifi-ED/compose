@@ -1,6 +1,13 @@
 import ContainerResource
 import Foundation
 
+private extension RuntimeStatus {
+    /// Returns `.paused` when upstream container adds the case; nil until then.
+    static var pausedIfAvailable: RuntimeStatus? {
+        nil
+    }
+}
+
 /// Profile and project context for pause/unpause scoping.
 package struct ProjectPauseScope: Sendable {
     package let context: ProjectOptions.LabelCommandContext
@@ -33,8 +40,12 @@ public enum ContainerLifecycle {
     }
 
     package static func targetsForUnpause(from containers: [ProjectContainer]) -> [ProjectContainer] {
-        // RuntimeStatus.paused arrives with upstream container pause support (PR-2).
-        pausedContainers(from: containers)
+        // Native `.paused` status arrives with upstream cgroup-freeze pause (PR-2). Until then,
+        // SIGSTOP-paused workloads still report `.running`; SIGCONT on running targets is harmless.
+        if let pausedStatus = RuntimeStatus.pausedIfAvailable {
+            return containers.filter { $0.status == pausedStatus }
+        }
+        return containers.filter { $0.status == .running }
     }
 
     package static func filteredTargetNames(
@@ -104,17 +115,5 @@ public enum ContainerLifecycle {
             throw ComposeError.multipleServiceFailures(result.failures)
         }
         return result.succeeded.sorted()
-    }
-
-    private static func pausedContainers(from containers: [ProjectContainer]) -> [ProjectContainer] {
-        guard let pausedStatus = RuntimeStatus.pausedIfAvailable else { return [] }
-        return containers.filter { $0.status == pausedStatus }
-    }
-}
-
-private extension RuntimeStatus {
-    /// Returns `.paused` when upstream container adds the case; nil until then.
-    static var pausedIfAvailable: RuntimeStatus? {
-        nil
     }
 }

@@ -8,7 +8,7 @@ extension TestRunner {
         runPauseSummaryTests()
         runPauseDryRunTests()
         runPauseParallelTests()
-        runPauseGatewayStubTests()
+        runPauseSignalRoutingTests()
         try runPauseProfileFilterTests()
     }
 
@@ -29,7 +29,7 @@ extension TestRunner {
         expect(pauseTargets.map(\.name) == ["demo_web_1"], "pause selects running containers only")
 
         let unpauseTargets = ContainerLifecycle.targetsForUnpause(from: [running, stopped])
-        expect(unpauseTargets.isEmpty, "unpause selects paused containers only (none until upstream)")
+        expect(unpauseTargets.map(\.name) == ["demo_web_1"], "unpause selects running until .paused exists")
     }
 
     private mutating func runPauseSummaryTests() {
@@ -100,36 +100,15 @@ extension TestRunner {
         expect(peak == 1, "pause batch can throttle via WaveExecutionPolicy")
     }
 
-    private mutating func runPauseGatewayStubTests() {
-        let pauseFailed = blockingAwait {
-            do {
-                try await ComposeContainerGateway.pause(id: "demo_web_1", machineContext: .applicationSandbox)
-                return false
-            } catch let error as ComposeError {
-                if case .pauseUnsupported(let operation) = error {
-                    return operation == "pause"
-                }
-                return false
-            } catch {
-                return false
-            }
-        }
-        expect(pauseFailed, "gateway pause stub throws pauseUnsupported")
-
-        let unpauseFailed = blockingAwait {
-            do {
-                try await ComposeContainerGateway.unpause(id: "demo_web_1", machineContext: .applicationSandbox)
-                return false
-            } catch let error as ComposeError {
-                if case .pauseUnsupported(let operation) = error {
-                    return operation == "unpause"
-                }
-                return false
-            } catch {
-                return false
-            }
-        }
-        expect(unpauseFailed, "gateway unpause stub throws pauseUnsupported")
+    private mutating func runPauseSignalRoutingTests() {
+        expect(
+            ComposeContainerGateway.pauseSignal == "SIGSTOP",
+            "pause routes through kill with SIGSTOP"
+        )
+        expect(
+            ComposeContainerGateway.unpauseSignal == "SIGCONT",
+            "unpause routes through kill with SIGCONT"
+        )
     }
 
     private mutating func runPauseProfileFilterTests() throws {
