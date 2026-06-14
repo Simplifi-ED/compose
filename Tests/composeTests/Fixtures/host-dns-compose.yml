@@ -1,0 +1,9 @@
+services:
+  web:
+    image: nginx:1.27.3
+    ports:
+      - "8080:80"
+    x-compose:
+      hosts:
+        - web.demo.local
+        - api.demo.local

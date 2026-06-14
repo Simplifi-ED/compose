@@ -182,6 +182,10 @@ package enum DownShutdown {
             projectName: input.context.projectName,
             machineContext: input.machineContext
         )
+        await HostDNSMapping.removeProjectMappings(
+            projectName: input.context.projectName,
+            firstComposeFileURL: input.context.fileURLs?.first
+        )
         ComposeFileStaging.removeProjectStaging(projectName: input.context.projectName)
     }
 

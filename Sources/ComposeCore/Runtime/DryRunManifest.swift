@@ -79,6 +79,31 @@ public actor DryRunManifest {
         }
     }
 
+    public func recordHostDNSInstall(projectName: String, projectID: String, hostnames: [String]) {
+        append(
+            group: 0,
+            sortKey: "host-dns:\(projectID)",
+            line: DryRunManifestFormatting.formatHostDNSInstall(
+                projectName: projectName,
+                projectID: projectID,
+                hostnames: hostnames
+            )
+        )
+    }
+
+    public func recordHostDNSRemove(projectName: String, projectID: String) {
+        groupOrder += 1
+        currentGroup = groupOrder
+        append(
+            group: currentGroup,
+            sortKey: "host-dns:\(projectID)",
+            line: DryRunManifestFormatting.formatHostDNSRemove(
+                projectName: projectName,
+                projectID: projectID
+            )
+        )
+    }
+
     public func recordCreate(_ plan: ServicePlan) {
         append(
             group: currentGroup,

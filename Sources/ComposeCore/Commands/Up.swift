@@ -38,6 +38,9 @@ public struct Up: AsyncParsableCommand {
     @OptionGroup
     var machineOptions: MachineOptions
 
+    @OptionGroup
+    var hostDNSOptions: HostDNSOptions
+
     @Flag(
         name: .long,
         help: "After startup, follow service logs in the foreground until services exit or you interrupt."
@@ -50,6 +53,7 @@ public struct Up: AsyncParsableCommand {
             dryRun: dryRunOptions.isEnabled
         )
         try parallelOptions.validate()
+        try hostDNSOptions.validateMachineCompatibility(machineName: machineOptions.resolvedMachineName)
         let machineContext = try await machineOptions.resolveContext().machineContext
         let startup = try resolveStartupPlan(machineName: machineOptions.resolvedMachineName)
 
@@ -63,7 +67,9 @@ public struct Up: AsyncParsableCommand {
                     buildPlans: startup.buildPlans,
                     networkPlans: startup.networkPlans,
                     volumePlans: startup.volumePlans,
-                    machineContext: machineContext
+                    fileURLs: startup.fileURLs,
+                    machineContext: machineContext,
+                    installHostDNS: hostDNSOptions.isEnabled
                 )
             )
             return
@@ -81,7 +87,8 @@ public struct Up: AsyncParsableCommand {
                 layers: startup.layers,
                 plans: startup.plans,
                 healthContext: startup.healthContext,
-                machineContext: bootedContext
+                machineContext: bootedContext,
+                installHostDNS: hostDNSOptions.isEnabled
             )
         )
     }

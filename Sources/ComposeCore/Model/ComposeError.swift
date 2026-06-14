@@ -79,4 +79,12 @@ public enum ComposeError: LocalizedError, Sendable {
     case archiveUnsupportedVersion(found: Int, supported: Int)
     case archiveWriteFailed(path: String, underlying: Error)
     case archiveReadFailed(path: String, underlying: Error)
+    case invalidHostDNSHostname(hostname: String, reason: String)
+    case hostDNSNoPublishedPort(service: String, hostname: String)
+    case duplicateHostDNSHostname(hostname: String, services: [String])
+    case hostDNSExternalConflict(hostname: String, address: String, line: Int)
+    case hostDNSRequiresElevation(manualCommand: String)
+    case hostDNSElevationCancelled(operation: String)
+    case hostDNSUnsupportedWithMachine
+    case hostDNSUnsupportedPlatform
 }

@@ -12,6 +12,7 @@ extension Up {
         let plans: [ServicePlan]
         let healthContext: HealthWaitContext
         let machineContext: MachineContext
+        let installHostDNS: Bool
     }
 
     func runLive(_ input: LiveInput) async throws {
@@ -30,13 +31,19 @@ extension Up {
             projectName: input.projectName,
             machineContext: input.machineContext
         )
-        try await orchestrateStartup(
-            projectName: input.projectName,
-            composeFile: input.composeFile,
-            layers: input.layers,
-            healthContext: input.healthContext,
-            machineContext: input.machineContext
-        )
+        try await installHostDNSIfRequested(input)
+        do {
+            try await orchestrateStartup(
+                projectName: input.projectName,
+                composeFile: input.composeFile,
+                layers: input.layers,
+                healthContext: input.healthContext,
+                machineContext: input.machineContext
+            )
+        } catch {
+            await rollbackHostDNSIfNeeded(input, unless: error)
+            throw error
+        }
         try await finishStartup(
             plans: input.plans,
             projectName: input.projectName,
