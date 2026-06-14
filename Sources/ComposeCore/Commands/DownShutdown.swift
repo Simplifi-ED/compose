@@ -152,6 +152,7 @@ package enum DownShutdown {
         package let discovered: [DiscoveredContainer]
         package let teardownContainers: [DiscoveredContainer]
         package let shouldPurgeVolumes: Bool
+        package let shouldTrim: Bool
         package let bindPurgeContext: VolumePurgeContext?
         package let machineContext: MachineContext
     }
@@ -170,7 +171,8 @@ package enum DownShutdown {
                     teardownContainers: input.teardownContainers
                 ),
                 projectName: input.context.projectName,
-                machineContext: input.machineContext
+                machineContext: input.machineContext,
+                trimBeforeDelete: input.shouldTrim
             )
         }
         await NetworkRunner.removeProjectNetworks(
@@ -187,6 +189,7 @@ package enum DownShutdown {
             firstComposeFileURL: input.context.fileURLs?.first
         )
         ComposeFileStaging.removeProjectStaging(projectName: input.context.projectName)
+        await finishProjectTrim(input)
     }
 
     package static func resolveShutdownLayers(
@@ -201,29 +204,6 @@ package enum DownShutdown {
             )
         }
         return [containers]
-    }
-
-    static func tearDownContainers(
-        context: ProjectOptions.LabelCommandContext,
-        containers: [DiscoveredContainer],
-        useOrderedShutdown: Bool,
-        progress: WaveProgressHandlers?,
-        execution: WaveExecutionPolicy = .unlimited,
-        machineContext: MachineContext = .applicationSandbox
-    ) async throws {
-        let layers = try resolveShutdownLayers(
-            context: context,
-            containers: containers,
-            useOrderedShutdown: useOrderedShutdown
-        )
-        try await ServiceRunner.down(
-            layers: layers,
-            projectName: context.projectName,
-            onRemoved: { print($0) },
-            progress: progress,
-            execution: execution,
-            machineContext: machineContext
-        )
     }
 
     static func warnUnmappedContainers(

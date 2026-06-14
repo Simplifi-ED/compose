@@ -81,7 +81,8 @@ extension VolumeRunner {
     static func removeInMachine(
         _ plans: [VolumePlanning.Plan],
         projectName: String,
-        machineContext: MachineContext
+        machineContext: MachineContext,
+        trimBeforeDelete: Bool = false
     ) async {
         let booted: BootedMachineContext
         do {
@@ -90,6 +91,7 @@ extension VolumeRunner {
             warnRemoveFailed(names: plans.map(\.runtimeName), error: error)
             return
         }
+        var trimWarnings: [String] = []
         for plan in plans {
             let configuration: VolumeConfiguration?
             do {
@@ -103,6 +105,14 @@ extension VolumeRunner {
             }
             guard let configuration, isProjectVolume(configuration, projectName: projectName) else {
                 continue
+            }
+            if trimBeforeDelete,
+               let warning = await DiskTrim.trimNamedVolumeBeforeDelete(
+                   runtimeName: plan.runtimeName,
+                   projectName: projectName,
+                   machineContext: machineContext
+               ) {
+                trimWarnings.append(warning)
             }
             do {
                 try await MachineInVMRunner.run(
@@ -119,6 +129,7 @@ extension VolumeRunner {
                 warnRemoveFailed(names: [plan.runtimeName], error: error)
             }
         }
+        DiskTrim.emitWarnings(trimWarnings)
     }
 
     static func machineVolumeConfiguration(

@@ -60,11 +60,17 @@ package enum VolumeRunner {
     package static func removeProjectVolumes(
         _ plans: [VolumePlanning.Plan],
         projectName: String,
-        machineContext: MachineContext = .applicationSandbox
+        machineContext: MachineContext = .applicationSandbox,
+        trimBeforeDelete: Bool = false
     ) async {
         guard !plans.isEmpty else { return }
         if machineContext.isMachineMode {
-            await removeInMachine(plans, projectName: projectName, machineContext: machineContext)
+            await removeInMachine(
+                plans,
+                projectName: projectName,
+                machineContext: machineContext,
+                trimBeforeDelete: trimBeforeDelete
+            )
             return
         }
         let removable: Set<String>
@@ -79,8 +85,41 @@ package enum VolumeRunner {
             return
         }
         let targets = plans.filter { removable.contains($0.runtimeName) }
+        await trimNamedVolumesBeforeDelete(
+            targets,
+            projectName: projectName,
+            machineContext: machineContext,
+            trimBeforeDelete: trimBeforeDelete
+        )
+        await deleteNamedVolumes(targets, projectName: projectName)
+    }
+
+    private static func trimNamedVolumesBeforeDelete(
+        _ plans: [VolumePlanning.Plan],
+        projectName: String,
+        machineContext: MachineContext,
+        trimBeforeDelete: Bool
+    ) async {
+        guard trimBeforeDelete else { return }
+        var warnings: [String] = []
+        for plan in plans {
+            if let warning = await DiskTrim.trimNamedVolumeBeforeDelete(
+                runtimeName: plan.runtimeName,
+                projectName: projectName,
+                machineContext: machineContext
+            ) {
+                warnings.append(warning)
+            }
+        }
+        DiskTrim.emitWarnings(warnings)
+    }
+
+    private static func deleteNamedVolumes(
+        _ plans: [VolumePlanning.Plan],
+        projectName: String
+    ) async {
         await withTaskGroup(of: (name: String, error: Error?).self) { group in
-            for plan in targets {
+            for plan in plans {
                 group.addTask {
                     do {
                         try await ClientVolume.delete(name: plan.runtimeName)
