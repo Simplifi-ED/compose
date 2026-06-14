@@ -101,7 +101,8 @@ container compose down -f fixtures/minimal-compose.yml -p demo
 | `exec SERVICE CMD` | Run a command inside a running service container. |
 | `cp SRC DEST` | Copy files between the host and a running service container. |
 | `run SERVICE [CMD]` | Start a one-off container from a service definition. |
-| `top` | Live CPU/memory stats for all project containers. |
+| `top` | Live CPU/memory/network/block I/O stats (Docker `compose stats` equivalent). |
+| `stats` | Alias for `top`. |
 | `watch` | Sync local file changes into running containers. |
 | `config` | Print the resolved compose config without starting anything. |
 | `doctor` | Run pre-flight checks for container and compose plugin readiness. |
@@ -114,7 +115,30 @@ Supported on `up`, `down`, `ps`, `logs`, `events`, `exec`, and `cp`:
 container compose up --machine dev -f compose.yaml
 ```
 
-`watch`, `run`, `top`, `config`, `save`, and `load` reject `--machine`.
+`watch`, `run`, `top`, `stats`, `config`, `save`, and `load` reject `--machine`.
+
+### Top / Stats (`compose top`, `compose stats`)
+
+`stats` is an alias for `top` — same flags, output, and behavior. Streams live resource usage for project containers (Docker Compose `stats` equivalent).
+
+Default refresh interval is **2 seconds** (`--interval`, minimum 1). Interactive TTY mode redraws the table in place; plain mode prints a new table each tick; **piped** output (stdout not a TTY) prints a **single snapshot** (two internal samples spaced by `--interval` for CPU %).
+
+```bash
+container compose stats -p demo
+container compose top -p demo --interval 3 web db
+```
+
+| Column | Meaning |
+|--------|---------|
+| NAME | Container name (`{project}_{service}_{index}`) |
+| SERVICE | Compose service name |
+| CPU % | CPU usage since the previous sample |
+| MEM USAGE / LIMIT | Memory used / cgroup limit |
+| NET RX/TX | Network bytes received / transmitted |
+| BLOCK I/O | Block device bytes read / written |
+| PIDS | Process count in the container |
+
+Stopped containers show `--` for resource columns. Ctrl+C ends the stream without stopping containers.
 
 ### Events (`compose events`)
 
@@ -381,7 +405,7 @@ COMPOSE_PROFILES=debug container compose up --profile metrics   # debug + metric
 
 `--profile` flags add to any profiles set in `COMPOSE_PROFILES` (comma-separated process environment). `COMPOSE_PROFILES` in a `.env` file beside the compose file is not supported yet.
 
-If `COMPOSE_PROFILES` is exported in your shell, `ps`, `logs`, `top`, `config`, `watch`, and `down` need a compose file to apply profile filtering—even with `-p` only. Use `COMPOSE_PROFILES=*` (or `down --profile "*"`) to stop every project container without a compose file.
+If `COMPOSE_PROFILES` is exported in your shell, `ps`, `logs`, `top`, `stats`, `config`, `watch`, and `down` need a compose file to apply profile filtering—even with `-p` only. Use `COMPOSE_PROFILES=*` (or `down --profile "*"`) to stop every project container without a compose file.
 
 `compose run debugger sh` auto-enables the service's profiles.
 

@@ -5,6 +5,7 @@ package enum StatsStreamSession {
         projectName: String,
         serviceFilter: Set<String>?,
         mode: TerminalMode,
+        sampleInterval: Duration = ProjectStats.defaultSampleInterval,
         policy: InterruptPolicy = .cancelOnly,
         onQuietCancel: (@Sendable () -> Void)? = nil
     ) async throws -> SignalForwarding.ExitOutcome {
@@ -23,14 +24,16 @@ package enum StatsStreamSession {
                         projectName: projectName,
                         serviceFilter: serviceFilter,
                         renderer: renderer,
-                        mode: mode
+                        mode: mode,
+                        sampleInterval: sampleInterval
                     )
                 case .interactive, .plain:
                     try await renderStream(
                         projectName: projectName,
                         serviceFilter: serviceFilter,
                         renderer: renderer,
-                        mode: mode
+                        mode: mode,
+                        sampleInterval: sampleInterval
                     )
                 }
             }
@@ -61,11 +64,15 @@ package enum StatsStreamSession {
         projectName: String,
         serviceFilter: Set<String>?,
         renderer: StatsTableRenderer,
-        mode: TerminalMode
+        mode: TerminalMode,
+        sampleInterval: Duration
     ) async throws {
         let containers = try await loadContainers(projectName: projectName, serviceFilter: serviceFilter)
         var warnedFailures: Set<String> = []
-        let snapshot = try await StatsCollector.collectSnapshot(for: containers)
+        let snapshot = try await StatsCollector.collectSnapshot(
+            for: containers,
+            sampleInterval: sampleInterval
+        )
         warnStatsFailures(snapshot.failures, warned: &warnedFailures)
         let rows = ProjectStats.rows(
             from: containers,
@@ -82,7 +89,8 @@ package enum StatsStreamSession {
         projectName: String,
         serviceFilter: Set<String>?,
         renderer: StatsTableRenderer,
-        mode: TerminalMode
+        mode: TerminalMode,
+        sampleInterval: Duration
     ) async throws {
         var previousSamples: [String: StatsSample] = [:]
         var warnedFailures: Set<String> = []
@@ -103,7 +111,7 @@ package enum StatsStreamSession {
             }
 
             previousSamples = result.samples
-            try await Task.sleep(for: ProjectStats.sampleInterval)
+            try await Task.sleep(for: sampleInterval)
         }
     }
 }

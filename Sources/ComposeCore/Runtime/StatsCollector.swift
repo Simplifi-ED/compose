@@ -81,11 +81,12 @@ package enum StatsCollector {
     /// Waits one sample interval, then collects a second sample for pipe-mode snapshots.
     package static func collectSnapshot(
         for containers: [ProjectContainer],
+        sampleInterval: Duration = ProjectStats.defaultSampleInterval,
         client: ContainerClient = ContainerClient()
     ) async throws -> StatsSnapshotResult {
         let first = await collect(for: containers, client: client)
         if !first.samples.isEmpty {
-            try await Task.sleep(for: ProjectStats.sampleInterval)
+            try await Task.sleep(for: sampleInterval)
         }
         let second = await collect(for: containers, client: client)
         let failures = first.failedContainerNames + second.failedContainerNames
