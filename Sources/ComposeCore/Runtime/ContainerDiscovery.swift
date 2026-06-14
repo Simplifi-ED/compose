@@ -45,11 +45,13 @@ public enum ContainerDiscovery {
 
     public static func projectContainers(
         forProject projectName: String,
-        machineContext: MachineContext = .applicationSandbox
+        machineContext: MachineContext = .applicationSandbox,
+        hostClient: ContainerClient? = nil
     ) async throws -> [ProjectContainer] {
         var snapshots = try await ComposeContainerGateway.list(
             filters: listFilters(forProject: projectName, machineContext: machineContext),
-            machineContext: machineContext
+            machineContext: machineContext,
+            hostClient: hostClient
         )
         if !machineContext.isMachineMode {
             snapshots = snapshots.filter { $0.configuration.labels[ComposeLabels.machine] == nil }

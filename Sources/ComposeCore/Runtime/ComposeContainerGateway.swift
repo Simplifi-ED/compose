@@ -17,7 +17,8 @@ package enum ComposeContainerGateway {
 
     package static func list(
         filters: ContainerListFilters,
-        machineContext: MachineContext = .applicationSandbox
+        machineContext: MachineContext = .applicationSandbox,
+        hostClient: ContainerClient? = nil
     ) async throws -> [ContainerSnapshot] {
         if machineContext.isMachineMode {
             guard machineContext.isMachineRunning else { return [] }
@@ -31,6 +32,9 @@ package enum ComposeContainerGateway {
                     startedDate: item.status.startedDate
                 )
             }.filter { snapshotMatchesFilters($0, filters: filters) }
+        }
+        if let hostClient {
+            return try await hostClient.list(filters: filters)
         }
         return try await ContainerClient().list(filters: filters)
     }
@@ -205,6 +209,16 @@ package enum ComposeContainerGateway {
             throw ComposeError.machineUnsupportedOperation("logs streaming")
         }
         return try await ContainerClient().logs(id: id)
+    }
+
+    /// Native engine event stream hook. Empty until upstream exposes `containerEvent` XPC handling.
+    package static func events(
+        machineContext: MachineContext = .applicationSandbox
+    ) -> AsyncStream<ProjectEvent> {
+        _ = machineContext
+        return AsyncStream { continuation in
+            continuation.finish()
+        }
     }
 
     private static func snapshotMatchesFilters(
