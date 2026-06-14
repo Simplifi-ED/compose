@@ -56,10 +56,14 @@ package enum PluginInstallPath {
             ?? defaultHomebrewPrefix(environment: environment)
         guard let brewPrefix, !brewPrefix.isEmpty else { return nil }
 
+        let resolvedCLIPath = URL(fileURLWithPath: containerCLIPath)
+            .standardizedFileURL
+            .resolvingSymlinksInPath()
+            .path
         let brewContainerBin = (brewPrefix as NSString)
             .appendingPathComponent("opt/container/bin/container")
         let brewContainerRoot = (brewPrefix as NSString).appendingPathComponent("opt/container")
-        if containerCLIPath == brewContainerBin || containerCLIPath.hasPrefix(brewContainerRoot + "/") {
+        if resolvedCLIPath == brewContainerBin || resolvedCLIPath.hasPrefix(brewContainerRoot + "/") {
             return (brewPrefix as NSString).appendingPathComponent("opt/container")
         }
         return nil

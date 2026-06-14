@@ -50,10 +50,15 @@ package enum DoctorSubprocess {
         let stderrReader = Task { @concurrent in
             stderrPipe.fileHandleForReading.readDataToEndOfFile()
         }
+        defer {
+            stdoutReader.cancel()
+            stderrReader.cancel()
+            closePipes(stdoutPipe: stdoutPipe, stderrPipe: stderrPipe)
+        }
 
         try process.run()
         let exitCode = try await waitForExit(process: process, executable: executable, timeout: timeout)
-        closePipes(stdoutPipe: stdoutPipe, stderrPipe: stderrPipe)
+        closePipeWriters(stdoutPipe: stdoutPipe, stderrPipe: stderrPipe)
 
         let stdoutData = await stdoutReader.value
         let stderrData = await stderrReader.value
@@ -87,31 +92,31 @@ package enum DoctorSubprocess {
         executable: String,
         timeout: Duration
     ) async throws -> Int32 {
-        do {
-            return try await withThrowingTaskGroup(of: Int32.self) { group in
-                group.addTask {
-                    process.waitUntilExit()
-                    return process.terminationStatus
-                }
-                group.addTask {
-                    try await Task.sleep(for: timeout)
-                    throw DoctorSubprocessError.timedOut(executable)
-                }
-                guard let code = try await group.next() else {
-                    throw DoctorSubprocessError.timedOut(executable)
-                }
-                group.cancelAll()
-                return code
+        try await withThrowingTaskGroup(of: Int32.self) { group in
+            group.addTask {
+                process.waitUntilExit()
+                return process.terminationStatus
             }
-        } catch {
-            process.terminate()
-            throw error
+            group.addTask {
+                try await Task.sleep(for: timeout)
+                process.terminate()
+                throw DoctorSubprocessError.timedOut(executable)
+            }
+            guard let code = try await group.next() else {
+                throw DoctorSubprocessError.timedOut(executable)
+            }
+            group.cancelAll()
+            return code
         }
     }
 
-    private static func closePipes(stdoutPipe: Pipe, stderrPipe: Pipe) {
+    private static func closePipeWriters(stdoutPipe: Pipe, stderrPipe: Pipe) {
         try? stdoutPipe.fileHandleForWriting.close()
         try? stderrPipe.fileHandleForWriting.close()
+    }
+
+    private static func closePipes(stdoutPipe: Pipe, stderrPipe: Pipe) {
+        closePipeWriters(stdoutPipe: stdoutPipe, stderrPipe: stderrPipe)
         try? stdoutPipe.fileHandleForReading.close()
         try? stderrPipe.fileHandleForReading.close()
     }
