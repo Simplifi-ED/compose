@@ -104,6 +104,7 @@ container compose down -f fixtures/minimal-compose.yml -p demo
 | `top` | Live CPU/memory stats for all project containers. |
 | `watch` | Sync local file changes into running containers. |
 | `config` | Print the resolved compose config without starting anything. |
+| `doctor` | Run pre-flight checks for container and compose plugin readiness. |
 | `save` | Export service images and resolved compose YAML to a portable archive. |
 | `load` | Import images from a stack archive into the local image store. |
 
@@ -699,6 +700,41 @@ Exit codes: `0` = all services stopped cleanly · `130` = SIGINT · `143` = SIGT
 | Port already in use | Change the host port in the compose file, or `container compose down -p <project>` |
 | arm64 image fails | Use images with a `linux/arm64` manifest |
 | Old containers not found by `down` | Pre-label containers lack metadata. Remove with `container rm <name>` first. |
+
+---
+
+## Doctor
+
+`container compose doctor` runs **non-mutating** pre-flight checks before you hit failures during `up` or `down`. It does not change compose projects, system configuration, or auto-repair with `sudo`. Some probes may run subprocesses or a cached-image container run; doctor never pulls images automatically.
+
+```bash
+container compose doctor
+container compose doctor --quiet   # exit code only (0 = all critical checks passed)
+```
+
+Example output:
+
+```text
+✅ Host architecture
+   Running on Apple Silicon (arm64).
+
+❌ Container API server
+   Container API is not reachable.
+   → container system start
+
+⏭ Host kernel configuration
+   Skipped because the container API is not reachable.
+
+Summary: 6 passed, 1 warnings, 1 critical, 2 skipped
+```
+
+**Checks:** Apple Silicon, disk space (temp + `~/.config/container-compose`), Rosetta 2 (advisory), plugin bundle files, plugin install path writability (advisory), `container` CLI on PATH and version, API reachability, plugin subcommand registration (from [`ComposeSubcommandRegistry`](Sources/ComposeCore/Commands/ComposeSubcommandRegistry.swift)), local cache of the kernel probe image, and kernel/runtime verification when the probe image is already cached.
+
+**Skip chain:** when an upstream check fails, downstream runtime checks are marked skipped instead of emitting duplicate errors. For example, a missing `container` CLI skips API and kernel checks; a down API server skips plugin discovery and kernel checks.
+
+**Kernel probe:** there is no non-invasive `container system kernel status` in container 1.0.0. When the API is reachable, doctor warns if `docker.io/library/busybox:1.36.1` is not cached locally and skips the kernel run probe until you pull it manually (`container image pull docker.io/library/busybox:1.36.1`). Registry/network failures are reported separately from kernel misconfiguration.
+
+**CI:** [`compose-verify`](Sources/compose-verify/) tests doctor report formatting and skip logic without a live container runtime. GitHub Actions does not run `compose doctor` by default. A full doctor run requires a local `container` install and running API (`container system start`).
 
 ---
 

@@ -76,6 +76,7 @@ jobs:
           REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
+          VERSION="${TAG#v}"
           URL="https://github.com/${REPO}/releases/download/${TAG}/compose-plugin.tar.gz"
           SHA256="$(curl --retry 6 --retry-all-errors --retry-delay 2 --retry-connrefused -fsSL "$URL" | shasum -a 256 | awk '{print $1}')"
           if [ -z "$SHA256" ]; then
@@ -83,8 +84,10 @@ jobs:
             exit 1
           fi
           FORMULA="Formula/container-compose.rb"
+          sed -i "s|version \".*\"|version \"${VERSION}\"|" "$FORMULA"
           sed -i "s|url \".*\"|url \"${URL}\"|" "$FORMULA"
           sed -i "s|sha256 \".*\"|sha256 \"${SHA256}\"|" "$FORMULA"
+          grep -Fq "version \"${VERSION}\"" "$FORMULA"
           grep -Fq "$URL" "$FORMULA"
           grep -Fq "$SHA256" "$FORMULA"
 
