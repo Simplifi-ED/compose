@@ -214,6 +214,7 @@ do {
     runner.runRollbackTests()
     runner.runTeardownErrorTests()
     runner.runTerminalTests()
+    runner.runDoctorTests()
     runner.runProgressTests()
     runner.runPsTests()
     runner.runLogsTests()
