@@ -54,47 +54,49 @@ extension ServiceRunner {
         _ request: StartupWaveRequest,
         startedWaves: inout [[String]]
     ) async throws {
-        try Task.checkCancellation()
-        await request.beforeWave?(request.index)
-        let project = request.layer.first?.projectName ?? ""
-        await request.progress?.onWaveStart?(
-            request.index + 1,
-            request.layers.count,
-            request.layer.map(\.name)
-        )
-        logWaveStart(
-            wave: request.index + 1,
-            total: request.layers.count,
-            project: project,
-            containerNames: request.layer.map(\.name)
-        )
-        let result = await parallelRun(
-            request.layer.map {
-                ParallelRunItem(label: $0.name, collectOnSuccess: $0.name, value: $0)
-            },
-            maxConcurrent: request.execution.maxConcurrent,
-            onCompletion: request.progress?.onServiceComplete
-        ) { plan in
-            try await request.hooks.runContainer(plan)
-        }
-        if result.wasInterrupted {
-            handleInterruptedWave(
-                result: result,
-                startedWaves: &startedWaves,
-                layers: request.layers
+        try await SignpostTelemetry.interval(SignpostTelemetry.executeWave) {
+            try Task.checkCancellation()
+            await request.beforeWave?(request.index)
+            let project = request.layer.first?.projectName ?? ""
+            await request.progress?.onWaveStart?(
+                request.index + 1,
+                request.layers.count,
+                request.layer.map(\.name)
             )
-            throw CancellationError()
+            logWaveStart(
+                wave: request.index + 1,
+                total: request.layers.count,
+                project: project,
+                containerNames: request.layer.map(\.name)
+            )
+            let result = await parallelRun(
+                request.layer.map {
+                    ParallelRunItem(label: $0.name, collectOnSuccess: $0.name, value: $0)
+                },
+                maxConcurrent: request.execution.maxConcurrent,
+                onCompletion: request.progress?.onServiceComplete
+            ) { plan in
+                try await request.hooks.runContainer(plan)
+            }
+            if result.wasInterrupted {
+                handleInterruptedWave(
+                    result: result,
+                    startedWaves: &startedWaves,
+                    layers: request.layers
+                )
+                throw CancellationError()
+            }
+            if !result.succeeded.isEmpty {
+                startedWaves.append(result.succeeded)
+            }
+            try handleStartupWaveFailures(
+                result: result,
+                index: request.index,
+                project: project
+            )
+            await request.progress?.onWaveComplete?(request.index + 1)
+            logWaveComplete(wave: request.index + 1, project: project)
         }
-        if !result.succeeded.isEmpty {
-            startedWaves.append(result.succeeded)
-        }
-        try handleStartupWaveFailures(
-            result: result,
-            index: request.index,
-            project: project
-        )
-        await request.progress?.onWaveComplete?(request.index + 1)
-        logWaveComplete(wave: request.index + 1, project: project)
         try await waitForNextLayerHealth(request: request)
     }
 

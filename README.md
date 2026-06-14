@@ -476,6 +476,31 @@ Categories: `orchestration`, `lifecycle`, `signals`, `volumes`, `networks`, `bui
 
 Disable telemetry with `COMPOSE_OSLOG=0` or `--no-oslog` on `up`, `down`, `run`, and other commands that support the flag. `compose up --dry-run` does not emit lifecycle execution events. Secrets, environment values, and build args are never written to the unified log.
 
+### Instruments signposts
+
+Startup hot paths emit interval signposts under the same subsystem for profiling in Instruments (Points of Interest template):
+
+| Signpost | When |
+|----------|------|
+| `compose.parse` | YAML load, merge, include, substitution |
+| `compose.plan` | Dependency layers, replica expansion, validation |
+| `compose.network` | Project network create before waves |
+| `compose.volume` | Project volume create before waves |
+| `compose.execute.wave` | Each startup wave (parallel container batch) |
+| `compose.discovery` | Orchestration discovery via `ContainerDiscovery.containers` (`up`/`down` orphan checks; not `ps`/`logs`/`events` polling) |
+
+Workflow:
+
+1. Open **Instruments** → **Points of Interest** template.
+2. Filter subsystem `com.simplifi-ed.container-compose`.
+3. Run `compose up` in a terminal; nested intervals appear for parse → plan → network/volume → waves.
+
+Signposts use the same opt-out as unified logs (`COMPOSE_OSLOG=0`, `--no-oslog`, `--dry-run`). For log lines (not intervals), use the Logging template or:
+
+```bash
+log stream --predicate 'subsystem == "com.simplifi-ed.container-compose" AND category == "orchestration"'
+```
+
 ---
 
 ## Configs and secrets

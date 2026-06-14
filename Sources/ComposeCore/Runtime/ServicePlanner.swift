@@ -44,49 +44,51 @@ public enum ServicePlanner {
         scaleOverrides: [String: Int] = [:],
         machineName: String? = nil
     ) throws -> [[ServicePlan]] {
-        let layers = try dependencyLayers(for: composeFile, activeProfiles: activeProfiles)
-        let activeServiceNames = Set(layers.flatMap { $0.map(\.serviceName) })
-        try ComposeFileMountResolver.validate(
-            composeFile: composeFile,
-            activeServiceNames: activeServiceNames
-        )
-        try NetworkPlanning.validate(
-            composeFile: composeFile,
-            activeServiceNames: activeServiceNames
-        )
-        try VolumePlanning.validate(
-            composeFile: composeFile,
-            activeServiceNames: activeServiceNames
-        )
-        try ReplicaPlanning.validateScaleTargets(
-            scaleOverrides: scaleOverrides,
-            services: composeFile.services,
-            activeServiceNames: activeServiceNames
-        )
-        return try layers.map { layer in
-            try layer.flatMap { serviceName, service in
-                let replicas = try ReplicaPlanning.resolvedReplicaCount(
-                    serviceName: serviceName,
-                    service: service,
-                    scaleOverrides: scaleOverrides
-                )
-                try ReplicaPlanning.validateForUp(
-                    serviceName: serviceName,
-                    service: service,
-                    replicas: replicas
-                )
-                return try (1...replicas).map { index in
-                    try buildUpPlan(
-                        context: PlanningContext(
-                            composeFile: composeFile,
-                            projectName: projectName,
-                            composeDirectory: composeDirectory,
-                            machineName: machineName
-                        ),
+        try SignpostTelemetry.interval(SignpostTelemetry.plan) {
+            let layers = try dependencyLayers(for: composeFile, activeProfiles: activeProfiles)
+            let activeServiceNames = Set(layers.flatMap { $0.map(\.serviceName) })
+            try ComposeFileMountResolver.validate(
+                composeFile: composeFile,
+                activeServiceNames: activeServiceNames
+            )
+            try NetworkPlanning.validate(
+                composeFile: composeFile,
+                activeServiceNames: activeServiceNames
+            )
+            try VolumePlanning.validate(
+                composeFile: composeFile,
+                activeServiceNames: activeServiceNames
+            )
+            try ReplicaPlanning.validateScaleTargets(
+                scaleOverrides: scaleOverrides,
+                services: composeFile.services,
+                activeServiceNames: activeServiceNames
+            )
+            return try layers.map { layer in
+                try layer.flatMap { serviceName, service in
+                    let replicas = try ReplicaPlanning.resolvedReplicaCount(
                         serviceName: serviceName,
                         service: service,
-                        replicaIndex: index
+                        scaleOverrides: scaleOverrides
                     )
+                    try ReplicaPlanning.validateForUp(
+                        serviceName: serviceName,
+                        service: service,
+                        replicas: replicas
+                    )
+                    return try (1...replicas).map { index in
+                        try buildUpPlan(
+                            context: PlanningContext(
+                                composeFile: composeFile,
+                                projectName: projectName,
+                                composeDirectory: composeDirectory,
+                                machineName: machineName
+                            ),
+                            serviceName: serviceName,
+                            service: service,
+                            replicaIndex: index
+                        )
+                    }
                 }
             }
         }

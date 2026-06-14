@@ -12,9 +12,11 @@ public enum ComposeParser {
         fileURLs: [URL],
         processEnvironment: [String: String] = ProcessInfo.processInfo.environment
     ) throws -> ComposeFile {
-        let composeFile = try decodeMerged(fileURLs: fileURLs, processEnvironment: processEnvironment)
-        try validate(composeFile)
-        return composeFile
+        try SignpostTelemetry.interval(SignpostTelemetry.parse) {
+            let composeFile = try decodeMerged(fileURLs: fileURLs, processEnvironment: processEnvironment)
+            try validate(composeFile)
+            return composeFile
+        }
     }
 
     /// Decode and validate dependency graph only — for `down` when the file may be edited after `up`.
@@ -29,9 +31,11 @@ public enum ComposeParser {
         fileURLs: [URL],
         processEnvironment: [String: String] = ProcessInfo.processInfo.environment
     ) throws -> ComposeFile {
-        let composeFile = try decodeMerged(fileURLs: fileURLs, processEnvironment: processEnvironment)
-        try validateShutdownGraph(composeFile)
-        return composeFile
+        try SignpostTelemetry.interval(SignpostTelemetry.parse) {
+            let composeFile = try decodeMerged(fileURLs: fileURLs, processEnvironment: processEnvironment)
+            try validateShutdownGraph(composeFile)
+            return composeFile
+        }
     }
 
     /// Yams wraps `ComposeError` thrown from `Decodable` in `DecodingError.dataCorrupted`.

@@ -1,9 +1,23 @@
 import Foundation
+import os.signpost
 
 /// Session gate for Unified Logging telemetry. Configured once per command entry.
 package enum OsLogConfiguration {
     package static let subsystem = "com.simplifi-ed.container-compose"
     package static let environmentVariableName = "COMPOSE_OSLOG"
+
+    package static let orchestrationSignposter = OSSignposter(
+        subsystem: subsystem,
+        category: "orchestration"
+    )
+    package static let networksSignposter = OSSignposter(
+        subsystem: subsystem,
+        category: "networks"
+    )
+    package static let volumesSignposter = OSSignposter(
+        subsystem: subsystem,
+        category: "volumes"
+    )
 
     // ponytail: single writer at command entry; concurrent readers during orchestration
     nonisolated(unsafe) package static var sessionEnabled = true

@@ -16,37 +16,39 @@ package enum VolumeRunner {
         machineContext: MachineContext = .applicationSandbox
     ) async throws {
         guard !plans.isEmpty else { return }
-        if let dryRunManifest {
-            for plan in plans {
-                await dryRunManifest.recordVolumeCreate(name: plan.runtimeName)
-            }
-            return
-        }
-        if machineContext.isMachineMode {
-            try await createInMachine(plans, projectName: projectName, machineContext: machineContext)
-            return
-        }
-        let existing = try await listVolumeNames()
-        for plan in plans {
-            if existing.contains(plan.runtimeName) {
-                if let configuration = try? await ClientVolume.inspect(plan.runtimeName),
-                   !isProjectVolume(configuration, projectName: projectName) {
-                    warnUnlabeledVolumeReuse(runtimeName: plan.runtimeName)
+        try await SignpostTelemetry.interval(SignpostTelemetry.volume, category: .volumes) {
+            if let dryRunManifest {
+                for plan in plans {
+                    await dryRunManifest.recordVolumeCreate(name: plan.runtimeName)
                 }
-                continue
+                return
             }
-            do {
-                _ = try await ClientVolume.create(
-                    name: plan.runtimeName,
-                    labels: ComposeLabels.volumeLabels(
-                        projectName: projectName,
-                        logicalName: plan.logicalName
+            if machineContext.isMachineMode {
+                try await createInMachine(plans, projectName: projectName, machineContext: machineContext)
+                return
+            }
+            let existing = try await listVolumeNames()
+            for plan in plans {
+                if existing.contains(plan.runtimeName) {
+                    if let configuration = try? await ClientVolume.inspect(plan.runtimeName),
+                       !isProjectVolume(configuration, projectName: projectName) {
+                        warnUnlabeledVolumeReuse(runtimeName: plan.runtimeName)
+                    }
+                    continue
+                }
+                do {
+                    _ = try await ClientVolume.create(
+                        name: plan.runtimeName,
+                        labels: ComposeLabels.volumeLabels(
+                            projectName: projectName,
+                            logicalName: plan.logicalName
+                        )
                     )
-                )
-                logVolumeCreate(projectName: projectName, plan: plan, machine: "host")
-            } catch {
-                logVolumeCreateFailed(projectName: projectName, plan: plan, error: error)
-                throw ComposeError.volumeCreateFailed(volume: plan.logicalName, underlying: error)
+                    logVolumeCreate(projectName: projectName, plan: plan, machine: "host")
+                } catch {
+                    logVolumeCreateFailed(projectName: projectName, plan: plan, error: error)
+                    throw ComposeError.volumeCreateFailed(volume: plan.logicalName, underlying: error)
+                }
             }
         }
     }
