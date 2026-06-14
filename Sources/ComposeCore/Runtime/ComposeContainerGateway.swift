@@ -12,6 +12,9 @@ import Foundation
 ///   ``MachineContext/ensureBooted()`` on mutating commands, then pass the returned context
 ///   (or call ``MachineContext/bootedContext()`` before in-VM I/O).
 package enum ComposeContainerGateway {
+    package static let pauseSignal = "SIGSTOP"
+    package static let unpauseSignal = "SIGCONT"
+
     package static func list(
         filters: ContainerListFilters,
         machineContext: MachineContext = .applicationSandbox
@@ -67,6 +70,20 @@ package enum ComposeContainerGateway {
             return
         }
         try await ServiceRunner.runContainerWithFileMounts(plan, machineContext: machineContext)
+    }
+
+    package static func pause(
+        id: String,
+        machineContext: MachineContext = .applicationSandbox
+    ) async throws {
+        try await kill(id: id, signal: Self.pauseSignal, machineContext: machineContext)
+    }
+
+    package static func unpause(
+        id: String,
+        machineContext: MachineContext = .applicationSandbox
+    ) async throws {
+        try await kill(id: id, signal: Self.unpauseSignal, machineContext: machineContext)
     }
 
     package static func stop(
