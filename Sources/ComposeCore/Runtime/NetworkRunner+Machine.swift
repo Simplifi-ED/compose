@@ -54,13 +54,21 @@ extension NetworkRunner {
             return
         }
         for plan in plans {
-            guard let resource = try? await machineNetworkResource(
-                snapshot: booted.snapshot,
-                name: plan.runtimeName
-            ),
-                !resource.isBuiltin,
-                isProjectNetwork(resource, projectName: projectName)
-            else {
+            let resource: NetworkResource
+            do {
+                guard let inspected = try await machineNetworkResource(
+                    snapshot: booted.snapshot,
+                    name: plan.runtimeName
+                ) else {
+                    continue
+                }
+                resource = inspected
+            } catch {
+                warnRemoveFailed(names: [plan.runtimeName], error: error)
+                continue
+            }
+            guard !resource.isBuiltin,
+                  isProjectNetwork(resource, projectName: projectName) else {
                 continue
             }
             do {

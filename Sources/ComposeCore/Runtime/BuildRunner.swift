@@ -116,7 +116,7 @@ package enum BuildRunner {
                 OsLogTelemetry.build.info(
                     """
                     event=build_start service=\(plan.serviceName, privacy: .public) \
-                    dockerfile=\(dockerfile, privacy: .public) \
+                    dockerfile=\(dockerfile, privacy: .private) \
                     machine=\(machine, privacy: .public)
                     """
                 )
