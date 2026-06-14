@@ -19,6 +19,7 @@ extension ComposeService: Decodable {
         case networks
         case networkMode = "network_mode"
         case useInit = "init"
+        case xCompose = "x-compose"
     }
 
     public init(from decoder: Decoder) throws {
@@ -47,7 +48,34 @@ extension ComposeService: Decodable {
         let decodedNetworks = try ComposeNetworkDecoder.decodeServiceNetworks(from: container, forKey: .networks)
         networks = decodedNetworks.names
         networkNullRemovals = decodedNetworks.nullRemovals
+        hostnames = try Self.decodeHostnames(from: container)
         projectDirectory = nil
+    }
+
+    private static func decodeHostnames(
+        from container: KeyedDecodingContainer<CodingKeys>
+    ) throws -> [String] {
+        guard container.contains(.xCompose) else { return [] }
+        let nested: KeyedDecodingContainer<XComposeKeys>
+        do {
+            nested = try container.nestedContainer(keyedBy: XComposeKeys.self, forKey: .xCompose)
+        } catch {
+            throw ComposeError.invalidField("x-compose", reason: "expected a map with a hosts list")
+        }
+        warnUnsupportedXComposeKeys(in: nested)
+        guard nested.contains(.hosts) else { return [] }
+        if let value = try? nested.decode([String].self, forKey: .hosts) {
+            return value
+        }
+        throw ComposeError.invalidField("x-compose.hosts", reason: "expected a list of hostnames")
+    }
+
+    private static func warnUnsupportedXComposeKeys(
+        in container: KeyedDecodingContainer<XComposeKeys>
+    ) {
+        for key in container.allKeys where key != .hosts {
+            fputs("warning: x-compose: key '\(key.stringValue)' isn't supported yet\n", stderr)
+        }
     }
 
     private static func decodeBuild(
@@ -228,6 +256,10 @@ extension ComposeService: Decodable {
 
 private struct DependsOnEntry: Decodable {
     let condition: String
+}
+
+private enum XComposeKeys: String, CodingKey {
+    case hosts
 }
 
 private struct ComposeBuildDynamicKey: CodingKey {

@@ -41,7 +41,7 @@ public enum ComposeConfigResolver {
             services: adjusted
         )
 
-        return ComposeFile(
+        let composeFile = ComposeFile(
             name: parsed.name,
             services: resolvedServices,
             configs: parsed.configs,
@@ -49,6 +49,20 @@ public enum ComposeConfigResolver {
             networks: parsed.networks,
             volumes: parsed.volumes
         )
+        emitHostDNSWarnings(composeFile: composeFile, activeServiceNames: activeServiceNames)
+        return composeFile
+    }
+
+    package static func emitHostDNSWarnings(
+        composeFile: ComposeFile,
+        activeServiceNames: Set<String>
+    ) {
+        for warning in HostDNSPlanning.warnings(
+            composeFile: composeFile,
+            activeServiceNames: activeServiceNames
+        ) {
+            fputs("\(warning.message)\n", stderr)
+        }
     }
 
     /// Resolves the compose file and returns YAML unless `quiet` requests validation only.

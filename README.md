@@ -140,6 +140,45 @@ container compose top -p demo --interval 3 web db
 
 Stopped containers show `--` for resource columns. Ctrl+C ends the stream without stopping containers.
 
+### Host DNS (`up --host-dns`)
+
+Maps declared service hostnames to `127.0.0.1` on the **macOS host** so browsers can reach published ports by name (e.g. `http://web.demo.local:8080`). In-container DNS from compose `networks:` is separate — this feature does not change VM/container resolver behavior.
+
+Declare hostnames per service:
+
+```yaml
+services:
+  web:
+    image: nginx:1.27.3
+    ports:
+      - "8080:80"
+    x-compose:
+      hosts:
+        - web.demo.local
+```
+
+Opt in on startup (compose itself stays unprivileged; macOS prompts for `/etc/hosts` access only):
+
+```bash
+container compose up --host-dns
+```
+
+**Do not** run `sudo container compose up` — elevation applies only to the hosts-file write. Ownership is tracked at `~/.config/container-compose/<project>/host-dns.json`.
+
+`container compose down` removes the project's delimited block from `/etc/hosts` when possible. If the admin prompt is cancelled, stderr prints the exact block marker and ownership path for manual cleanup.
+
+Manual acceptance:
+
+```bash
+container compose up --host-dns -f compose.yaml
+# approve admin prompt
+ping -c1 web.demo.local
+container compose down -f compose.yaml
+# approve prompt if needed; ping should fail afterward
+```
+
+Prefer `.local` / `.test` suffixes. Non-dev hostnames emit a warning because mapping affects the whole machine while the project is up.
+
 ### Events (`compose events`)
 
 Streams **start** and **die** lifecycle lines for project containers using a **foreground polling loop** (default **1.5s** interval). There is no background daemon — polling runs only while the command is active.

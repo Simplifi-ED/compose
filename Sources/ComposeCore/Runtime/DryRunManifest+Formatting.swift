@@ -71,6 +71,19 @@ package enum DryRunManifestFormatting {
         "[DRY-RUN] remove network \"\(name)\""
     }
 
+    package static func formatHostDNSInstall(
+        projectName: String,
+        projectID: String,
+        hostnames: [String]
+    ) -> String {
+        "[DRY-RUN] install host DNS project=\"\(projectName)\" id=\"\(projectID)\" "
+            + "hosts=\(formatStringArray(hostnames.sorted()))"
+    }
+
+    package static func formatHostDNSRemove(projectName: String, projectID: String) -> String {
+        "[DRY-RUN] remove host DNS project=\"\(projectName)\" id=\"\(projectID)\""
+    }
+
     package static func formatTeardown(_ name: String, reason: DryRunManifest.TeardownReason) -> String {
         switch reason {
         case .shutdown:

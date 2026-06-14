@@ -206,6 +206,7 @@ do {
     try runner.runVolumePurgeTests()
     try runner.runReadOnlyVolumeTests()
     try runner.runNetworkTests()
+    try runner.runHostDNSTests()
     try runner.runNamedVolumeTests()
     try runner.runDryRunTests()
     try runner.runPauseTests()

@@ -60,7 +60,12 @@ enum ComposeFileMerge {
             develop: override.develop ?? base.develop,
             networks: mergeServiceNetworks(base: base, override: override),
             projectDirectory: override.projectDirectory ?? base.projectDirectory,
-            useInit: override.useInit ?? base.useInit
+            useInit: override.useInit ?? base.useInit,
+            hostnames: ComposeBindingKeys.mergeUniqueEntries(
+                base: base.hostnames,
+                override: override.hostnames,
+                key: { $0.lowercased() }
+            )
         )
     }
 

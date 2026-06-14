@@ -61,6 +61,7 @@ extension ComposeService: Encodable {
         case develop
         case networks
         case useInit = "init"
+        case xCompose = "x-compose"
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -101,6 +102,13 @@ extension ComposeService: Encodable {
         if useInit == true {
             try container.encode(true, forKey: .useInit)
         }
+        try encodeXComposeHosts(to: &container)
+    }
+
+    private func encodeXComposeHosts(to container: inout KeyedEncodingContainer<CodingKeys>) throws {
+        guard !hostnames.isEmpty else { return }
+        var extensionContainer = container.nestedContainer(keyedBy: XComposeEncodeKeys.self, forKey: .xCompose)
+        try extensionContainer.encode(hostnames, forKey: .hosts)
     }
 
     private func encodeServiceMounts(
@@ -149,6 +157,10 @@ extension ComposeService: Encodable {
 
 private struct DependsOnConditionExport: Encodable {
     let condition: String
+}
+
+private enum XComposeEncodeKeys: String, CodingKey {
+    case hosts
 }
 
 private struct ResolvedServiceMountEncoder: Encodable {

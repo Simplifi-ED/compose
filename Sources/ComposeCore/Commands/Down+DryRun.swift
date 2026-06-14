@@ -56,6 +56,11 @@ extension Down {
             teardownContainers: containers
         )
         await manifest.recordNetworkRemovals(names: networkPlans.map(\.runtimeName))
+        await HostDNSMapping.removeProjectMappings(
+            projectName: context.projectName,
+            firstComposeFileURL: context.fileURLs?.first,
+            dryRunManifest: manifest
+        )
 
         await manifest.printLines()
     }

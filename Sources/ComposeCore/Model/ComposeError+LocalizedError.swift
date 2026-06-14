@@ -210,6 +210,26 @@ extension ComposeError {
             return "Couldn't write archive '\(path)': \(underlying.localizedDescription)"
         case .archiveReadFailed(let path, let underlying):
             return "Couldn't read archive '\(path)': \(underlying.localizedDescription)"
+        case .invalidHostDNSHostname(let hostname, let reason):
+            return "Invalid hostname '\(hostname)': \(reason)"
+        case .hostDNSNoPublishedPort(let service, let hostname):
+            return "Service '\(service)' declares host '\(hostname)' but has no published host port"
+        case .duplicateHostDNSHostname(let hostname, let services):
+            return "Host '\(hostname)' is declared by multiple services: \(services.joined(separator: ", "))"
+        case .hostDNSExternalConflict(let hostname, let address, let line):
+            return "Host '\(hostname)' already maps to \(address) in /etc/hosts (line \(line))"
+        case .hostDNSRequiresElevation(let manualCommand):
+            return """
+                Host DNS requires administrator access to update /etc/hosts. \
+                Approve the prompt to continue, or run manually:
+                \(manualCommand)
+                """
+        case .hostDNSElevationCancelled(let operation):
+            return "Host DNS \(operation) cancelled."
+        case .hostDNSUnsupportedWithMachine:
+            return "Host DNS is macOS host-only and cannot be used with --machine"
+        case .hostDNSUnsupportedPlatform:
+            return "Host DNS is macOS-only"
         }
     }
 

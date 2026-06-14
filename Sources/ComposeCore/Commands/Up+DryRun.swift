@@ -9,7 +9,9 @@ extension Up {
         let buildPlans: [BuildRunner.Plan]
         let networkPlans: [NetworkPlanning.Plan]
         let volumePlans: [VolumePlanning.Plan]
+        let fileURLs: [URL]
         let machineContext: MachineContext
+        let installHostDNS: Bool
     }
 
     func runDryRun(_ input: DryRunInput) async throws {
@@ -33,6 +35,16 @@ extension Up {
             dryRunManifest: manifest,
             machineContext: input.machineContext
         )
+
+        if input.installHostDNS {
+            try await HostDNSMapping.installAll(
+                composeFile: input.composeFile,
+                projectName: input.projectName,
+                firstComposeFileURL: input.fileURLs[0],
+                activeServiceNames: Set(input.layers.flatMap { $0 }.map(\.serviceName)),
+                dryRunManifest: manifest
+            )
+        }
 
         if workspaceHygiene.shouldRemoveOrphans {
             try await recordOrphanTeardowns(
