@@ -11,7 +11,7 @@ import Foundation
 ///
 /// Intentional divergences:
 /// - Byte counts use `FormatStyle.byteCount` (binary) instead of upstream `%.2f GiB/KiB` strings.
-/// - CPU intervals use measured `ContinuousClock` deltas (~1s) instead of a fixed 2s window.
+/// - CPU intervals use measured `ContinuousClock` deltas (configured sample interval, default 2s).
 package enum StatsFormatting {
     package static let notAvailable = "--"
 

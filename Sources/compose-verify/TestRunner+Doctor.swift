@@ -219,6 +219,16 @@ extension TestRunner {
             "parse compose help subcommands"
         )
 
+        expect(
+            ComposeSubcommandRegistry.parseSubcommands(
+                from: """
+                SUBCOMMANDS:
+                  top, stats              Display live resource usage for project services.
+                """
+            ) == Set(["top", "stats"]),
+            "parse subcommand aliases from help"
+        )
+
         let noisyHelp = """
         SUBCOMMANDS:
           up                      Start services

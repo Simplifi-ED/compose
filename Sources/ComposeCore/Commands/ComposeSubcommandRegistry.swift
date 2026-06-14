@@ -41,9 +41,11 @@ package enum ComposeSubcommandRegistry {
                 break
             }
             guard !trimmed.isEmpty, lineString.first?.isWhitespace == true else { continue }
-            let token = trimmed.split(whereSeparator: { $0.isWhitespace }).first.map(String.init)
-            if let token, token.allSatisfy({ $0.isLetter || $0 == "-" }) {
-                names.insert(token.lowercased())
+            let namesSegment = trimmed.split(separator: "  ", maxSplits: 1).first.map(String.init) ?? trimmed
+            for part in namesSegment.split(separator: ",", omittingEmptySubsequences: true) {
+                let name = part.trimmingCharacters(in: .whitespaces).lowercased()
+                guard !name.isEmpty, name.allSatisfy({ $0.isLetter || $0 == "-" }) else { continue }
+                names.insert(name)
             }
         }
         return names

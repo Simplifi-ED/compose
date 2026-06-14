@@ -44,7 +44,8 @@ package struct StatsSample: Sendable {
 
 package enum ProjectStats {
     package static let notAvailable = StatsFormatting.notAvailable
-    package static let sampleInterval: Duration = .seconds(1)
+    package static let defaultSampleIntervalSeconds = 2
+    package static let defaultSampleInterval: Duration = .seconds(defaultSampleIntervalSeconds)
 
     package static func rows(
         from containers: [ProjectContainer],

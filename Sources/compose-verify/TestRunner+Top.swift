@@ -4,6 +4,7 @@ import Foundation
 
 extension TestRunner {
     mutating func runTopTests() {
+        runTopIntervalParsingTests()
         runTopCPUCalculationTests()
         runTopByteFormatTests()
         runTopRowBuildTests()
@@ -11,6 +12,59 @@ extension TestRunner {
         runTopRendererTests()
         runTopStatsFailureWarningTests()
         runTopSignalPolicyTests()
+    }
+
+    private mutating func runTopIntervalParsingTests() {
+        do {
+            let defaults = try Top.parse([])
+            expect(defaults.parsedInterval == 2, "default interval is 2 seconds")
+        } catch {
+            expect(false, "Top.parse([]) threw: \(error)")
+        }
+
+        do {
+            let custom = try Top.parse(["--interval", "3"])
+            expect(custom.parsedInterval == 3, "custom interval parsed")
+        } catch {
+            expect(false, "Top.parse --interval 3 threw: \(error)")
+        }
+
+        do {
+            let minimum = try Top.parse(["--interval", "1"])
+            expect(minimum.parsedInterval == 1, "minimum interval parsed")
+        } catch {
+            expect(false, "Top.parse --interval 1 threw: \(error)")
+        }
+
+        do {
+            _ = try Top.parse(["--interval", "0"])
+            fputs("FAIL: expected throw for non-positive interval\n", stderr)
+            failures += 1
+        } catch {
+            let description = String(describing: error)
+            expect(
+                description.contains("--interval must be at least 1 second"),
+                "sub-1 interval rejected at parse time"
+            )
+        }
+
+        do {
+            try Top.validateInterval(1)
+        } catch {
+            expect(false, "validateInterval(1) threw: \(error)")
+        }
+
+        do {
+            try Top.validateInterval(0)
+            fputs("FAIL: expected throw for validateInterval(0)\n", stderr)
+            failures += 1
+        } catch {
+            let description = String(describing: error)
+            expect(
+                description.contains("--interval must be at least 1 second"),
+                "validateInterval rejects sub-1 values"
+            )
+        }
     }
 
     private mutating func runTopCPUCalculationTests() {
