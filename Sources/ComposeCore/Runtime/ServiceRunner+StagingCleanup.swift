@@ -29,12 +29,41 @@ extension ServiceRunner {
         execution: WaveExecutionPolicy,
         rollbackTeardown: @Sendable @escaping (String) async throws -> Void
     ) async throws {
+        let project = layers.flatMap { $0 }.first?.projectName ?? ""
+        let started = startedWaves.flatMap { $0 }
+        if !started.isEmpty {
+            OsLogTelemetry.enabled {
+                OsLogTelemetry.orchestration.error(
+                    """
+                    event=rollback_start project=\(project, privacy: .public) \
+                    containers=\(started.joined(separator: ","), privacy: .public)
+                    """
+                )
+            }
+        }
         let rollbackFailures = await rollbackStartedContainers(
             startedWaves.reversed(),
             execution: execution,
             teardown: rollbackTeardown
         )
         cleanupOrphanStaging(layers: layers, startedWaves: startedWaves)
+        OsLogTelemetry.enabled {
+            if rollbackFailures.isEmpty {
+                OsLogTelemetry.orchestration.info(
+                    """
+                    event=rollback_complete project=\(project, privacy: .public) \
+                    failure_count=\(rollbackFailures.count, privacy: .public)
+                    """
+                )
+            } else {
+                OsLogTelemetry.orchestration.error(
+                    """
+                    event=rollback_complete project=\(project, privacy: .public) \
+                    failure_count=\(rollbackFailures.count, privacy: .public)
+                    """
+                )
+            }
+        }
         if !rollbackFailures.isEmpty {
             let started = startedWaves.flatMap { $0 }
             let rollbackMessage = ComposeError.rollbackFailed(

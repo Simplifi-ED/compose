@@ -57,6 +57,7 @@ package enum ComposeContainerGateway {
         plan: ServicePlan,
         machineContext: MachineContext = .applicationSandbox
     ) async throws {
+        let machine = machineContext.machineName ?? "host"
         if machineContext.isMachineMode {
             let booted = try machineContext.bootedContext()
             let existing = try await list(
@@ -64,6 +65,7 @@ package enum ComposeContainerGateway {
                 machineContext: machineContext
             )
             if !existing.isEmpty {
+                logLifecycleReplace(plan: plan, machine: machine)
                 try await ContainerTeardown.teardown(id: plan.name, machineContext: machineContext)
             }
             let runArguments = try ComposeFileStaging.preparedRunArguments(for: plan)
@@ -71,6 +73,7 @@ package enum ComposeContainerGateway {
                 snapshot: booted.snapshot,
                 containerArguments: ["run"] + runArguments
             )
+            logLifecycleStart(plan: plan, machine: machine)
             return
         }
         try await ServiceRunner.runContainerWithFileMounts(plan, machineContext: machineContext)
@@ -95,6 +98,7 @@ package enum ComposeContainerGateway {
         opts: ContainerStopOptions? = nil,
         machineContext: MachineContext = .applicationSandbox
     ) async throws {
+        let machine = machineContext.machineName ?? "host"
         if machineContext.isMachineMode {
             let booted = try machineContext.bootedContext()
             var args = ["stop", id]
@@ -102,6 +106,7 @@ package enum ComposeContainerGateway {
                 args.append(contentsOf: ["--timeout", String(timeout)])
             }
             try await MachineInVMRunner.run(snapshot: booted.snapshot, containerArguments: args)
+            logLifecycleStop(id: id, machine: machine)
             return
         }
         let client = ContainerClient()
@@ -110,6 +115,7 @@ package enum ComposeContainerGateway {
         } else {
             try await client.stop(id: id)
         }
+        logLifecycleStop(id: id, machine: machine)
     }
 
     package static func kill(
@@ -133,6 +139,7 @@ package enum ComposeContainerGateway {
         force: Bool = true,
         machineContext: MachineContext = .applicationSandbox
     ) async throws {
+        let machine = machineContext.machineName ?? "host"
         if machineContext.isMachineMode {
             let booted = try machineContext.bootedContext()
             var args = ["delete", id]
@@ -140,84 +147,50 @@ package enum ComposeContainerGateway {
                 args.insert("--force", at: 1)
             }
             try await MachineInVMRunner.run(snapshot: booted.snapshot, containerArguments: args)
+            logLifecycleRemove(id: id, machine: machine)
             return
         }
         try await ContainerClient().delete(id: id, force: force)
+        logLifecycleRemove(id: id, machine: machine)
     }
 
-    package static func copyIn(
-        id: String,
-        source: String,
-        destination: String,
-        mode: UInt32,
-        createParents: Bool,
-        machineContext: MachineContext = .applicationSandbox
-    ) async throws {
-        if machineContext.isMachineMode {
-            throw ComposeError.machineUnsupportedOperation("copy in")
+    private static func logLifecycleReplace(plan: ServicePlan, machine: String) {
+        OsLogTelemetry.enabled {
+            OsLogTelemetry.lifecycle.info(
+                """
+                event=container_replace project=\(plan.projectName, privacy: .public) \
+                service=\(plan.serviceName, privacy: .public) \
+                container=\(plan.name, privacy: .public) machine=\(machine, privacy: .public)
+                """
+            )
         }
-        try await ContainerClient().copyIn(
-            id: id,
-            source: source,
-            destination: destination,
-            mode: mode,
-            createParents: createParents
-        )
     }
 
-    package static func copyOut(
-        id: String,
-        source: String,
-        destination: String,
-        createParents: Bool,
-        machineContext: MachineContext = .applicationSandbox
-    ) async throws {
-        if machineContext.isMachineMode {
-            throw ComposeError.machineUnsupportedOperation("copy out")
+    private static func logLifecycleStart(plan: ServicePlan, machine: String) {
+        OsLogTelemetry.enabled {
+            OsLogTelemetry.lifecycle.info(
+                """
+                event=container_start project=\(plan.projectName, privacy: .public) \
+                service=\(plan.serviceName, privacy: .public) container=\(plan.name, privacy: .public) \
+                replica=\(plan.replicaIndex, privacy: .public) machine=\(machine, privacy: .public)
+                """
+            )
         }
-        try await ContainerClient().copyOut(
-            id: id,
-            source: source,
-            destination: destination,
-            createParents: createParents
-        )
     }
 
-    package static func createProcess(
-        containerId: String,
-        processId: String,
-        configuration: ProcessConfiguration,
-        stdio: [FileHandle?],
-        machineContext: MachineContext = .applicationSandbox
-    ) async throws -> any ClientProcess {
-        if machineContext.isMachineMode {
-            throw ComposeError.machineUnsupportedOperation("exec")
+    private static func logLifecycleStop(id: String, machine: String) {
+        OsLogTelemetry.enabled {
+            OsLogTelemetry.lifecycle.info(
+                "event=container_stop container=\(id, privacy: .public) machine=\(machine, privacy: .public)"
+            )
         }
-        return try await ContainerClient().createProcess(
-            containerId: containerId,
-            processId: processId,
-            configuration: configuration,
-            stdio: stdio
-        )
     }
 
-    package static func logs(
-        id: String,
-        machineContext: MachineContext = .applicationSandbox
-    ) async throws -> [FileHandle] {
-        if machineContext.isMachineMode {
-            throw ComposeError.machineUnsupportedOperation("logs streaming")
-        }
-        return try await ContainerClient().logs(id: id)
-    }
-
-    /// Native engine event stream hook. Empty until upstream exposes `containerEvent` XPC handling.
-    package static func events(
-        machineContext: MachineContext = .applicationSandbox
-    ) -> AsyncStream<ProjectEvent> {
-        _ = machineContext
-        return AsyncStream { continuation in
-            continuation.finish()
+    private static func logLifecycleRemove(id: String, machine: String) {
+        OsLogTelemetry.enabled {
+            OsLogTelemetry.lifecycle.info(
+                "event=container_remove container=\(id, privacy: .public) machine=\(machine, privacy: .public)"
+            )
         }
     }
 

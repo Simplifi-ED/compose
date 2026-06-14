@@ -17,6 +17,9 @@ public struct Logs: AsyncParsableCommand {
     @OptionGroup
     var machineOptions: MachineOptions
 
+    @OptionGroup
+    var osLogOptions: OsLogOptions
+
     @Flag(name: .long, help: "Stream new log lines.")
     var follow = false
 
@@ -36,6 +39,7 @@ public struct Logs: AsyncParsableCommand {
     }
 
     public func run() async throws {
+        OsLogConfiguration.apply(cliNoOslog: osLogOptions.isDisabled)
         guard let machineContext = try await machineOptions
             .resolveContext(stopped: .gracefulExit)
             .machineContextIfReady

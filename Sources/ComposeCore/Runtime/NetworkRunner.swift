@@ -1,7 +1,6 @@
 import ContainerAPIClient
 import ContainerResource
 import Foundation
-import MachineAPIClient
 
 /// Creates and removes project-scoped networks around container lifecycles.
 ///
@@ -44,20 +43,30 @@ package enum NetworkRunner {
                 }
                 continue
             }
-            do {
-                let configuration = try NetworkConfiguration(
-                    name: plan.runtimeName,
-                    mode: .nat,
-                    labels: ResourceLabels(ComposeLabels.networkLabels(
-                        projectName: projectName,
-                        logicalName: plan.logicalName
-                    )),
-                    plugin: createPlugin
-                )
-                _ = try await client.create(configuration: configuration)
-            } catch {
-                throw ComposeError.networkCreateFailed(network: plan.logicalName, underlying: error)
-            }
+            try await createHostNetwork(plan: plan, projectName: projectName, client: client)
+        }
+    }
+
+    private static func createHostNetwork(
+        plan: NetworkPlanning.Plan,
+        projectName: String,
+        client: NetworkClient
+    ) async throws {
+        do {
+            let configuration = try NetworkConfiguration(
+                name: plan.runtimeName,
+                mode: .nat,
+                labels: ResourceLabels(ComposeLabels.networkLabels(
+                    projectName: projectName,
+                    logicalName: plan.logicalName
+                )),
+                plugin: createPlugin
+            )
+            _ = try await client.create(configuration: configuration)
+            logNetworkCreate(projectName: projectName, plan: plan, machine: "host")
+        } catch {
+            logNetworkCreateFailed(projectName: projectName, plan: plan, error: error)
+            throw ComposeError.networkCreateFailed(network: plan.logicalName, underlying: error)
         }
     }
 
@@ -105,96 +114,17 @@ package enum NetworkRunner {
                     warnRemoveFailed(names: [result.name], error: error)
                 } else {
                     print(result.name)
+                    logNetworkRemove(projectName: projectName, runtimeName: result.name, machine: "host")
                 }
             }
         }
     }
 
-    private static func createInMachine(
-        _ plans: [NetworkPlanning.Plan],
-        projectName: String,
-        machineContext: MachineContext
-    ) async throws {
-        let booted = try machineContext.bootedContext()
-        for plan in plans {
-            if let resource = try await machineNetworkResource(
-                snapshot: booted.snapshot,
-                name: plan.runtimeName
-            ) {
-                if !isProjectNetwork(resource, projectName: projectName) {
-                    warnUnlabeledNetworkReuse(runtimeName: plan.runtimeName)
-                }
-                continue
-            }
-            do {
-                var arguments = ["network", "create"]
-                for (key, value) in ComposeLabels.networkLabels(
-                    projectName: projectName,
-                    logicalName: plan.logicalName
-                ).sorted(by: { $0.key < $1.key }) {
-                    arguments.append(contentsOf: ["--label", "\(key)=\(value)"])
-                }
-                arguments.append(plan.runtimeName)
-                try await MachineInVMRunner.run(snapshot: booted.snapshot, containerArguments: arguments)
-            } catch {
-                throw ComposeError.networkCreateFailed(network: plan.logicalName, underlying: error)
-            }
-        }
-    }
-
-    private static func removeInMachine(
-        _ plans: [NetworkPlanning.Plan],
-        projectName: String,
-        machineContext: MachineContext
-    ) async {
-        let booted: BootedMachineContext
-        do {
-            booted = try machineContext.bootedContext()
-        } catch {
-            warnRemoveFailed(names: plans.map(\.runtimeName), error: error)
-            return
-        }
-        for plan in plans {
-            guard let resource = try? await machineNetworkResource(
-                snapshot: booted.snapshot,
-                name: plan.runtimeName
-            ),
-                !resource.isBuiltin,
-                isProjectNetwork(resource, projectName: projectName)
-            else {
-                continue
-            }
-            do {
-                try await MachineInVMRunner.run(
-                    snapshot: booted.snapshot,
-                    containerArguments: ["network", "delete", plan.runtimeName]
-                )
-                print(plan.runtimeName)
-            } catch {
-                warnRemoveFailed(names: [plan.runtimeName], error: error)
-            }
-        }
-    }
-
-    private static func machineNetworkResource(
-        snapshot: MachineSnapshot,
-        name: String
-    ) async throws -> NetworkResource? {
-        let capture = try await MachineInVMRunner.runCapturing(
-            snapshot: snapshot,
-            containerArguments: ["network", "inspect", name]
-        )
-        guard capture.exitCode == 0 else { return nil }
-        let trimmed = capture.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return nil }
-        return try JSONDecoder().decode([NetworkResource].self, from: Data(trimmed.utf8)).first
-    }
-
-    private static func isProjectNetwork(_ resource: NetworkResource, projectName: String) -> Bool {
+    package static func isProjectNetwork(_ resource: NetworkResource, projectName: String) -> Bool {
         resource.labels.contains { $0 == ComposeLabels.project && $1 == projectName }
     }
 
-    private static func warnUnlabeledNetworkReuse(runtimeName: String) {
+    package static func warnUnlabeledNetworkReuse(runtimeName: String) {
         fputs(
             "Warning: network '\(runtimeName)' already exists but wasn't created"
                 + " by this compose project; reusing it.\n",
@@ -202,12 +132,56 @@ package enum NetworkRunner {
         )
     }
 
-    private static func warnRemoveFailed(names: [String], error: Error) {
+    package static func warnRemoveFailed(names: [String], error: Error) {
         let list = names.joined(separator: ", ")
         fputs(
             "Warning: couldn't remove network(s) \(list): \(error.localizedDescription). "
                 + "Remove them with `container network rm`.\n",
             stderr
         )
+    }
+
+    package static func logNetworkCreate(
+        projectName: String,
+        plan: NetworkPlanning.Plan,
+        machine: String
+    ) {
+        OsLogTelemetry.enabled {
+            OsLogTelemetry.networks.info(
+                """
+                event=network_create project=\(projectName, privacy: .public) \
+                network=\(plan.logicalName, privacy: .public) \
+                runtime=\(plan.runtimeName, privacy: .public) \
+                machine=\(machine, privacy: .public)
+                """
+            )
+        }
+    }
+
+    package static func logNetworkCreateFailed(
+        projectName: String,
+        plan: NetworkPlanning.Plan,
+        error: Error
+    ) {
+        OsLogTelemetry.enabled {
+            OsLogTelemetry.networks.error(
+                """
+                event=network_create_failed project=\(projectName, privacy: .public) \
+                network=\(plan.logicalName, privacy: .public) \
+                error_type=\(String(describing: type(of: error)), privacy: .public)
+                """
+            )
+        }
+    }
+
+    package static func logNetworkRemove(projectName: String, runtimeName: String, machine: String) {
+        OsLogTelemetry.enabled {
+            OsLogTelemetry.networks.info(
+                """
+                event=network_remove project=\(projectName, privacy: .public) \
+                runtime=\(runtimeName, privacy: .public) machine=\(machine, privacy: .public)
+                """
+            )
+        }
     }
 }

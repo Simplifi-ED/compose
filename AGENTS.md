@@ -35,6 +35,7 @@ You are building a **Minimal Real Compose Plugin**—NOT a generic orchestration
 - Minimal compose `networks:`: root declarations (empty/no-option form; `external: false` only) and service memberships (short list + empty-map long form); project-scoped network create (`{project}_{network}`) before startup waves and removal on `down`; attach via `container run --network`; DNS resolves **container names** (`{project}_{service}_{index}`), not Docker-style service shorthand; custom networks require macOS 26+ [1].
 - Minimal compose `volumes:`: root declarations (empty/no-option form; `external: false` only) and service short-syntax named mounts (`mydata:/app/data`); project-scoped volume create (`{project}_{volume}`) via `ClientVolume` before startup waves; mount via `container run -v`; removal on `down -v` only (label-scoped); bind-mount `down -v` behavior unchanged [1].
 - `compose doctor`: non-mutating pre-flight diagnostics (`DoctorChecks` / `DoctorReport`); checks container CLI, API reachability, plugin bundle/discovery, disk space, Rosetta (advisory), and kernel/runtime via cached-image probe only; explicit skip chain; `--quiet` exit-code mode; no `--fix` / auto-repair; register subcommands in `ComposeSubcommandRegistry` (also used by `ComposeApp` and plugin-discovery check) [1].
+- Unified Logging telemetry: structured `os.Logger` in `ComposeCore/Telemetry/` (subsystem `com.simplifi-ed.container-compose`; categories `orchestration`, `lifecycle`, `signals`, `volumes`, `networks`, `build`); high-signal orchestration events at gateway/runner call sites; opt-out via `COMPOSE_OSLOG=0` or `--no-oslog`; no telemetry during `--dry-run`; never log secrets, env values, build args, or staged config/secret paths; supplements stderr/stdout (does not replace) [1].
 
 ### **Out of Scope (DO NOT CODE):**
 
@@ -138,6 +139,35 @@ You must actively resolve the three core gaps in the VM hypervisor boundary inst
 
 ---
 
+## 7. Ponytail, lazy senior dev mode
+
+You are a lazy senior developer. Lazy means efficient, not careless. The best code is the code never written.
+
+Before writing any code, stop at the first rung that holds:
+
+1. Does this need to be built at all? (YAGNI)
+2. Does the standard library already do this? Use it.
+3. Does a native platform feature cover it? Use it.
+4. Does an already-installed dependency solve it? Use it.
+5. Can this be one line? Make it one line.
+6. Only then: write the minimum code that works.
+
+Rules:
+
+- No abstractions that weren't explicitly requested.
+- No new dependency if it can be avoided.
+- No boilerplate nobody asked for.
+- Deletion over addition. Boring over clever. Fewest files possible.
+- Question complex requests: "Do you actually need X, or does Y cover it?"
+- Pick the edge-case-correct option when two stdlib approaches are the same size, lazy means less code, not the flimsier algorithm.
+- Mark intentional simplifications with a `ponytail:` comment. If the shortcut has a known ceiling (global lock, O(n²) scan, naive heuristic), the comment names the ceiling and the upgrade path.
+
+Not lazy about: input validation at trust boundaries, error handling that prevents data loss, security, accessibility, anything explicitly requested. Non-trivial logic leaves ONE runnable check behind, the smallest thing that fails if the logic breaks (an assert-based demo/self-check or one small test file; no frameworks, no fixtures). Trivial one-liners need no test.
+
+(Yes, this section also applies to agents working on this repo itself. Especially to them.)
+
+---
+
 ## Learned User Preferences
 
 - v1 scope is minimal real compose (parse `docker-compose.yml`, start/stop services), not full Docker Compose parity.
@@ -163,6 +193,7 @@ You must actively resolve the three core gaps in the VM hypervisor boundary inst
 - Per-file substitution before YAML parse: shell environment overrides `.env` beside each compose file; supports `${VAR}`, `${VAR:-default}`, `${VAR-default}`, and `$$` escapes; unresolved `${VAR}` errors; YAML anchors/aliases resolved by Yams during decode.
 - CLI subcommands: `up`, `down`, `pause`, `unpause`, `ps`, `logs`, `events`, `top`, `exec`, `cp`, `run`, `watch`, `config`, `doctor`, `save`, `load`; add new commands to `ComposeSubcommandRegistry` in `Commands/` (single source for `ComposeApp` registration and `doctor` plugin-discovery check); shared flags via `@OptionGroup` `ParsableArguments` structs (`ProjectOptions`, `ProfileOptions`, …) with synthesized `Codable`—delegate to pure resolution helpers, not `ResolutionCache`/custom `init(from:)` unless encoding is required; `up`/`down` accept `--progress auto|plain|none`; `up --attach` multiplexes logs after detached start; `-f`/`-p` on subcommands, not `compose` root; service `init: true` maps to `container run --init` via `ServiceRunMapping` (`useInit` tri-state merge; config encodes only `init: true`); `save -o` exports profile-resolved manifest + OCI stack tar (`ArchiveExport`, local images only—no pull); `load -i` imports archive and writes bundled `compose.yaml`; `save`/`load` reject `--machine`.
 - Profiles: default `up` skips profiled services; `--profile` (repeatable, OR) and process-env `COMPOSE_PROFILES` (comma-separated, union with CLI—not read from compose `.env`) on `up`, `ps`, `logs`, `events`, `top`, `down`, `config`, `watch`; `ProfileResolution.resolve(cliProfiles:environment:)` is the pure merge helper (inject env dict in compose-verify—no setenv); sticky shell `COMPOSE_PROFILES` sets `profileFilterRequested` for query/teardown even on `-p`-only (needs compose file or `profileFilterRequiresComposeFile`; `COMPOSE_PROFILES=*`/`down --profile "*"` stops all project containers without a compose file); `run` auto-enables target service profiles; filter before dependency graph with `profileExcludedDependency`.
+- Unified Logging: `ComposeCore/Telemetry/OsLogConfiguration` + `OsLogTelemetry` (subsystem `com.simplifi-ed.container-compose`); `OsLogConfiguration.apply` at command entry; process env `COMPOSE_OSLOG=0` and `--no-oslog` (`OsLogOptions`) opt out; dry-run suppresses all os_log; secrets/env/build args never logged.
 - `ComposeCore/Terminal/` is presentation-only (no Container API imports); `Runtime/` holds orchestration (`ServiceRunner` waves + `HealthWait` inter-wave gating, `LogStream`, `SignalForwarding`, `ExecSession`, `AttachAfterUp`, `ProjectStatus`). `compose top` streams `ContainerClient.stats()` by project labels; `compose logs` multiplexes containerLog + bootlog. SIGINT during `up`/`down` leaves started containers running. State uses `com.docker.compose.*` labels on `ContainerRun`. Interactive PTY resize for `exec`/`run` (`useInteractivePTY`) is forwarded by upstream `ProcessIO.handleProcess` (SIGWINCH → `ClientProcess.resize`); compose owns SIGINT/SIGTERM via `SignalForwarding`. `up --attach` is log-only (no PTY resize); `--machine` exec/run resize deferred.
 - Scaling: `ReplicaPlanning` is pure validation/naming; replica loops live in `ServicePlanner.startupLayers`; `up` names are always `{project}_{service}_{index}` (1-based); `container_name` errors on `up` via `validateForUp` but still keys `run` via `runContainerBaseName`; `deploy.replicas` must be >= 1 at decode; static host port + replicas > 1 fails at plan time; container-only ports (`80`, `:80`) parse but emit no `-p`; replicas carry `com.docker.compose.container-number`; log multiplex keys by container name and disambiguates replica prefixes. `deploy.resources.limits` via `DeployResourceLimitsPlanning`: whole-integer `cpus` only (fractional decimals and millicore suffixes rejected at plan/config time—Virtualization.framework); omit `cpus` for lightweight services; `memory` maps to `--memory`/`-m`.
 - `develop.watch` via FSEvents sync (`WatchDebouncer`, `ContainerFileSync`); `build:` via `BuildRunner`/`Application.BuildCommand` before waves (default tag `{project}_{service}`; args never logged); `compose cp` via `CpSession`/`CpContainerResolver` and shared `ContainerCopyAPI`; dry-run prefixes for build/cp; path sandbox reuses `BindMountPathResolver`; `develop.watch` `rebuild` still deferred.

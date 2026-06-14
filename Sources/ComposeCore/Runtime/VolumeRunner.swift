@@ -1,7 +1,6 @@
 import ContainerAPIClient
 import ContainerResource
 import Foundation
-import MachineAPIClient
 
 /// Creates and removes project-scoped named volumes around container lifecycles.
 ///
@@ -32,11 +31,7 @@ package enum VolumeRunner {
             if existing.contains(plan.runtimeName) {
                 if let configuration = try? await ClientVolume.inspect(plan.runtimeName),
                    !isProjectVolume(configuration, projectName: projectName) {
-                    fputs(
-                        "Warning: volume '\(plan.runtimeName)' already exists but wasn't created"
-                            + " by this compose project; reusing it.\n",
-                        stderr
-                    )
+                    warnUnlabeledVolumeReuse(runtimeName: plan.runtimeName)
                 }
                 continue
             }
@@ -48,7 +43,9 @@ package enum VolumeRunner {
                         logicalName: plan.logicalName
                     )
                 )
+                logVolumeCreate(projectName: projectName, plan: plan, machine: "host")
             } catch {
+                logVolumeCreateFailed(projectName: projectName, plan: plan, error: error)
                 throw ComposeError.volumeCreateFailed(volume: plan.logicalName, underlying: error)
             }
         }
@@ -96,110 +93,17 @@ package enum VolumeRunner {
                     warnRemoveFailed(names: [result.name], error: error)
                 } else {
                     print(result.name)
+                    logVolumeRemove(projectName: projectName, runtimeName: result.name, machine: "host")
                 }
             }
         }
-    }
-
-    private static func createInMachine(
-        _ plans: [VolumePlanning.Plan],
-        projectName: String,
-        machineContext: MachineContext
-    ) async throws {
-        let booted = try machineContext.bootedContext()
-        let existing = try await machineVolumeNames(snapshot: booted.snapshot)
-        for plan in plans {
-            if existing.contains(plan.runtimeName) {
-                if let configuration = try? await machineVolumeConfiguration(
-                    snapshot: booted.snapshot,
-                    name: plan.runtimeName
-                ),
-                    !isProjectVolume(configuration, projectName: projectName) {
-                    warnUnlabeledVolumeReuse(runtimeName: plan.runtimeName)
-                }
-                continue
-            }
-            do {
-                let arguments = machineCreateArguments(plan: plan, projectName: projectName)
-                try await MachineInVMRunner.run(snapshot: booted.snapshot, containerArguments: arguments)
-            } catch {
-                throw ComposeError.volumeCreateFailed(volume: plan.logicalName, underlying: error)
-            }
-        }
-    }
-
-    private static func removeInMachine(
-        _ plans: [VolumePlanning.Plan],
-        projectName: String,
-        machineContext: MachineContext
-    ) async {
-        let booted: BootedMachineContext
-        do {
-            booted = try machineContext.bootedContext()
-        } catch {
-            warnRemoveFailed(names: plans.map(\.runtimeName), error: error)
-            return
-        }
-        for plan in plans {
-            let configuration: VolumeConfiguration?
-            do {
-                configuration = try await machineVolumeConfiguration(
-                    snapshot: booted.snapshot,
-                    name: plan.runtimeName
-                )
-            } catch {
-                warnRemoveFailed(names: [plan.runtimeName], error: error)
-                continue
-            }
-            guard let configuration, isProjectVolume(configuration, projectName: projectName) else {
-                continue
-            }
-            do {
-                try await MachineInVMRunner.run(
-                    snapshot: booted.snapshot,
-                    containerArguments: machineRemoveArguments(plan: plan)
-                )
-                print(plan.runtimeName)
-            } catch {
-                warnRemoveFailed(names: [plan.runtimeName], error: error)
-            }
-        }
-    }
-
-    private static func machineVolumeConfiguration(
-        snapshot: MachineSnapshot,
-        name: String
-    ) async throws -> VolumeConfiguration? {
-        let capture = try await MachineInVMRunner.runCapturing(
-            snapshot: snapshot,
-            containerArguments: machineInspectArguments(name: name)
-        )
-        guard capture.exitCode == 0 else { return nil }
-        let trimmed = capture.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return nil }
-        return try JSONDecoder().decode([VolumeConfiguration].self, from: Data(trimmed.utf8)).first
-    }
-
-    private static func machineVolumeNames(snapshot: MachineSnapshot) async throws -> Set<String> {
-        let capture = try await MachineInVMRunner.runCapturing(
-            snapshot: snapshot,
-            containerArguments: machineListArguments()
-        )
-        guard capture.exitCode == 0 else {
-            throw ComposeError.machineCommandFailed(
-                machine: snapshot.id,
-                command: "volume list",
-                exitCode: capture.exitCode
-            )
-        }
-        return Set(capture.stdout.split(separator: "\n").map(String.init))
     }
 
     private static func listVolumeNames() async throws -> Set<String> {
         Set(try await ClientVolume.list().map(\.name))
     }
 
-    private static func warnUnlabeledVolumeReuse(runtimeName: String) {
+    package static func warnUnlabeledVolumeReuse(runtimeName: String) {
         fputs(
             "Warning: volume '\(runtimeName)' already exists but wasn't created"
                 + " by this compose project; reusing it.\n",
@@ -207,7 +111,50 @@ package enum VolumeRunner {
         )
     }
 
-    private static func warnRemoveFailed(names: [String], error: Error) {
+    package static func logVolumeCreate(
+        projectName: String,
+        plan: VolumePlanning.Plan,
+        machine: String
+    ) {
+        OsLogTelemetry.enabled {
+            OsLogTelemetry.volumes.info(
+                """
+                event=volume_create project=\(projectName, privacy: .public) \
+                volume=\(plan.logicalName, privacy: .public) runtime=\(plan.runtimeName, privacy: .public) \
+                machine=\(machine, privacy: .public)
+                """
+            )
+        }
+    }
+
+    package static func logVolumeCreateFailed(
+        projectName: String,
+        plan: VolumePlanning.Plan,
+        error: Error
+    ) {
+        OsLogTelemetry.enabled {
+            OsLogTelemetry.volumes.error(
+                """
+                event=volume_create_failed project=\(projectName, privacy: .public) \
+                volume=\(plan.logicalName, privacy: .public) \
+                error_type=\(String(describing: type(of: error)), privacy: .public)
+                """
+            )
+        }
+    }
+
+    package static func logVolumeRemove(projectName: String, runtimeName: String, machine: String) {
+        OsLogTelemetry.enabled {
+            OsLogTelemetry.volumes.info(
+                """
+                event=volume_remove project=\(projectName, privacy: .public) \
+                runtime=\(runtimeName, privacy: .public) machine=\(machine, privacy: .public)
+                """
+            )
+        }
+    }
+
+    package static func warnRemoveFailed(names: [String], error: Error) {
         let list = names.joined(separator: ", ")
         fputs(
             "Warning: couldn't remove volume(s) \(list): \(error.localizedDescription). "

@@ -21,6 +21,9 @@ public struct Events: AsyncParsableCommand {
     @OptionGroup
     var machineOptions: MachineOptions
 
+    @OptionGroup
+    var osLogOptions: OsLogOptions
+
     @Flag(name: .long, help: "Keep streaming events until interrupted.")
     var follow = false
 
@@ -43,6 +46,7 @@ public struct Events: AsyncParsableCommand {
     }
 
     public func run() async throws {
+        OsLogConfiguration.apply(cliNoOslog: osLogOptions.isDisabled)
         guard let machineContext = try await machineOptions
             .resolveContext(stopped: .gracefulExit)
             .machineContextIfReady

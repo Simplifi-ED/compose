@@ -19,6 +19,9 @@ public struct Run: AsyncParsableCommand {
     var dryRunOptions: DryRunOptions
 
     @OptionGroup
+    var osLogOptions: OsLogOptions
+
+    @OptionGroup
     var machineOptions: MachineOptions
 
     @Flag(name: .long, help: "Remove the container after it exits.")
@@ -47,6 +50,10 @@ public struct Run: AsyncParsableCommand {
     }
 
     public func run() async throws {
+        OsLogConfiguration.apply(
+            cliNoOslog: osLogOptions.isDisabled,
+            dryRun: dryRunOptions.isEnabled
+        )
         try machineOptions.rejectIfUnsupported(commandName: "run")
         let resolved = try resolveRun()
 
