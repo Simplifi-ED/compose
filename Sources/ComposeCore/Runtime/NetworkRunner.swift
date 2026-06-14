@@ -18,32 +18,34 @@ package enum NetworkRunner {
         machineContext: MachineContext = .applicationSandbox
     ) async throws {
         guard !plans.isEmpty else { return }
-        if let dryRunManifest {
-            for plan in plans {
-                await dryRunManifest.recordNetworkCreate(name: plan.runtimeName)
-            }
-            return
-        }
-        if machineContext.isMachineMode {
-            try await createInMachine(plans, projectName: projectName, machineContext: machineContext)
-            return
-        }
-        guard #available(macOS 26, *) else {
-            throw ComposeError.networksRequireMacOS26
-        }
-        let client = NetworkClient()
-        let resourcesByID = Dictionary(
-            try await client.list().map { ($0.id, $0) },
-            uniquingKeysWith: { first, _ in first }
-        )
-        for plan in plans {
-            if let resource = resourcesByID[plan.runtimeName] {
-                if !isProjectNetwork(resource, projectName: projectName) {
-                    warnUnlabeledNetworkReuse(runtimeName: plan.runtimeName)
+        try await SignpostTelemetry.interval(SignpostTelemetry.network, category: .networks) {
+            if let dryRunManifest {
+                for plan in plans {
+                    await dryRunManifest.recordNetworkCreate(name: plan.runtimeName)
                 }
-                continue
+                return
             }
-            try await createHostNetwork(plan: plan, projectName: projectName, client: client)
+            if machineContext.isMachineMode {
+                try await createInMachine(plans, projectName: projectName, machineContext: machineContext)
+                return
+            }
+            guard #available(macOS 26, *) else {
+                throw ComposeError.networksRequireMacOS26
+            }
+            let client = NetworkClient()
+            let resourcesByID = Dictionary(
+                try await client.list().map { ($0.id, $0) },
+                uniquingKeysWith: { first, _ in first }
+            )
+            for plan in plans {
+                if let resource = resourcesByID[plan.runtimeName] {
+                    if !isProjectNetwork(resource, projectName: projectName) {
+                        warnUnlabeledNetworkReuse(runtimeName: plan.runtimeName)
+                    }
+                    continue
+                }
+                try await createHostNetwork(plan: plan, projectName: projectName, client: client)
+            }
         }
     }
 

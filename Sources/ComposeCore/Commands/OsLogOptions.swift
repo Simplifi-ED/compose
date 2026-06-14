@@ -5,7 +5,7 @@ public struct OsLogOptions: ParsableArguments {
 
     @Flag(
         name: .long,
-        help: "Disable Unified Logging telemetry (or set COMPOSE_OSLOG=0)."
+        help: "Disable Unified Logging telemetry and Instruments signposts (or set COMPOSE_OSLOG=0)."
     )
     var noOslog = false
 

@@ -38,8 +38,10 @@ public enum ContainerDiscovery {
         forProject projectName: String,
         machineContext: MachineContext = .applicationSandbox
     ) async throws -> [DiscoveredContainer] {
-        try await projectContainers(forProject: projectName, machineContext: machineContext).map {
-            DiscoveredContainer(name: $0.name, serviceName: $0.serviceName)
+        try await SignpostTelemetry.interval(SignpostTelemetry.discovery) {
+            try await projectContainers(forProject: projectName, machineContext: machineContext).map {
+                DiscoveredContainer(name: $0.name, serviceName: $0.serviceName)
+            }
         }
     }
 
