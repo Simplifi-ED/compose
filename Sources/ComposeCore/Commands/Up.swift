@@ -78,15 +78,7 @@ public struct Up: AsyncParsableCommand {
         let bootedContext = try await machineContext.ensureBooted()
         try await runLive(
             LiveInput(
-                buildPlans: startup.buildPlans,
-                networkPlans: startup.networkPlans,
-                volumePlans: startup.volumePlans,
-                projectName: startup.projectName,
-                composeFile: startup.composeFile,
-                fileURLs: startup.fileURLs,
-                layers: startup.layers,
-                plans: startup.plans,
-                healthContext: startup.healthContext,
+                plan: startup,
                 machineContext: bootedContext,
                 installHostDNS: hostDNSOptions.isEnabled
             )

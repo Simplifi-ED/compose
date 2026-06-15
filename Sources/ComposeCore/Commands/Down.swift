@@ -50,64 +50,49 @@ public struct Down: AsyncParsableCommand {
             dryRun: dryRunOptions.isEnabled
         )
         try parallelOptions.validate()
-        var machineContext = try await machineOptions.resolveContext().machineContext
-        if machineContext.isMachineMode, !dryRunOptions.isEnabled, !machineContext.isMachineRunning {
-            machineContext = try await machineContext.ensureBooted()
-        }
-        let context = try projectOptions.resolvedLabelCommandContext(
-            profileFilterRequested: profileOptions.profileFilterRequested,
-            machineContext: machineContext
-        )
-        let discovered = try await ContainerDiscovery.containers(
-            forProject: context.projectName,
-            machineContext: machineContext
-        )
-        let containers = try DownShutdown.filteredContainers(
-            discovered: discovered,
-            context: context,
-            profileFilterRequested: profileOptions.profileFilterRequested,
-            activeProfiles: profileOptions.activeProfileSet,
-            tearsDownAll: profileOptions.tearsDownAll
-        )
-        let resolution = try resolveContainersForShutdown(
-            discovered: discovered,
-            selected: containers,
-            context: context
-        )
+        let request = try downRequest(dryRun: dryRunOptions.isEnabled)
+        let shutdown = try await ProjectDownRun.resolveShutdown(request: request)
 
         if dryRunOptions.isEnabled {
             try await runDryRun(
-                context: context,
-                discovered: discovered,
-                containers: resolution.containers,
-                orphanNames: resolution.orphanNames,
-                machineContext: machineContext
+                context: shutdown.labelContext,
+                discovered: shutdown.discovered,
+                containers: shutdown.containers,
+                orphanNames: shutdown.orphanNames,
+                machineContext: shutdown.machineContext
             )
             return
         }
 
-        try await executeShutdown(
-            context: context,
-            discovered: discovered,
-            containers: resolution.containers,
-            machineContext: machineContext
+        try await executeShutdown(request: request, shutdown: shutdown)
+    }
+
+    private func downRequest(dryRun: Bool) throws -> ProjectDownRequest {
+        ProjectDownRequest(
+            inputs: projectOptions.composeCommandInputs(
+                profiles: profileOptions.profiles,
+                machineName: machineOptions.resolvedMachineName
+            ),
+            dryRun: dryRun,
+            removeVolumes: volumes,
+            trim: trim,
+            maxConcurrent: parallelOptions.resolvedMaxConcurrent(),
+            orphanPolicy: workspaceHygiene.shouldRemoveOrphans
+                ? ProjectDownOrphanPolicy(
+                    profileFilterRequested: profileOptions.profileFilterRequested,
+                    tearsDownAll: profileOptions.tearsDownAll,
+                    activeProfiles: profileOptions.activeProfileSet
+                )
+                : nil
         )
     }
 
     private func executeShutdown(
-        context: ProjectOptions.LabelCommandContext,
-        discovered: [DiscoveredContainer],
-        containers: [DiscoveredContainer],
-        machineContext: MachineContext
+        request: ProjectDownRequest,
+        shutdown: ProjectDownRun.ShutdownContext
     ) async throws {
-        let useOrderedShutdown = context.fileURLs != nil && !projectOptions.hasExplicitProjectName
-        let volumePurgeContext = DownShutdown.volumePurgeContext(
-            context: context,
-            discovered: discovered,
-            teardownContainers: containers
-        )
         let displayNames = Dictionary(
-            containers.map {
+            shutdown.containers.map {
                 ($0.name, progressServiceLabel(containerName: $0.name, serviceName: $0.serviceName))
             },
             uniquingKeysWith: { _, last in last }
@@ -117,33 +102,14 @@ public struct Down: AsyncParsableCommand {
             phase: .stopping,
             label: { displayNames[$0] ?? $0 }
         )
-
-        let shouldPurgeVolumes = volumes
-        let shouldTrim = trim
-        let execution = WaveExecutionPolicy(maxConcurrent: parallelOptions.resolvedMaxConcurrent())
         try await runOrchestrationCommand(
             lines: orchestration.lines,
             interruptedMessage: "Shutdown interrupted. Some containers may still be running."
         ) {
-            try await DownShutdown.tearDownContainers(
-                context: context,
-                containers: containers,
-                useOrderedShutdown: useOrderedShutdown,
-                progress: orchestration.handlers,
-                execution: execution,
-                machineContext: machineContext,
-                trimBeforeDelete: shouldTrim
-            )
-            try await DownShutdown.finishProjectTeardown(
-                DownShutdown.FinishTeardownInput(
-                    context: context,
-                    discovered: discovered,
-                    teardownContainers: containers,
-                    shouldPurgeVolumes: shouldPurgeVolumes,
-                    shouldTrim: shouldTrim,
-                    bindPurgeContext: volumePurgeContext,
-                    machineContext: machineContext
-                )
+            try await ProjectDownRun.executeShutdown(
+                request: request,
+                shutdown: shutdown,
+                execution: ProjectDownExecution(progress: orchestration.handlers)
             )
         }
     }

@@ -3,7 +3,7 @@ WARNINGS_AS_ERRORS ?= true
 SWIFT ?= /usr/bin/swift
 SWIFT_FLAGS := $(if $(filter-out false,$(WARNINGS_AS_ERRORS)),-Xswiftc -warnings-as-errors)
 
-.PHONY: build lint test dist verify-codesign smoke smoke-volumes smoke-volumes-named smoke-networks clean
+.PHONY: build lint test dist verify-codesign smoke smoke-xpc smoke-volumes smoke-volumes-named smoke-networks clean
 
 build:
 	$(SWIFT) build -c $(BUILD_CONFIGURATION) $(SWIFT_FLAGS)
@@ -24,6 +24,9 @@ verify-codesign:
 
 smoke:
 	./scripts/smoke-test.sh
+
+smoke-xpc: ## local Mach XPC listener + sample client (arm64)
+	bash ./scripts/smoke-xpc.sh
 
 smoke-volumes: ## install plugin + live :ro/:z bind-mount runtime checks
 	bash ./scripts/install.sh

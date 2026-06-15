@@ -6,10 +6,10 @@ extension Up {
         guard input.installHostDNS else { return }
         do {
             try await HostDNSMapping.installAll(
-                composeFile: input.composeFile,
-                projectName: input.projectName,
-                firstComposeFileURL: input.fileURLs[0],
-                activeServiceNames: Set(input.plans.map(\.serviceName))
+                composeFile: input.plan.composeFile,
+                projectName: input.plan.projectName,
+                firstComposeFileURL: input.plan.fileURLs[0],
+                activeServiceNames: Set(input.plan.plans.map(\.serviceName))
             )
         } catch let error as ComposeError {
             switch error {
@@ -30,8 +30,8 @@ extension Up {
         guard input.installHostDNS else { return }
         if error is ExitCode { return }
         await HostDNSMapping.removeProjectMappings(
-            projectName: input.projectName,
-            firstComposeFileURL: input.fileURLs[0]
+            projectName: input.plan.projectName,
+            firstComposeFileURL: input.plan.fileURLs[0]
         )
     }
 }

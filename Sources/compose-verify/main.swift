@@ -230,6 +230,7 @@ do {
     runner.runRunTests()
     runner.runSignalsTests()
     runner.runOsLogConfigurationTests()
+    runner.runXPCTests()
 } catch {
     fputs("FAIL: unexpected error: \(error)\n", stderr)
     runner.failures += 1

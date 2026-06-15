@@ -2,42 +2,31 @@ import Foundation
 
 extension Up {
     struct LiveInput: Sendable {
-        let buildPlans: [BuildRunner.Plan]
-        let networkPlans: [NetworkPlanning.Plan]
-        let volumePlans: [VolumePlanning.Plan]
-        let projectName: String
-        let composeFile: ComposeFile
-        let fileURLs: [URL]
-        let layers: [[ServicePlan]]
-        let plans: [ServicePlan]
-        let healthContext: HealthWaitContext
+        let plan: StartupPlan
         let machineContext: MachineContext
         let installHostDNS: Bool
     }
 
     func runLive(_ input: LiveInput) async throws {
         try await executeBuildPlans(
-            input.buildPlans,
+            input.plan.buildPlans,
             dryRunManifest: nil,
             machineContext: input.machineContext
         )
         try await NetworkRunner.createAll(
-            input.networkPlans,
-            projectName: input.projectName,
+            input.plan.networkPlans,
+            projectName: input.plan.projectName,
             machineContext: input.machineContext
         )
         try await VolumeRunner.createAll(
-            input.volumePlans,
-            projectName: input.projectName,
+            input.plan.volumePlans,
+            projectName: input.plan.projectName,
             machineContext: input.machineContext
         )
         try await installHostDNSIfRequested(input)
         do {
             try await orchestrateStartup(
-                projectName: input.projectName,
-                composeFile: input.composeFile,
-                layers: input.layers,
-                healthContext: input.healthContext,
+                plan: input.plan,
                 machineContext: input.machineContext
             )
         } catch {
@@ -45,46 +34,39 @@ extension Up {
             throw error
         }
         try await finishStartup(
-            plans: input.plans,
-            projectName: input.projectName,
-            composeFile: input.composeFile,
-            fileURLs: input.fileURLs,
+            plans: input.plan.plans,
+            projectName: input.plan.projectName,
+            composeFile: input.plan.composeFile,
+            fileURLs: input.plan.fileURLs,
             machineContext: input.machineContext
         )
     }
 
     func orchestrateStartup(
-        projectName: String,
-        composeFile: ComposeFile,
-        layers: [[ServicePlan]],
-        healthContext: HealthWaitContext,
+        plan: StartupPlan,
         machineContext: MachineContext
     ) async throws {
-        let shouldRemoveOrphans = workspaceHygiene.shouldRemoveOrphans
-        let activeProfiles = profileOptions.activeProfileSet
-        let execution = WaveExecutionPolicy(maxConcurrent: parallelOptions.resolvedMaxConcurrent())
         let orchestration = makeProgressOrchestration(
             display: progressOptions.resolvedDisplay(),
             phase: .starting
+        )
+        let request = ProjectUpRequest(
+            inputs: projectOptions.composeCommandInputs(
+                profiles: profileOptions.profiles,
+                machineName: machineContext.machineName
+            ),
+            removeOrphans: workspaceHygiene.shouldRemoveOrphans,
+            maxConcurrent: parallelOptions.resolvedMaxConcurrent(),
+            scaleOverrides: (try? scaleOptions.resolvedScaleOverrides()) ?? [:]
         )
         try await runOrchestrationCommand(
             lines: orchestration.lines,
             interruptedMessage: "Startup interrupted. Started containers are still running."
         ) {
-            if shouldRemoveOrphans {
-                try await UpOrphanRemoval.removeBeforeStartupBestEffort(
-                    projectName: projectName,
-                    composeFile: composeFile,
-                    activeProfiles: activeProfiles,
-                    execution: execution,
-                    machineContext: machineContext
-                )
-            }
-            try await ServiceRunner.up(
-                layers: layers,
-                progress: orchestration.handlers,
-                healthContext: healthContext,
-                execution: execution,
+            try await ProjectUpRun.executeWaves(
+                plan: plan,
+                request: request,
+                execution: ProjectUpExecution(progress: orchestration.handlers),
                 machineContext: machineContext
             )
         }

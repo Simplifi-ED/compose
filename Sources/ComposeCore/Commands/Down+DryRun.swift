@@ -9,7 +9,7 @@ extension Down {
         machineContext: MachineContext
     ) async throws {
         let manifest = DryRunManifest(machineName: machineContext.machineName)
-        let useOrderedShutdown = context.fileURLs != nil && !projectOptions.hasExplicitProjectName
+        let useOrderedShutdown = context.fileURLs != nil
         let execution = WaveExecutionPolicy(maxConcurrent: parallelOptions.resolvedMaxConcurrent())
         await manifest.setOrphanNames(orphanNames)
 
