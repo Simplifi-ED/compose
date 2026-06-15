@@ -31,6 +31,16 @@ let package = Package(
             path: "Sources/compose"
         ),
         .executableTarget(
+            name: "compose-xpc",
+            dependencies: ["ComposeCore"],
+            path: "Sources/compose-xpc"
+        ),
+        .executableTarget(
+            name: "compose-xpc-sample",
+            dependencies: ["ComposeCore"],
+            path: "Sources/compose-xpc-sample"
+        ),
+        .executableTarget(
             name: "compose-verify",
             dependencies: [
                 "ComposeCore",

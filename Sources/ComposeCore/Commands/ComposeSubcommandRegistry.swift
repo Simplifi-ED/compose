@@ -19,7 +19,8 @@ package enum ComposeSubcommandRegistry {
         Watch.self,
         Save.self,
         Load.self,
-        Doctor.self
+        Doctor.self,
+        Xpc.self
     ]
 
     package static var commandNames: [String] {

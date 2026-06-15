@@ -57,7 +57,7 @@ fi
 install_plugin_copy() {
   mkdir -p "$PLUGIN_DEST"
   cp -R dist/compose/* "$PLUGIN_DEST/"
-  chmod 755 "$PLUGIN_DEST/bin/compose"
+  chmod 755 "$PLUGIN_DEST"/bin/*
 }
 
 install_plugin_symlink() {

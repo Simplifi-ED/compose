@@ -632,7 +632,7 @@ Opt-in guest `fstrim` during teardown to return freed blocks from sparse ext4 di
 | `down -v --trim` | Containers + project-labeled named volumes (volumes via privileged helper) |
 | `down --machine NAME --trim` | Same as above, plus machine guest filesystem after project cleanup |
 
-**Requirements and limits**
+## Requirements and limits
 
 - Host backing store must be **APFS** (skipped with a warning on ExFAT, external NTFS, etc.)
 - Named-volume trim uses a short-lived privileged helper container (`CAP_SYS_ADMIN`)
@@ -640,7 +640,7 @@ Opt-in guest `fstrim` during teardown to return freed blocks from sparse ext4 di
 - Trim failures emit **warnings**; `down` still completes
 - No new `compose volume prune` subcommand — volume trim hooks the existing `down -v` removal path
 
-**Manual verification (Tier B — guest reclaim confirmed)**
+## Manual verification (Tier B — guest reclaim confirmed)
 
 ```bash
 # Named volume on APFS host
@@ -832,7 +832,7 @@ Release builds of `bin/compose` are **ad-hoc signed** (`codesign -s -`) with emb
 
 **Not included (by design):**
 
-- `com.apple.security.network.server` — compose does not bind or listen; port publishing is handled by the `container` runtime
+- `com.apple.security.network.server` — compose does not bind TCP listeners; port publishing is handled by the `container` runtime (local Mach XPC uses `compose-xpc`; see [docs/xpc-clients.md](docs/xpc-clients.md))
 - `com.apple.security.files.user-selected.read-write` — powerbox access only; does not cover headless CLI paths or bind mounts
 
 For the full entitlement matrix, sandbox blocker register, and spike results, see [`docs/entitlements-audit.md`](docs/entitlements-audit.md). Opt-in sandbox spike: `./scripts/smoke-sandbox-entitlements.sh`.
