@@ -5,7 +5,7 @@ package enum PlatformPlanning {
     package static let amd64Platform = "linux/amd64"
 
     package static let unsupportedPlatformReason =
-        "only linux/amd64 and linux/x86_64 are supported"
+        "only linux/arm64, linux/amd64, and linux/x86_64 are supported"
     package static let amd64RequiresAppleSiliconReason =
         "platform linux/amd64 requires Apple Silicon"
     package static let rosettaMissingReason =

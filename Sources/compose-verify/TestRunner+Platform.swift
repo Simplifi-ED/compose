@@ -36,6 +36,12 @@ extension TestRunner {
     }
 
     private mutating func runPlatformRunMappingTests() throws {
+        try runPlatformAmd64UpMappingTests()
+        try runPlatformAmd64RunMappingTests()
+        try runPlatformNativeOmitTests()
+    }
+
+    private mutating func runPlatformAmd64UpMappingTests() throws {
         let fixturesDirectory = Self.fixtureURL("platform-amd64-compose.yml").deletingLastPathComponent()
         let composeFile = try ComposeParser.parse(fileURL: Self.fixtureURL("platform-amd64-compose.yml"))
         let context = ServicePlanner.PlanningContext(
@@ -60,45 +66,63 @@ extension TestRunner {
             expect(false, "up plan missing platform flag or image")
         }
         _ = try Application.ContainerRun.parse(upPlan.runArguments)
+    }
 
-        if RosettaAvailability.isInstalled() {
-            let runPlan = try ServicePlanner.runPlan(
-                context: context,
-                serviceName: "web",
-                service: composeFile.services["web"]!,
-                options: RunPlanOptions(
-                    removeContainer: false,
-                    commandOverride: nil,
-                    interactive: false,
-                    processTerminal: false,
-                    nameSuffix: "00000001"
-                )
+    private mutating func runPlatformAmd64RunMappingTests() throws {
+        guard RosettaAvailability.isInstalled() else { return }
+        let fixturesDirectory = Self.fixtureURL("platform-amd64-compose.yml").deletingLastPathComponent()
+        let composeFile = try ComposeParser.parse(fileURL: Self.fixtureURL("platform-amd64-compose.yml"))
+        let context = ServicePlanner.PlanningContext(
+            composeFile: composeFile,
+            projectName: "demo",
+            composeDirectory: fixturesDirectory
+        )
+        let runPlan = try ServicePlanner.runPlan(
+            context: context,
+            serviceName: "web",
+            service: composeFile.services["web"]!,
+            options: RunPlanOptions(
+                removeContainer: false,
+                commandOverride: nil,
+                interactive: false,
+                processTerminal: false,
+                nameSuffix: "00000001"
             )
-            expect(runPlan.runArguments.contains("--platform"), "run plan includes --platform")
-            _ = try Application.ContainerRun.parse(runPlan.runArguments)
-        }
+        )
+        expect(runPlan.runArguments.contains("--platform"), "run plan includes --platform")
+        _ = try Application.ContainerRun.parse(runPlan.runArguments)
+    }
 
+    private mutating func runPlatformNativeOmitTests() throws {
+        let fixturesDirectory = Self.fixtureURL("platform-arm64-compose.yml").deletingLastPathComponent()
         let arm64File = try ComposeParser.parse(fileURL: Self.fixtureURL("platform-arm64-compose.yml"))
-        let arm64Context = ServicePlanner.PlanningContext(
+        let context = ServicePlanner.PlanningContext(
             composeFile: arm64File,
             projectName: "demo",
             composeDirectory: fixturesDirectory
         )
         let nativePlan = try ServicePlanner.buildUpPlan(
-            context: arm64Context,
+            context: context,
             serviceName: "web",
             service: arm64File.services["web"]!,
             replicaIndex: 1
         )
-        if RosettaAvailability.hostMachine() == "arm64" {
-            expect(!nativePlan.runArguments.contains("--platform"), "native arm64 omits --platform on arm64 host")
-        }
+        guard RosettaAvailability.hostMachine() == "arm64" else { return }
+        expect(!nativePlan.runArguments.contains("--platform"), "native arm64 omits --platform on arm64 host")
     }
 
     private mutating func runPlatformValidationTests() throws {
-        let composeFile = try ComposeParser.parse(fileURL: Self.fixtureURL("platform-amd64-compose.yml"))
-        let fixturesDirectory = Self.fixtureURL("platform-amd64-compose.yml").deletingLastPathComponent()
+        try runPlatformValidateInjectedTests()
+        try runPlatformValidateIntegrationTests()
+    }
 
+    private mutating func runPlatformValidateInjectedTests() throws {
+        try runPlatformValidateSuccessCase()
+        try runPlatformValidateFailureCases()
+    }
+
+    private mutating func runPlatformValidateSuccessCase() throws {
+        let composeFile = try ComposeParser.parse(fileURL: Self.fixtureURL("platform-amd64-compose.yml"))
         try PlatformPlanning.validate(
             services: composeFile.services,
             activeServiceNames: ["web"],
@@ -106,6 +130,10 @@ extension TestRunner {
             hostMachine: "arm64",
             rosettaInstalled: { true }
         )
+    }
+
+    private mutating func runPlatformValidateFailureCases() throws {
+        let composeFile = try ComposeParser.parse(fileURL: Self.fixtureURL("platform-amd64-compose.yml"))
 
         expectComposeError("platform rejects missing rosetta") { error in
             if case .invalidField("services.web.platform", let reason) = error {
@@ -151,8 +179,13 @@ extension TestRunner {
                 rosettaInstalled: { true }
             )
         }
+    }
 
+    private mutating func runPlatformValidateIntegrationTests() throws {
+        let composeFile = try ComposeParser.parse(fileURL: Self.fixtureURL("platform-amd64-compose.yml"))
+        let fixturesDirectory = Self.fixtureURL("platform-amd64-compose.yml").deletingLastPathComponent()
         let invalidFile = try ComposeParser.parse(fileURL: Self.fixtureURL("platform-invalid-compose.yml"))
+
         expectComposeError("invalid platform at plan time") { error in
             if case .invalidField("services.web.platform", _) = error { return true }
             return false
@@ -164,14 +197,13 @@ extension TestRunner {
             )
         }
 
-        if RosettaAvailability.isInstalled(), RosettaAvailability.hostMachine() == "arm64" {
-            _ = try ServicePlanner.startupLayers(
-                for: composeFile,
-                projectName: "demo",
-                composeDirectory: fixturesDirectory,
-                machineName: nil
-            )
-        }
+        guard RosettaAvailability.isInstalled(), RosettaAvailability.hostMachine() == "arm64" else { return }
+        _ = try ServicePlanner.startupLayers(
+            for: composeFile,
+            projectName: "demo",
+            composeDirectory: fixturesDirectory,
+            machineName: nil
+        )
     }
 
     private mutating func runPlatformDryRunTests() throws {
