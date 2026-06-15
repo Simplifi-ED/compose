@@ -1,0 +1,5 @@
+services:
+  web:
+    image: docker.io/library/alpine:3.24
+    platform: linux/x86_64
+    command: sleep 300

@@ -47,50 +47,22 @@ public enum ServicePlanner {
         try SignpostTelemetry.interval(SignpostTelemetry.plan) {
             let layers = try dependencyLayers(for: composeFile, activeProfiles: activeProfiles)
             let activeServiceNames = Set(layers.flatMap { $0.map(\.serviceName) })
-            try ComposeFileMountResolver.validate(
+            try validateStartupPlanning(
                 composeFile: composeFile,
-                activeServiceNames: activeServiceNames
+                activeServiceNames: activeServiceNames,
+                machineName: machineName,
+                scaleOverrides: scaleOverrides
             )
-            try NetworkPlanning.validate(
-                composeFile: composeFile,
-                activeServiceNames: activeServiceNames
+            return try buildStartupLayerPlans(
+                layers: layers,
+                context: PlanningContext(
+                    composeFile: composeFile,
+                    projectName: projectName,
+                    composeDirectory: composeDirectory,
+                    machineName: machineName
+                ),
+                scaleOverrides: scaleOverrides
             )
-            try VolumePlanning.validate(
-                composeFile: composeFile,
-                activeServiceNames: activeServiceNames
-            )
-            try ReplicaPlanning.validateScaleTargets(
-                scaleOverrides: scaleOverrides,
-                services: composeFile.services,
-                activeServiceNames: activeServiceNames
-            )
-            return try layers.map { layer in
-                try layer.flatMap { serviceName, service in
-                    let replicas = try ReplicaPlanning.resolvedReplicaCount(
-                        serviceName: serviceName,
-                        service: service,
-                        scaleOverrides: scaleOverrides
-                    )
-                    try ReplicaPlanning.validateForUp(
-                        serviceName: serviceName,
-                        service: service,
-                        replicas: replicas
-                    )
-                    return try (1...replicas).map { index in
-                        try buildUpPlan(
-                            context: PlanningContext(
-                                composeFile: composeFile,
-                                projectName: projectName,
-                                composeDirectory: composeDirectory,
-                                machineName: machineName
-                            ),
-                            serviceName: serviceName,
-                            service: service,
-                            replicaIndex: index
-                        )
-                    }
-                }
-            }
         }
     }
 

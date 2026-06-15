@@ -212,6 +212,7 @@ do {
     try runner.runDryRunTests()
     try runner.runPauseTests()
     try runner.runBuildTests()
+    try runner.runPlatformTests()
     runner.runLabelTests()
     runner.runRollbackTests()
     runner.runTeardownErrorTests()

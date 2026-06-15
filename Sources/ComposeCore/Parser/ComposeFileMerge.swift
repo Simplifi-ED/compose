@@ -65,7 +65,8 @@ enum ComposeFileMerge {
                 base: base.hostnames,
                 override: override.hostnames,
                 key: { $0.lowercased() }
-            )
+            ),
+            platform: override.platform ?? base.platform
         )
     }
 

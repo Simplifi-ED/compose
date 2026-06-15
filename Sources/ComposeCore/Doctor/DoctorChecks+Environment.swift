@@ -2,7 +2,7 @@ import Foundation
 
 package enum DoctorChecksEnvironment {
     package static func hostArchitecture(
-        machine: String = currentMachine()
+        machine: String = RosettaAvailability.hostMachine()
     ) -> DoctorFinding {
         if machine == "arm64" {
             return DoctorFinding(
@@ -60,8 +60,7 @@ package enum DoctorChecksEnvironment {
     }
 
     package static func rosettaInstalled() -> DoctorFinding {
-        let rosettaPath = "/Library/Apple/usr/share/rosetta/rosettad"
-        if FileManager.default.fileExists(atPath: rosettaPath) {
+        if RosettaAvailability.isInstalled() {
             return DoctorFinding(
                 id: "rosetta",
                 title: DoctorCheckCatalog.title(for: "rosetta"),
@@ -212,15 +211,6 @@ package enum DoctorChecksEnvironment {
             }
             return findings.sorted { $0.id < $1.id }
         }
-    }
-
-    private static func currentMachine() -> String {
-        var size = 0
-        sysctlbyname("hw.machine", nil, &size, nil, 0)
-        var machine = [CChar](repeating: 0, count: size)
-        sysctlbyname("hw.machine", &machine, &size, nil, 0)
-        let bytes = machine.prefix { $0 != 0 }.map { UInt8(bitPattern: $0) }
-        return String(bytes: bytes, encoding: .utf8) ?? "unknown"
     }
 
     private static func availableBytes(at url: URL) -> Int64? {

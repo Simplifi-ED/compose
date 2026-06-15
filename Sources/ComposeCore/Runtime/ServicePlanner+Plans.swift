@@ -20,14 +20,7 @@ extension ServicePlanner {
         )
         let name = "\(baseName)_run_\(options.nameSuffix)"
 
-        try ComposeFileMountResolver.validate(
-            composeFile: context.composeFile,
-            activeServiceNames: [serviceName]
-        )
-        try NetworkPlanning.validate(
-            composeFile: context.composeFile,
-            activeServiceNames: [serviceName]
-        )
+        try validateRunPlanning(context: context, serviceName: serviceName)
 
         var arguments: [String] = ["--name", name]
         if options.removeContainer {
@@ -89,6 +82,25 @@ extension ServicePlanner {
                 containerNumber: replicaIndex,
                 replicaIndex: replicaIndex
             )
+        )
+    }
+
+    private static func validateRunPlanning(
+        context: PlanningContext,
+        serviceName: String
+    ) throws {
+        try ComposeFileMountResolver.validate(
+            composeFile: context.composeFile,
+            activeServiceNames: [serviceName]
+        )
+        try NetworkPlanning.validate(
+            composeFile: context.composeFile,
+            activeServiceNames: [serviceName]
+        )
+        try PlatformPlanning.validate(
+            services: context.composeFile.services,
+            activeServiceNames: [serviceName],
+            machineName: context.machineName
         )
     }
 
