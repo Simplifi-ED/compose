@@ -13,10 +13,10 @@ package enum ComposeXPCHandlers {
 
     package static func statusJSON(_ requestJSON: String) async throws -> String {
         let request = try ComposeXPCCodec.decodeRequest(requestJSON)
-        let response = try await ProjectListRun.run(
+        let result = try await ProjectListRun.run(
             ProjectListRequest(inputs: inputs(from: request))
         )
-        return try ComposeXPCCodec.encode(response)
+        return try ComposeXPCCodec.encode(ComposeXPCDTOMapping.statusResponse(from: result))
     }
 
     package static func mutationJSON(
@@ -28,10 +28,10 @@ package enum ComposeXPCHandlers {
         if operation == .startup {
             try validateStartupRequest(request)
         }
-        let response: ComposeXPCMutationResponse
+        let result: ProjectMutationResult
         switch operation {
         case .startup:
-            response = try await ProjectUpRun.run(
+            result = try await ProjectUpRun.run(
                 ProjectUpRequest(
                     inputs: inputs,
                     dryRun: request.dryRun,
@@ -39,7 +39,7 @@ package enum ComposeXPCHandlers {
                 )
             )
         case .shutdown:
-            response = try await ProjectDownRun.run(
+            result = try await ProjectDownRun.run(
                 ProjectDownRequest(
                     inputs: inputs,
                     dryRun: request.dryRun,
@@ -47,7 +47,7 @@ package enum ComposeXPCHandlers {
                 )
             )
         }
-        return try ComposeXPCCodec.encode(response)
+        return try ComposeXPCCodec.encode(ComposeXPCDTOMapping.mutationResponse(from: result))
     }
 
     package enum MutationOperation: Sendable {

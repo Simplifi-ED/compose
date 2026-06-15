@@ -54,6 +54,7 @@ public struct Events: AsyncParsableCommand {
         let context = try projectOptions.resolvedLabelCommandContext(
             skipComposeFileOnExplicitProject: true,
             profileFilterRequested: profileOptions.profileFilterRequested,
+            profiles: profileOptions.profiles,
             machineContext: machineContext
         )
         let filter = try projectOptions.resolvedQueryServiceFilter(

@@ -37,6 +37,21 @@ package enum ComposeCommandContext {
         skipComposeFileOnExplicitProject: Bool = true,
         profileFilterRequested: Bool? = nil
     ) async throws -> ProjectOptions.LabelCommandContext {
+        let machineContext = try await MachineContext.resolve(machineName: inputs.machineName)
+        return try resolveLabelContext(
+            inputs: inputs,
+            machineContext: machineContext,
+            skipComposeFileOnExplicitProject: skipComposeFileOnExplicitProject,
+            profileFilterRequested: profileFilterRequested
+        )
+    }
+
+    package static func resolveLabelContext(
+        inputs: ComposeCommandInputs,
+        machineContext: MachineContext,
+        skipComposeFileOnExplicitProject: Bool = true,
+        profileFilterRequested: Bool? = nil
+    ) throws -> ProjectOptions.LabelCommandContext {
         try ComposePathValidation.validateComposeFilePaths(inputs.files)
 
         let profileResolution = ProfileResolution.resolve(
@@ -45,8 +60,6 @@ package enum ComposeCommandContext {
         )
         let filterRequested = profileFilterRequested ?? profileResolution.profileFilterRequested
         let hasExplicitProject = inputs.projectName.map { !$0.isEmpty } ?? false
-
-        let machineContext = try await MachineContext.resolve(machineName: inputs.machineName)
 
         if skipComposeFileOnExplicitProject, hasExplicitProject, !filterRequested {
             let projectName = try ProjectNameResolver.resolve(

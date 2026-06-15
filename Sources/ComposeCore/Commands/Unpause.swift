@@ -38,6 +38,7 @@ public struct Unpause: AsyncParsableCommand {
         }
         let context = try projectOptions.resolvedLabelCommandContext(
             profileFilterRequested: profileOptions.profileFilterRequested,
+            profiles: profileOptions.profiles,
             machineContext: machineContext
         )
         try await ProjectPauseRun.run(

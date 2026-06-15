@@ -9,13 +9,13 @@ package struct ProjectListRequest: Sendable {
 }
 
 package enum ProjectListRun {
-    package static func run(_ request: ProjectListRequest) async throws -> ComposeXPCStatusResponse {
+    package static func run(_ request: ProjectListRequest) async throws -> ProjectListResult {
         var warnings: [String] = []
         let resolution = try await MachineContext.resolve(machineName: request.inputs.machineName)
         let machineContext: MachineContext
         if resolution.isMachineMode, !resolution.isMachineRunning {
             warnings.append("Machine stopped; no containers listed.")
-            return ComposeXPCStatusResponse(exitStatus: 0, containers: [], warnings: warnings)
+            return ProjectListResult(rows: [], warnings: warnings)
         }
         machineContext = resolution
 
@@ -29,14 +29,6 @@ package enum ProjectListRun {
             inputs: request.inputs
         )
         let rows = ProjectStatus.rows(from: containers, filter: filter)
-        let payload = rows.map {
-            ComposeXPCContainerRow(
-                name: $0.name,
-                service: $0.service,
-                state: $0.state,
-                ports: $0.ports
-            )
-        }
-        return ComposeXPCStatusResponse(exitStatus: 0, containers: payload, warnings: warnings)
+        return ProjectListResult(rows: rows, warnings: warnings)
     }
 }

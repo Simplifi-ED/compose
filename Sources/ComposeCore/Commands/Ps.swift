@@ -25,25 +25,23 @@ public struct Ps: AsyncParsableCommand {
             .resolveContext(stopped: .gracefulExit)
             .machineContextIfReady
         else { return }
-        let context = try projectOptions.resolvedLabelCommandContext(
-            skipComposeFileOnExplicitProject: true,
-            profileFilterRequested: profileOptions.profileFilterRequested,
-            machineContext: machineContext
+
+        let result = try await ProjectListRun.run(
+            ProjectListRequest(
+                inputs: projectOptions.composeCommandInputs(
+                    profiles: profileOptions.profiles,
+                    machineName: machineContext.machineName,
+                    services: services
+                )
+            )
         )
-        let containers = try await ContainerDiscovery.projectContainers(
-            forProject: context.projectName,
-            machineContext: machineContext
-        )
-        let filter = try projectOptions.resolvedQueryServiceFilter(
-            context: context,
-            profileOptions: profileOptions,
-            positionalServices: services
-        )
-        let rows = ProjectStatus.rows(from: containers, filter: filter)
+        for warning in result.warnings {
+            fputs("warning: \(warning)\n", stderr)
+        }
         let mode = TerminalMode.resolve()
         let table = ProjectStatus.defaultTable()
         print(table.formatHeader(mode: mode))
-        for row in rows {
+        for row in result.rows {
             print(table.formatRow(row.cells))
         }
     }

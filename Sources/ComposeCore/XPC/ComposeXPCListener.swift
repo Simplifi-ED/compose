@@ -6,7 +6,6 @@ package enum ComposeXPCListenerMode: Sendable {
 
 package final class ComposeXPCListenerController: NSObject, NSXPCListenerDelegate {
     private let listener: NSXPCListener
-    private let service = ComposeXPCService()
 
     package init(mode: ComposeXPCListenerMode = .machService) {
         listener = NSXPCListener(machServiceName: ComposeXPCConstants.machServiceName)
@@ -27,11 +26,12 @@ package final class ComposeXPCListenerController: NSObject, NSXPCListenerDelegat
         } catch {
             return false
         }
+        let service = ComposeXPCService()
         let interface = NSXPCInterface(with: ComposeXPCProtocol.self)
         newConnection.exportedInterface = interface
         newConnection.exportedObject = service
-        newConnection.invalidationHandler = {}
-        newConnection.interruptionHandler = {}
+        newConnection.invalidationHandler = { service.cancelAll() }
+        newConnection.interruptionHandler = { service.cancelAll() }
         newConnection.resume()
         return true
     }

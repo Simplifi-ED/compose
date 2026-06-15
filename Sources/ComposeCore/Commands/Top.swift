@@ -39,7 +39,8 @@ public struct Top: AsyncParsableCommand {
         try machineOptions.rejectIfUnsupported(commandName: "top/stats")
         let context = try projectOptions.resolvedLabelCommandContext(
             skipComposeFileOnExplicitProject: true,
-            profileFilterRequested: profileOptions.profileFilterRequested
+            profileFilterRequested: profileOptions.profileFilterRequested,
+            profiles: profileOptions.profiles
         )
         let filter = try projectOptions.resolvedQueryServiceFilter(
             context: context,

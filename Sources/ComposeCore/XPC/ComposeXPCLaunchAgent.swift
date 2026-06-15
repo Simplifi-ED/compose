@@ -39,21 +39,26 @@ package enum ComposeXPCLaunchAgent {
     private static func writePlist(composeXPCBinary: URL) throws {
         let agentsDirectory = plistURL().deletingLastPathComponent()
         try FileManager.default.createDirectory(at: agentsDirectory, withIntermediateDirectories: true)
-        let plist: [String: Any] = [
-            "Label": ComposeXPCConstants.launchAgentLabel,
-            "ProgramArguments": [composeXPCBinary.path, "--mach"],
-            "RunAtLoad": true,
-            "KeepAlive": true,
-            "MachServices": [
-                ComposeXPCConstants.machServiceName: true
-            ]
-        ]
+        let plist = launchAgentPlist(binary: composeXPCBinary)
         let data = try PropertyListSerialization.data(
             fromPropertyList: plist,
             format: .xml,
             options: 0
         )
         try data.write(to: plistURL(), options: .atomic)
+    }
+
+  /// Single source for `Resources/LaunchAgents/com.simplifi-ed.container-compose.xpc.plist` (reference copy).
+    package static func launchAgentPlist(binary: URL) -> [String: Any] {
+        [
+            "Label": ComposeXPCConstants.launchAgentLabel,
+            "ProgramArguments": [binary.path, "--mach"],
+            "RunAtLoad": true,
+            "KeepAlive": true,
+            "MachServices": [
+                ComposeXPCConstants.machServiceName: true
+            ]
+        ]
     }
 
     private static func removePlistIfPresent() throws {

@@ -1,5 +1,30 @@
 import Foundation
 
+private final class ComposeXPCInFlightRegistry: @unchecked Sendable {
+    private let lock = NSLock()
+    private var tasks = [UUID: Task<Void, Never>]()
+
+    func store(_ id: UUID, _ task: Task<Void, Never>) {
+        lock.lock()
+        tasks[id] = task
+        lock.unlock()
+    }
+
+    func remove(_ id: UUID) {
+        lock.lock()
+        tasks.removeValue(forKey: id)
+        lock.unlock()
+    }
+
+    func cancelAll() {
+        lock.lock()
+        let active = Array(tasks.values)
+        tasks.removeAll()
+        lock.unlock()
+        active.forEach { $0.cancel() }
+    }
+}
+
 private final class ComposeXPCReplyBox: @unchecked Sendable {
     let reply: (String?, NSError?) -> Void
 
@@ -9,8 +34,14 @@ private final class ComposeXPCReplyBox: @unchecked Sendable {
 }
 
 package final class ComposeXPCService: NSObject, ComposeXPCProtocol {
+    private let inFlight = ComposeXPCInFlightRegistry()
+
     package override init() {
         super.init()
+    }
+
+    package func cancelAll() {
+        inFlight.cancelAll()
     }
 
     package func status(requestJSON: String, reply: @escaping (String?, NSError?) -> Void) {
@@ -41,10 +72,17 @@ package final class ComposeXPCService: NSObject, ComposeXPCProtocol {
         operation: @escaping @Sendable () async throws -> String
     ) {
         let box = ComposeXPCReplyBox(reply)
-        Task {
+        let registry = inFlight
+        let taskID = UUID()
+        let task = Task {
+            defer { registry.remove(taskID) }
             do {
+                try Task.checkCancellation()
                 let payload = try await operation()
+                try Task.checkCancellation()
                 box.reply(payload, nil)
+            } catch is CancellationError {
+                return
             } catch let error as NSError {
                 box.reply(ComposeXPCCodec.errorResponseJSON(from: error), nil)
             } catch {
@@ -55,5 +93,6 @@ package final class ComposeXPCService: NSObject, ComposeXPCProtocol {
                 box.reply(ComposeXPCCodec.errorResponseJSON(from: nsError), nil)
             }
         }
+        registry.store(taskID, task)
     }
 }
