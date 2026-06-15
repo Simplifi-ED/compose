@@ -38,6 +38,12 @@ public struct Down: AsyncParsableCommand {
     )
     var volumes = false
 
+    @Flag(
+        name: .long,
+        help: "Reclaim APFS sparse disk space after teardown (APFS hosts only; guest fstrim)."
+    )
+    var trim = false
+
     public func run() async throws {
         OsLogConfiguration.apply(
             cliNoOslog: osLogOptions.isDisabled,
@@ -113,6 +119,7 @@ public struct Down: AsyncParsableCommand {
         )
 
         let shouldPurgeVolumes = volumes
+        let shouldTrim = trim
         let execution = WaveExecutionPolicy(maxConcurrent: parallelOptions.resolvedMaxConcurrent())
         try await runOrchestrationCommand(
             lines: orchestration.lines,
@@ -124,7 +131,8 @@ public struct Down: AsyncParsableCommand {
                 useOrderedShutdown: useOrderedShutdown,
                 progress: orchestration.handlers,
                 execution: execution,
-                machineContext: machineContext
+                machineContext: machineContext,
+                trimBeforeDelete: shouldTrim
             )
             try await DownShutdown.finishProjectTeardown(
                 DownShutdown.FinishTeardownInput(
@@ -132,6 +140,7 @@ public struct Down: AsyncParsableCommand {
                     discovered: discovered,
                     teardownContainers: containers,
                     shouldPurgeVolumes: shouldPurgeVolumes,
+                    shouldTrim: shouldTrim,
                     bindPurgeContext: volumePurgeContext,
                     machineContext: machineContext
                 )

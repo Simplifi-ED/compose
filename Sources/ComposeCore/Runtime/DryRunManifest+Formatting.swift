@@ -67,6 +67,18 @@ package enum DryRunManifestFormatting {
         "[DRY-RUN] remove volume \"\(name)\""
     }
 
+    package static func formatDiskTrimContainer(name: String) -> String {
+        "[DRY-RUN] trim container root filesystem \"\(name)\" (guest fstrim)"
+    }
+
+    package static func formatDiskTrimVolume(name: String) -> String {
+        "[DRY-RUN] trim named volume \"\(name)\" (guest fstrim)"
+    }
+
+    package static func formatDiskTrimMachine(name: String) -> String {
+        "[DRY-RUN] trim machine guest filesystem machine=\"\(name)\" (guest fstrim)"
+    }
+
     package static func formatNetworkRemove(name: String) -> String {
         "[DRY-RUN] remove network \"\(name)\""
     }

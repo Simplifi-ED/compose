@@ -13,41 +13,29 @@ extension Down {
         let execution = WaveExecutionPolicy(maxConcurrent: parallelOptions.resolvedMaxConcurrent())
         await manifest.setOrphanNames(orphanNames)
 
-        let layers = try DownShutdown.resolveShutdownLayers(
+        try await recordDryRunTeardown(
+            manifest: manifest,
             context: context,
             containers: containers,
-            useOrderedShutdown: useOrderedShutdown
-        )
-        let teardown = await manifest.makeDownTeardown()
-        try await ServiceRunner.orchestrateDown(
-            layers: layers,
-            onRemoved: nil,
-            progress: nil,
-            execution: execution,
-            teardown: teardown,
-            beforeWave: { index in
-                await manifest.setDownWaveIndex(index)
-            }
+            useOrderedShutdown: useOrderedShutdown,
+            execution: execution
         )
 
-        if volumes, let volumePurgeContext = DownShutdown.volumePurgeContext(
+        try await recordVolumeDryRun(
+            manifest: manifest,
             context: context,
             discovered: discovered,
-            teardownContainers: containers
-        ) {
-            let paths = DownShutdown.previewVolumePurgePaths(context: volumePurgeContext)
-            await manifest.recordPurge(paths: paths)
-        } else if volumes {
-            BindMountPurge.warnPurgeSkipped(DownShutdown.volumePurgeSkipReason(context: context))
-        }
+            containers: containers
+        )
 
-        if volumes {
-            let volumePlans = try DownShutdown.volumeRemovalPlans(
+        if trim {
+            try await recordTrimDryRun(
+                manifest: manifest,
                 context: context,
                 discovered: discovered,
-                teardownContainers: containers
+                containers: containers,
+                machineContext: machineContext
             )
-            await manifest.recordVolumeRemovals(names: volumePlans.map(\.runtimeName))
         }
 
         let networkPlans = try DownShutdown.networkRemovalPlans(

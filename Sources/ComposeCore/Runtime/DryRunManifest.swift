@@ -182,15 +182,19 @@ public actor DryRunManifest {
 
     public func recordVolumeRemovals(names: [String]) {
         guard !names.isEmpty else { return }
+        beginGroupedSection()
+        for name in names.sorted() {
+            append(group: currentGroup, sortKey: name, line: DryRunManifestFormatting.formatVolumeRemove(name: name))
+        }
+    }
+
+    package func beginGroupedSection() {
         groupOrder += 1
         currentGroup = groupOrder
-        for name in names.sorted() {
-            append(
-                group: currentGroup,
-                sortKey: name,
-                line: DryRunManifestFormatting.formatVolumeRemove(name: name)
-            )
-        }
+    }
+
+    package func appendTrimLine(sortKey: String, line: String) {
+        append(group: currentGroup, sortKey: sortKey, line: line)
     }
 
     public func recordPurge(paths: [String]) {

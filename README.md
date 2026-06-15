@@ -614,9 +614,44 @@ container compose up --remove-orphans
 
 # Remove containers + project bind-mount directories and named volumes
 container compose down -v
+
+# Reclaim APFS sparse backing space (opt-in; APFS hosts only)
+container compose down --trim
+container compose down -v --trim
 ```
 
 `down -v` removes **relative** bind-mount paths (e.g. `./data:/app`) and project-scoped named volumes created by compose. Absolute bind-mount paths are not touched.
+
+### APFS sparse trim (`--trim`)
+
+Opt-in guest `fstrim` during teardown to return freed blocks from sparse ext4 disk images to the host APFS store. Trim runs **inside Linux guests** (container rootfs, named volumes, or machine guest) — compose does not run `fstrim` on the macOS host root and never prompts for `sudo`.
+
+| Flag combo | What gets trimmed |
+|------------|-------------------|
+| `down --trim` | Project container root filesystems (before delete) |
+| `down -v --trim` | Containers + project-labeled named volumes (volumes via privileged helper) |
+| `down --machine NAME --trim` | Same as above, plus machine guest filesystem after project cleanup |
+
+**Requirements and limits**
+
+- Host backing store must be **APFS** (skipped with a warning on ExFAT, external NTFS, etc.)
+- Named-volume trim uses a short-lived privileged helper container (`CAP_SYS_ADMIN`)
+- Container rootfs trim succeeds only when guest `fstrim` is permitted (typically requires `cap_add: [SYS_ADMIN]` on the service, or use `down -v --trim` for named volumes)
+- Trim failures emit **warnings**; `down` still completes
+- No new `compose volume prune` subcommand — volume trim hooks the existing `down -v` removal path
+
+**Manual verification (Tier B — guest reclaim confirmed)**
+
+```bash
+# Named volume on APFS host
+container compose up -d -f compose.yaml
+container compose exec SERVICE sh -c 'dd if=/dev/zero of=/mount/big bs=1M count=100; rm /mount/big'
+du -k "$HOME/Library/Application Support/com.apple.container/volumes/PROJECT_VOLUME/volume.img"
+container compose down -v --trim
+du -k "$HOME/Library/Application Support/com.apple.container/volumes/PROJECT_VOLUME/volume.img"  # path gone after -v
+```
+
+Compare allocated size (`du -k`) on the host `.img` / `rootfs.ext4` before and after when the volume is not removed. Host shrink may require guest trim only (Tier B); full host byte drop depends on engine/APFS behavior (Tier A).
 
 ---
 
