@@ -62,6 +62,7 @@ extension ComposeService: Encodable {
         case networks
         case useInit = "init"
         case xCompose = "x-compose"
+        case platform
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -101,6 +102,9 @@ extension ComposeService: Encodable {
         }
         if useInit == true {
             try container.encode(true, forKey: .useInit)
+        }
+        if let platform {
+            try container.encode(try PlatformPlanning.normalize(platform), forKey: .platform)
         }
         try encodeXComposeHosts(to: &container)
     }

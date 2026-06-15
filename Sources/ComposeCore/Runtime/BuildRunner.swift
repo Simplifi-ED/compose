@@ -46,6 +46,10 @@ package enum BuildRunner {
         projectName: String,
         composeDirectory: URL
     ) throws -> Plan {
+        PlatformPlanning.warnBuildPlatformMismatch(
+            serviceName: serviceName,
+            platform: service.platform
+        )
         let build = service.build!
         let serviceDirectory = service.projectDirectory(orDefault: composeDirectory)
         let contextURL = try BuildValidator.resolvedContextURL(

@@ -20,6 +20,7 @@ extension ComposeService: Decodable {
         case networkMode = "network_mode"
         case useInit = "init"
         case xCompose = "x-compose"
+        case platform
     }
 
     public init(from decoder: Decoder) throws {
@@ -49,6 +50,7 @@ extension ComposeService: Decodable {
         networks = decodedNetworks.names
         networkNullRemovals = decodedNetworks.nullRemovals
         hostnames = try Self.decodeHostnames(from: container)
+        platform = try container.decodeIfPresent(String.self, forKey: .platform)
         projectDirectory = nil
     }
 

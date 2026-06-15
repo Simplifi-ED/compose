@@ -554,7 +554,17 @@ services:
 
 **Dry-run:** `up --dry-run` / `run --dry-run` emit `[DRY-RUN] build image "…"` lines without invoking the builder.
 
-**Limits:** Dockerfile size capped at 16 KiB by the Apple build engine; no cross-arch `platform` builds; no registry push; `develop.watch` `rebuild` is not supported yet. Build context paths must stay inside the compose file directory (absolute paths are allowed when they still resolve within it).
+**Limits:** Dockerfile size capped at 16 KiB by the Apple build engine; cross-arch `build.platform` is not supported (service `platform` applies to `container run` only); no registry push; `develop.watch` `rebuild` is not supported yet. Build context paths must stay inside the compose file directory (absolute paths are allowed when they still resolve within it).
+
+### Rosetta / `platform` (Apple Silicon)
+
+Service-level `platform: linux/amd64` (or `linux/x86_64`, normalized to `linux/amd64`) runs x86_64 Linux images via Rosetta 2 on Apple Silicon. Compose maps it to `container run --platform linux/amd64`; the engine enables Rosetta automatically.
+
+- **`compose config`** prints the normalized `platform` field.
+- **`compose doctor`** reports Rosetta installation (advisory); `up`/`run` fail at plan time when `platform: linux/amd64` is set and Rosetta is missing.
+- **`build:` + `platform`:** image builds still target native arm64; compose warns that `platform` applies to container run only.
+- **`--machine`:** not supported when a service declares `platform`.
+- **Compose spec:** only per-service `platform` is supported (no file-level default).
 
 ---
 

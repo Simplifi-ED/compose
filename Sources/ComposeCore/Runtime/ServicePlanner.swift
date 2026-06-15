@@ -59,6 +59,11 @@ public enum ServicePlanner {
                 composeFile: composeFile,
                 activeServiceNames: activeServiceNames
             )
+            try PlatformPlanning.validate(
+                services: composeFile.services,
+                activeServiceNames: activeServiceNames,
+                machineName: machineName
+            )
             try ReplicaPlanning.validateScaleTargets(
                 scaleOverrides: scaleOverrides,
                 services: composeFile.services,

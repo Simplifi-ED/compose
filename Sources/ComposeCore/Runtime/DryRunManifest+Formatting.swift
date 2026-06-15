@@ -14,6 +14,7 @@ package enum DryRunManifestFormatting {
         var useInit = false
         var cpu: String?
         var memory: String?
+        var platform: String?
     }
 
     package static func formatBuild(
@@ -51,6 +52,9 @@ package enum DryRunManifestFormatting {
         }
         if let memory = parsed.memory {
             details += " memory=\"\(memory)\""
+        }
+        if let platform = parsed.platform {
+            details += " platform=\"\(platform)\""
         }
         return flags.isEmpty ? "\(header) \(details)" : "\(header) \(details) \(flags)"
     }
@@ -192,6 +196,8 @@ package enum DryRunManifestFormatting {
             parsed.cpu = value
         case "--memory", "-m":
             parsed.memory = value
+        case "--platform":
+            parsed.platform = value
         default:
             return nil
         }

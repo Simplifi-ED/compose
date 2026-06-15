@@ -37,6 +37,8 @@ public struct ComposeService: Sendable, Equatable {
     public let useInit: Bool?
     /// Hostnames mapped on the macOS host when `up --host-dns` is used (`x-compose.hosts`).
     public let hostnames: [String]
+    /// Service platform (`linux/amd64`, `linux/x86_64`, or `linux/arm64`).
+    public let platform: String?
 
     public init(
         image: String?,
@@ -57,7 +59,8 @@ public struct ComposeService: Sendable, Equatable {
         networkNullRemovals: Set<String> = [],
         projectDirectory: URL? = nil,
         useInit: Bool? = nil,
-        hostnames: [String] = []
+        hostnames: [String] = [],
+        platform: String? = nil
     ) {
         self.image = image
         self.build = build
@@ -78,6 +81,7 @@ public struct ComposeService: Sendable, Equatable {
         self.projectDirectory = projectDirectory
         self.useInit = useInit
         self.hostnames = hostnames
+        self.platform = platform
     }
 
     /// Resolved bind-mount / relative-path root; uses `defaultDirectory` when unset (CLI compose file dir).
@@ -105,7 +109,8 @@ public struct ComposeService: Sendable, Equatable {
             networkNullRemovals: networkNullRemovals,
             projectDirectory: projectDirectory,
             useInit: useInit,
-            hostnames: hostnames
+            hostnames: hostnames,
+            platform: platform
         )
     }
 
@@ -129,7 +134,8 @@ public struct ComposeService: Sendable, Equatable {
             networkNullRemovals: networkNullRemovals,
             projectDirectory: directory,
             useInit: useInit,
-            hostnames: hostnames
+            hostnames: hostnames,
+            platform: platform
         )
     }
 
@@ -153,7 +159,8 @@ public struct ComposeService: Sendable, Equatable {
             networkNullRemovals: networkNullRemovals,
             projectDirectory: projectDirectory,
             useInit: useInit,
-            hostnames: hostnames
+            hostnames: hostnames,
+            platform: platform
         )
     }
 
@@ -177,7 +184,8 @@ public struct ComposeService: Sendable, Equatable {
             networkNullRemovals: networkNullRemovals,
             projectDirectory: projectDirectory,
             useInit: useInit,
-            hostnames: hostnames
+            hostnames: hostnames,
+            platform: platform
         )
     }
 }

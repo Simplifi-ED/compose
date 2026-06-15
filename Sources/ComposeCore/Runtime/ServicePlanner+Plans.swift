@@ -28,6 +28,11 @@ extension ServicePlanner {
             composeFile: context.composeFile,
             activeServiceNames: [serviceName]
         )
+        try PlatformPlanning.validate(
+            services: context.composeFile.services,
+            activeServiceNames: [serviceName],
+            machineName: context.machineName
+        )
 
         var arguments: [String] = ["--name", name]
         if options.removeContainer {
