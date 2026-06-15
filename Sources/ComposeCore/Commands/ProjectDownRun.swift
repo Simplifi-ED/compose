@@ -114,8 +114,7 @@ package enum ProjectDownRun {
         shutdown: ShutdownContext,
         execution: ProjectDownExecution
     ) async throws {
-        let hasExplicitProject = request.inputs.projectName.map { !$0.isEmpty } ?? false
-        let useOrderedShutdown = shutdown.labelContext.fileURLs != nil && !hasExplicitProject
+        let useOrderedShutdown = shutdown.labelContext.fileURLs != nil
         let volumePurgeContext = DownShutdown.volumePurgeContext(
             context: shutdown.labelContext,
             discovered: shutdown.discovered,

@@ -27,16 +27,18 @@ public struct XpcServe: AsyncParsableCommand {
 
     public func run() async throws {
         let helper = try resolvedComposeXPCBinary()
-        try ComposeXPCLaunchAgent.startService(composeXPCBinary: helper)
         defer {
             try? ComposeXPCLaunchAgent.uninstall()
         }
+        try ComposeXPCLaunchAgent.startService(composeXPCBinary: helper)
         fputs(
             "compose XPC listening (Mach service: \(ComposeXPCConstants.machServiceName))\n",
             stderr
         )
-        while true {
-            try await Task.sleep(for: .seconds(3600))
+        _ = try await SignalForwarding.runUntilCancelled(policy: .cancelOnly) {
+            while true {
+                try await Task.sleep(for: .seconds(3600))
+            }
         }
     }
 
@@ -97,13 +99,13 @@ public struct XpcDoctor: ParsableCommand {
             let allowlist = ComposeXPCClientAuth.loadAllowlist()
             print("allowlist: \(clientsURL.path)")
             print("  team_ids: \(allowlist.teamIDs.count)")
-            print("  bundle_ids: \(allowlist.bundleIDs.count)")
-            if allowlist.teamIDs.isEmpty, allowlist.bundleIDs.isEmpty {
+            print("  clients: \(allowlist.clients.count)")
+            if allowlist.teamIDs.isEmpty, allowlist.clients.isEmpty {
                 if allowlist.allowAnySigned {
                     print("  warning: allowAnySigned is enabled — any signed client may connect")
                 } else {
                     print(
-                        "  warning: empty allowlist rejects all clients; set teamIDs, bundleIDs, or allowAnySigned"
+                        "  warning: empty allowlist rejects all clients; set teamIDs, clients, or allowAnySigned"
                     )
                 }
             }

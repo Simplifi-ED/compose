@@ -29,6 +29,10 @@ if [[ ! -x "${BIN_DIR}/compose-xpc" ]]; then
   echo "error: release binary not found at ${BIN_DIR}/compose-xpc" >&2
   exit 1
 fi
+if [[ ! -x "${BIN_DIR}/compose-xpc-sample" ]]; then
+  echo "error: release binary not found at ${BIN_DIR}/compose-xpc-sample" >&2
+  exit 1
+fi
 
 mkdir -p dist/compose/bin dist/compose/LaunchAgents
 DEST_BINARY="dist/compose/bin/compose"

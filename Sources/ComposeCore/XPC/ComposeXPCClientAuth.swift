@@ -23,9 +23,11 @@ package enum ComposeXPCClientAuth {
     }
 
     package static func saveAllowlist(_ allowlist: ComposeXPCAllowlist) throws {
-        let directory = ComposeXPCConstants.configDirectory()
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let url = ComposeXPCConstants.clientsConfigURL()
+        try FileManager.default.createDirectory(
+            at: url.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
         let data = try JSONEncoder().encode(allowlist)
         try data.write(to: url, options: .atomic)
         try FileManager.default.setAttributes(
@@ -39,14 +41,14 @@ package enum ComposeXPCClientAuth {
         allowlist: ComposeXPCAllowlist
     ) -> Bool {
         guard info.signatureValid else { return false }
-        if allowlist.teamIDs.isEmpty, allowlist.bundleIDs.isEmpty {
+        if allowlist.teamIDs.isEmpty, allowlist.clients.isEmpty {
             return allowlist.allowAnySigned
         }
         if let teamID = info.teamID, allowlist.teamIDs.contains(teamID) {
             return true
         }
-        if let bundleID = info.bundleID, allowlist.bundleIDs.contains(bundleID) {
-            return true
+        if let teamID = info.teamID, let bundleID = info.bundleID {
+            return allowlist.clients.contains { $0.teamID == teamID && $0.bundleID == bundleID }
         }
         return false
     }
@@ -55,7 +57,7 @@ package enum ComposeXPCClientAuth {
         if !info.signatureValid {
             return "unsigned binary (valid code signature required)"
         }
-        return "team ID or bundle ID not on the allowlist"
+        return "team ID or registered client (team ID + bundle ID) not on the allowlist"
     }
 
     // ponytail: NSXPCConnection has no public auditToken in container 1.0 SDK; PID guest lookup at accept time.

@@ -45,7 +45,7 @@ extension TestRunner {
             bundleID: "com.example.app",
             signatureValid: true
         )
-        let allowlist = ComposeXPCAllowlist(teamIDs: ["TEAM1234"], bundleIDs: [])
+        let allowlist = ComposeXPCAllowlist(teamIDs: ["TEAM1234"], clients: [])
         expect(
             ComposeXPCClientAuth.matchesAllowlist(signed, allowlist: allowlist),
             "team ID allowlist match"
@@ -57,10 +57,19 @@ extension TestRunner {
             ),
             "unsigned client rejected"
         )
-        let bundleOnly = ComposeXPCAllowlist(bundleIDs: ["com.example.app"])
+        let clientPair = ComposeXPCAllowlist(
+            clients: [ComposeXPCAllowlistClient(teamID: "TEAM1234", bundleID: "com.example.app")]
+        )
         expect(
-            ComposeXPCClientAuth.matchesAllowlist(signed, allowlist: bundleOnly),
-            "bundle ID allowlist match"
+            ComposeXPCClientAuth.matchesAllowlist(signed, allowlist: clientPair),
+            "team+bundle client allowlist match"
+        )
+        expect(
+            !ComposeXPCClientAuth.matchesAllowlist(
+                ComposeXPCClientSigningInfo(teamID: "OTHER", bundleID: "com.example.app", signatureValid: true),
+                allowlist: clientPair
+            ),
+            "bundle ID alone does not match without team ID"
         )
         let emptyClosed = ComposeXPCAllowlist()
         expect(
@@ -87,6 +96,13 @@ extension TestRunner {
         } catch {
             expect(false, "valid compose path should not throw")
         }
+        expectComposeError(
+            "padded compose path rejected",
+            matching: { if case .invalidComposeFilePath = $0 { true } else { false } },
+            body: {
+                try ComposePathValidation.validateComposeFilePaths([" compose.yaml "])
+            }
+        )
     }
 
     private mutating func runXPCErrorMappingTests() {

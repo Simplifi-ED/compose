@@ -7,7 +7,12 @@ package enum ComposeXPCLaunchAgent {
 
     package static func startService(composeXPCBinary: URL) throws {
         try writePlist(composeXPCBinary: composeXPCBinary)
-        try bootstrapIfNeeded()
+        do {
+            try bootstrapIfNeeded()
+        } catch {
+            try? removePlistIfPresent()
+            throw error
+        }
     }
 
     package static func uninstall() throws {
@@ -69,9 +74,10 @@ package enum ComposeXPCLaunchAgent {
     }
 
     private static func bootstrapIfNeeded() throws {
+        try bootout()
         let uid = getuid()
         let status = runLaunchctl(["bootstrap", "gui/\(uid)", plistURL().path])
-        guard status == 0 || status == 37 else {
+        guard status == 0 else {
             throw ComposeXPCError.nsError(
                 code: .operationFailed,
                 message: "launchctl bootstrap failed (exit \(status))."

@@ -74,19 +74,29 @@ package struct ComposeXPCErrorResponse: Codable, Sendable, Equatable {
     package let message: String
 }
 
+package struct ComposeXPCAllowlistClient: Codable, Sendable, Equatable {
+    package var teamID: String
+    package var bundleID: String
+
+    package init(teamID: String, bundleID: String) {
+        self.teamID = teamID
+        self.bundleID = bundleID
+    }
+}
+
 package struct ComposeXPCAllowlist: Codable, Sendable, Equatable {
     package var teamIDs: [String]
-    package var bundleIDs: [String]
-    /// When true, any validly signed client is admitted if teamIDs and bundleIDs are empty.
+    package var clients: [ComposeXPCAllowlistClient]
+    /// When true, any validly signed client is admitted if teamIDs and clients are empty.
     package var allowAnySigned: Bool
 
     package init(
         teamIDs: [String] = [],
-        bundleIDs: [String] = [],
+        clients: [ComposeXPCAllowlistClient] = [],
         allowAnySigned: Bool = false
     ) {
         self.teamIDs = teamIDs
-        self.bundleIDs = bundleIDs
+        self.clients = clients
         self.allowAnySigned = allowAnySigned
     }
 }

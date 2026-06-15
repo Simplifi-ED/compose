@@ -7,6 +7,11 @@ package enum ComposePathValidation {
             guard !trimmed.isEmpty else {
                 throw ComposeError.invalidComposeFilePath("Compose file path cannot be empty.")
             }
+            guard trimmed == path else {
+                throw ComposeError.invalidComposeFilePath(
+                    "Compose file path cannot include leading or trailing whitespace: \(trimmed)"
+                )
+            }
             if trimmed.contains("..") {
                 throw ComposeError.invalidComposeFilePath(
                     "Compose file path cannot contain '..': \(trimmed)"

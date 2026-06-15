@@ -63,6 +63,7 @@ struct ComposeXPCSample {
 
     private static func invoke(operation: String, requestJSON: String, useMach: Bool) throws -> String {
         let connection = try ComposeXPCConnectionFactory.makeClientConnection(useMachService: useMach)
+        defer { connection.invalidate() }
         let semaphore = DispatchSemaphore(value: 0)
         var output: String?
         var replyError: NSError?
@@ -81,8 +82,10 @@ struct ComposeXPCSample {
         }
         connection.resume()
         dispatchOperation(operation, proxy: proxy, requestJSON: requestJSON, reply: reply)
-        semaphore.wait()
-        connection.invalidate()
+        let waitResult = semaphore.wait(timeout: .now() + .seconds(30))
+        if waitResult == .timedOut {
+            throw ComposeXPCError.invalidRequest("Timed out waiting for XPC response.")
+        }
 
         if let replyError {
             throw replyError
