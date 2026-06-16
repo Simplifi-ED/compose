@@ -68,7 +68,6 @@ package enum SSHAgentForwarding {
         try parseEntries(ssh, field: fieldPrefix)
         guard requireAgentReachability else { return }
         _ = try resolveForwardPlan(environment: environment, requireAgentReachability: true)
-        _ = serviceName
     }
 
     package static func validateBuildSSH(

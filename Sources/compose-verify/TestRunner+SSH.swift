@@ -100,7 +100,7 @@ extension TestRunner {
         if deadFD >= 0 {
             var deadAddr = sockaddr_un()
             deadAddr.sun_family = sa_family_t(AF_UNIX)
-            _ = SSHAgentForwarding.copyUnixAddressPath(deadSocketPath, into: &deadAddr)
+            SSHAgentForwarding.copyUnixAddressPath(deadSocketPath, into: &deadAddr)
             let deadLen = SSHAgentForwarding.unixSocketAddressLength(path: deadSocketPath)
             deadAddr.sun_len = UInt8(truncatingIfNeeded: deadLen)
             let bound = withUnsafePointer(to: &deadAddr) { pointer in
