@@ -39,7 +39,8 @@ package enum ProjectUpRun {
             inputs: request.inputs,
             scaleOverrides: request.scaleOverrides,
             machineName: request.inputs.machineName,
-            requireExplicitFiles: true
+            requireExplicitFiles: true,
+            dryRun: request.dryRun
         )
         if request.dryRun {
             return ProjectMutationResult(affectedContainers: plan.plans.map(\.name))

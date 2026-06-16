@@ -21,6 +21,7 @@ extension ComposeService: Decodable {
         case useInit = "init"
         case xCompose = "x-compose"
         case platform
+        case ssh
     }
 
     public init(from decoder: Decoder) throws {
@@ -51,6 +52,7 @@ extension ComposeService: Decodable {
         networkNullRemovals = decodedNetworks.nullRemovals
         hostnames = try Self.decodeHostnames(from: container)
         platform = try container.decodeIfPresent(String.self, forKey: .platform)
+        ssh = try ComposeSSHDecoder.decodeList(from: container, key: .ssh, fieldName: "ssh")
         projectDirectory = nil
     }
 

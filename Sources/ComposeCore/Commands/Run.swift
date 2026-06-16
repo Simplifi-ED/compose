@@ -107,7 +107,8 @@ public struct Run: AsyncParsableCommand {
             context: ServicePlanner.PlanningContext(
                 composeFile: composeFile,
                 projectName: projectName,
-                composeDirectory: serviceDirectory
+                composeDirectory: serviceDirectory,
+                requireAgentReachability: !dryRunOptions.isEnabled
             ),
             serviceName: service,
             service: composeService,

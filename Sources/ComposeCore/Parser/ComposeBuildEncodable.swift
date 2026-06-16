@@ -6,6 +6,7 @@ extension ComposeBuild: Encodable {
         case dockerfile
         case args
         case target
+        case ssh
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -19,5 +20,8 @@ extension ComposeBuild: Encodable {
             }
         }
         try container.encodeIfPresent(target, forKey: .target)
+        if !ssh.isEmpty {
+            try container.encode(ssh, forKey: .ssh)
+        }
     }
 }

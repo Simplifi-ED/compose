@@ -6,23 +6,26 @@ public struct ComposeBuild: Sendable, Equatable {
     public let dockerfile: String?
     public let args: [String: String]
     public let target: String?
+    public let ssh: [String]
 
     public init(
         context: String,
         dockerfile: String? = nil,
         args: [String: String] = [:],
-        target: String? = nil
+        target: String? = nil,
+        ssh: [String] = []
     ) {
         self.context = context
         self.dockerfile = dockerfile
         self.args = args
         self.target = target
+        self.ssh = ssh
     }
 }
 
 extension ComposeBuild: Decodable {
     package static let supportedKeys: Set<String> = [
-        "context", "dockerfile", "args", "target"
+        "context", "dockerfile", "args", "target", "ssh"
     ]
 
     private enum CodingKeys: String, CodingKey {
@@ -30,6 +33,7 @@ extension ComposeBuild: Decodable {
         case dockerfile
         case args
         case target
+        case ssh
     }
 
     public init(from decoder: Decoder) throws {
@@ -49,5 +53,6 @@ extension ComposeBuild: Decodable {
         dockerfile = try container.decodeIfPresent(String.self, forKey: .dockerfile)
         args = try container.decodeIfPresent([String: String].self, forKey: .args) ?? [:]
         target = try container.decodeIfPresent(String.self, forKey: .target)
+        ssh = try ComposeSSHDecoder.decodeList(from: container, key: .ssh, fieldName: "build.ssh") ?? []
     }
 }

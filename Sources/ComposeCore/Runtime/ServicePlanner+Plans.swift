@@ -102,6 +102,15 @@ extension ServicePlanner {
             activeServiceNames: [serviceName],
             machineName: context.machineName
         )
+        if let service = context.composeFile.services[serviceName],
+           SSHAgentForwarding.wantsForwarding(ssh: service.ssh) {
+            try SSHAgentForwarding.validateServiceSSH(
+                serviceName: serviceName,
+                ssh: service.ssh!,
+                fieldPrefix: "services.\(serviceName).ssh",
+                requireAgentReachability: context.requireAgentReachability
+            )
+        }
     }
 
     private struct PlanAssembly {
@@ -131,7 +140,8 @@ extension ServicePlanner {
                 image: assembly.image,
                 command: assembly.command,
                 containerNumber: assembly.containerNumber,
-                machineName: assembly.context.machineName
+                machineName: assembly.context.machineName,
+                requireAgentReachability: assembly.context.requireAgentReachability
             )
         )
 

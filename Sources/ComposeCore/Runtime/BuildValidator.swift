@@ -41,6 +41,10 @@ package enum BuildValidator {
             serviceName: serviceName,
             service: service
         )
+        try SSHAgentForwarding.validateBuildSSH(
+            serviceName: serviceName,
+            ssh: build.ssh
+        )
     }
 
     package static func resolvedContextURL(

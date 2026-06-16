@@ -10,6 +10,7 @@ package enum BuildRunner {
         package let dockerfile: String?
         package let args: [String: String]
         package let target: String?
+        package let ssh: [String]
     }
 
     package static func plans(
@@ -69,7 +70,8 @@ package enum BuildRunner {
             contextDisplayPath: build.context,
             dockerfile: build.dockerfile,
             args: build.args,
-            target: build.target
+            target: build.target,
+            ssh: build.ssh
         )
     }
 

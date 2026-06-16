@@ -18,7 +18,8 @@ package enum ProjectUpPlanning {
         inputs: ComposeCommandInputs,
         scaleOverrides: [String: Int] = [:],
         machineName: String? = nil,
-        requireExplicitFiles: Bool = false
+        requireExplicitFiles: Bool = false,
+        dryRun: Bool = false
     ) throws -> Plan {
         try ComposePathValidation.validateComposeFilePaths(inputs.files)
         if requireExplicitFiles, inputs.files.isEmpty {
@@ -50,7 +51,8 @@ package enum ProjectUpPlanning {
             composeDirectory: composeDirectory,
             activeProfiles: profileResolution.activeProfiles,
             scaleOverrides: scaleOverrides,
-            machineName: machineName
+            machineName: machineName,
+            requireAgentReachability: !dryRun
         )
         return try assemblePlan(
             PlanSeed(
