@@ -6,17 +6,20 @@ public enum ServicePlanner {
         package let projectName: String
         package let composeDirectory: URL
         package let machineName: String?
+        package let requireAgentReachability: Bool
 
         package init(
             composeFile: ComposeFile,
             projectName: String,
             composeDirectory: URL,
-            machineName: String? = nil
+            machineName: String? = nil,
+            requireAgentReachability: Bool = true
         ) {
             self.composeFile = composeFile
             self.projectName = projectName
             self.composeDirectory = composeDirectory
             self.machineName = machineName
+            self.requireAgentReachability = requireAgentReachability
         }
     }
 
@@ -42,7 +45,8 @@ public enum ServicePlanner {
         composeDirectory: URL,
         activeProfiles: Set<String> = [],
         scaleOverrides: [String: Int] = [:],
-        machineName: String? = nil
+        machineName: String? = nil,
+        requireAgentReachability: Bool = true
     ) throws -> [[ServicePlan]] {
         try SignpostTelemetry.interval(SignpostTelemetry.plan) {
             let layers = try dependencyLayers(for: composeFile, activeProfiles: activeProfiles)
@@ -51,7 +55,8 @@ public enum ServicePlanner {
                 composeFile: composeFile,
                 activeServiceNames: activeServiceNames,
                 machineName: machineName,
-                scaleOverrides: scaleOverrides
+                scaleOverrides: scaleOverrides,
+                requireAgentReachability: requireAgentReachability
             )
             return try buildStartupLayerPlans(
                 layers: layers,
@@ -59,7 +64,8 @@ public enum ServicePlanner {
                     composeFile: composeFile,
                     projectName: projectName,
                     composeDirectory: composeDirectory,
-                    machineName: machineName
+                    machineName: machineName,
+                    requireAgentReachability: requireAgentReachability
                 ),
                 scaleOverrides: scaleOverrides
             )

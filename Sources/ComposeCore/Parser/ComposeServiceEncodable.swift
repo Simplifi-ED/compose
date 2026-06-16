@@ -63,6 +63,7 @@ extension ComposeService: Encodable {
         case useInit = "init"
         case xCompose = "x-compose"
         case platform
+        case ssh
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -104,7 +105,13 @@ extension ComposeService: Encodable {
             try container.encode(true, forKey: .useInit)
         }
         try encodePlatform(to: &container)
+        try encodeSSH(to: &container)
         try encodeXComposeHosts(to: &container)
+    }
+
+    private func encodeSSH(to container: inout KeyedEncodingContainer<CodingKeys>) throws {
+        guard let ssh, !ssh.isEmpty else { return }
+        try container.encode(ssh, forKey: .ssh)
     }
 
     private func encodePlatform(to container: inout KeyedEncodingContainer<CodingKeys>) throws {
@@ -135,7 +142,7 @@ extension ComposeService: Encodable {
 
     private func encodeBuild(to container: inout KeyedEncodingContainer<CodingKeys>) throws {
         guard let build else { return }
-        if build.dockerfile == nil, build.args.isEmpty, build.target == nil {
+        if build.dockerfile == nil, build.args.isEmpty, build.target == nil, build.ssh.isEmpty {
             try container.encode(build.context, forKey: .build)
             return
         }

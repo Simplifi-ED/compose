@@ -9,6 +9,7 @@ struct ServiceRunConfiguration: Sendable {
     let command: [String]
     var containerNumber: Int = 1
     var machineName: String?
+    var requireAgentReachability: Bool = true
 }
 
 enum ServiceRunMapping {
@@ -38,6 +39,11 @@ enum ServiceRunMapping {
                 )
             ])
         }
+        arguments.append(contentsOf: try SSHAgentForwarding.runFlags(
+            service: configuration.service,
+            serviceName: configuration.serviceName,
+            requireAgentReachability: configuration.requireAgentReachability
+        ))
         arguments.append(contentsOf: try NetworkPlanning.networkFlags(
             service: configuration.service,
             projectName: configuration.projectName

@@ -29,7 +29,7 @@ enum ComposeFileMerge {
     static func merge(base: ComposeService, override: ComposeService) -> ComposeService {
         ComposeService(
             image: override.image ?? base.image,
-            build: override.build ?? base.build,
+            build: mergeBuild(base: base.build, override: override.build),
             command: override.command ?? base.command,
             ports: ComposeBindingKeys.mergeUniqueEntries(
                 base: base.ports,
@@ -66,8 +66,28 @@ enum ComposeFileMerge {
                 override: override.hostnames,
                 key: { $0.lowercased() }
             ),
-            platform: override.platform ?? base.platform
+            platform: override.platform ?? base.platform,
+            ssh: override.ssh ?? base.ssh
         )
+    }
+
+    static func mergeBuild(base: ComposeBuild?, override: ComposeBuild?) -> ComposeBuild? {
+        switch (base, override) {
+        case (nil, nil):
+            return nil
+        case (let base?, nil):
+            return base
+        case (nil, let override?):
+            return override
+        case (let base?, let override?):
+            return ComposeBuild(
+                context: override.context,
+                dockerfile: override.dockerfile ?? base.dockerfile,
+                args: base.args.merging(override.args) { _, override in override },
+                target: override.target ?? base.target,
+                ssh: override.ssh.isEmpty ? base.ssh : override.ssh
+            )
+        }
     }
 
     private static func mergeServiceNetworks(

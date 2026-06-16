@@ -55,7 +55,10 @@ public struct Up: AsyncParsableCommand {
         try parallelOptions.validate()
         try hostDNSOptions.validateMachineCompatibility(machineName: machineOptions.resolvedMachineName)
         let machineContext = try await machineOptions.resolveContext().machineContext
-        let startup = try resolveStartupPlan(machineName: machineOptions.resolvedMachineName)
+        let startup = try resolveStartupPlan(
+            machineName: machineOptions.resolvedMachineName,
+            dryRun: dryRunOptions.isEnabled
+        )
 
         if dryRunOptions.isEnabled {
             try await runDryRun(

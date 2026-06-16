@@ -21,6 +21,10 @@ extension BuildRunner {
         if let target = plan.target, !target.isEmpty {
             arguments.append(contentsOf: ["--target", target])
         }
+        arguments.append(contentsOf: try SSHAgentForwarding.buildSSHArguments(
+            ssh: plan.ssh,
+            serviceName: plan.serviceName
+        ))
         if let progress {
             switch progress {
             case .auto:

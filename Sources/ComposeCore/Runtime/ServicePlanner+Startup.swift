@@ -5,7 +5,8 @@ extension ServicePlanner {
         composeFile: ComposeFile,
         activeServiceNames: Set<String>,
         machineName: String?,
-        scaleOverrides: [String: Int]
+        scaleOverrides: [String: Int],
+        requireAgentReachability: Bool = true
     ) throws {
         try ComposeFileMountResolver.validate(
             composeFile: composeFile,
@@ -28,6 +29,11 @@ extension ServicePlanner {
             scaleOverrides: scaleOverrides,
             services: composeFile.services,
             activeServiceNames: activeServiceNames
+        )
+        try SSHAgentForwarding.validateStartup(
+            services: composeFile.services,
+            activeServiceNames: activeServiceNames,
+            requireAgentReachability: requireAgentReachability
         )
     }
 

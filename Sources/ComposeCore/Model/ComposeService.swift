@@ -39,6 +39,8 @@ public struct ComposeService: Sendable, Equatable {
     public let hostnames: [String]
     /// Service platform (`linux/amd64`, `linux/x86_64`, or `linux/arm64`).
     public let platform: String?
+    /// SSH agent forwarding (`ssh: default` / `ssh: [default]`).
+    public let ssh: [String]?
 
     public init(
         image: String?,
@@ -60,7 +62,8 @@ public struct ComposeService: Sendable, Equatable {
         projectDirectory: URL? = nil,
         useInit: Bool? = nil,
         hostnames: [String] = [],
-        platform: String? = nil
+        platform: String? = nil,
+        ssh: [String]? = nil
     ) {
         self.image = image
         self.build = build
@@ -82,6 +85,7 @@ public struct ComposeService: Sendable, Equatable {
         self.useInit = useInit
         self.hostnames = hostnames
         self.platform = platform
+        self.ssh = ssh
     }
 
     /// Resolved bind-mount / relative-path root; uses `defaultDirectory` when unset (CLI compose file dir).
@@ -110,7 +114,8 @@ public struct ComposeService: Sendable, Equatable {
             projectDirectory: projectDirectory,
             useInit: useInit,
             hostnames: hostnames,
-            platform: platform
+            platform: platform,
+            ssh: ssh
         )
     }
 
@@ -135,7 +140,8 @@ public struct ComposeService: Sendable, Equatable {
             projectDirectory: directory,
             useInit: useInit,
             hostnames: hostnames,
-            platform: platform
+            platform: platform,
+            ssh: ssh
         )
     }
 
@@ -160,7 +166,8 @@ public struct ComposeService: Sendable, Equatable {
             projectDirectory: projectDirectory,
             useInit: useInit,
             hostnames: hostnames,
-            platform: platform
+            platform: platform,
+            ssh: ssh
         )
     }
 
@@ -185,7 +192,8 @@ public struct ComposeService: Sendable, Equatable {
             projectDirectory: projectDirectory,
             useInit: useInit,
             hostnames: hostnames,
-            platform: platform
+            platform: platform,
+            ssh: ssh
         )
     }
 }
