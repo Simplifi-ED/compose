@@ -103,21 +103,27 @@ extension TestRunner {
         )
     }
 
-    private mutating func runGPUReservationMergeTests() throws {
-        let gpuBase = """
-        services:
-          web:
-            image: docker.io/library/alpine:3.24
-            command: sleep 300
-            deploy:
-              resources:
-                reservations:
-                  devices:
-                    - driver: apple
-                      capabilities: [gpu]
-        """
+    private static let gpuReservationMergeBaseYAML = """
+    services:
+      web:
+        image: docker.io/library/alpine:3.24
+        command: sleep 300
+        deploy:
+          resources:
+            reservations:
+              devices:
+                - driver: apple
+                  capabilities: [gpu]
+    """
 
-        let addDevice = try Self.mergeGPUReservationFixtures(
+    private mutating func runGPUReservationMergeTests() throws {
+        try runGPUReservationMergeAddDeviceTests()
+        try runGPUReservationMergePreserveBaseTests()
+        try runGPUReservationMergeClearBaseTests()
+    }
+
+    private mutating func runGPUReservationMergeAddDeviceTests() throws {
+        let merged = try Self.mergeGPUReservationFixtures(
             base: """
             services:
               web:
@@ -141,15 +147,17 @@ extension TestRunner {
                           capabilities: [gpu]
             """
         )
-        let limits = addDevice.services["web"]?.deploy?.resources?.limits
-        let reservations = addDevice.services["web"]?.deploy?.resources?.reservations?.devices
+        let limits = merged.services["web"]?.deploy?.resources?.limits
+        let reservations = merged.services["web"]?.deploy?.resources?.reservations?.devices
         expect(limits?.cpus == "2", "merge retains base cpus")
         expect(limits?.memory == "1G", "merge applies override memory")
         expect(reservations?.count == 1, "merge applies gpu reservation device")
         expect(reservations?.first?.driver == "apple", "merge keeps gpu reservation driver")
+    }
 
-        let preserveBase = try Self.mergeGPUReservationFixtures(
-            base: gpuBase,
+    private mutating func runGPUReservationMergePreserveBaseTests() throws {
+        let merged = try Self.mergeGPUReservationFixtures(
+            base: Self.gpuReservationMergeBaseYAML,
             override: """
             services:
               web:
@@ -159,12 +167,14 @@ extension TestRunner {
                       memory: 1G
             """
         )
-        let baseReservations = preserveBase.services["web"]?.deploy?.resources?.reservations?.devices
-        expect(baseReservations?.count == 1, "merge retains base gpu reservation when override omits reservations")
-        expect(baseReservations?.first?.driver == "apple", "merge retains base gpu reservation driver")
+        let reservations = merged.services["web"]?.deploy?.resources?.reservations?.devices
+        expect(reservations?.count == 1, "merge retains base gpu reservation when override omits reservations")
+        expect(reservations?.first?.driver == "apple", "merge retains base gpu reservation driver")
+    }
 
-        let cleared = try Self.mergeGPUReservationFixtures(
-            base: gpuBase,
+    private mutating func runGPUReservationMergeClearBaseTests() throws {
+        let merged = try Self.mergeGPUReservationFixtures(
+            base: Self.gpuReservationMergeBaseYAML,
             override: """
             services:
               web:
@@ -174,7 +184,7 @@ extension TestRunner {
                       devices: []
             """
         )
-        let clearedDevices = cleared.services["web"]?.deploy?.resources?.reservations?.devices
+        let clearedDevices = merged.services["web"]?.deploy?.resources?.reservations?.devices
         expect(clearedDevices?.isEmpty == true, "merge override with empty devices clears base gpu reservation")
     }
 
