@@ -97,13 +97,20 @@ package enum ClockSync {
         )
     }
 
+    private static let syncOperationTimeout: Duration = .seconds(10)
+
+    private struct SyncTimedOut: Error {}
+
     private static func syncContainerIDs(_ ids: [String]) async -> Result {
         guard !ids.isEmpty else { return Result(succeeded: 0, failed: 0) }
-        return await withTaskGroup(of: Bool.self) { taskGroup in
+        let eventLoopGroup = MultiThreadedEventLoopGroup(
+            numberOfThreads: max(1, min(4, ids.count))
+        )
+        let result = await withTaskGroup(of: Bool.self) { taskGroup in
             for id in ids {
                 taskGroup.addTask {
                     do {
-                        try await syncContainer(id: id)
+                        try await syncContainer(id: id, eventLoopGroup: eventLoopGroup)
                         return true
                     } catch {
                         return false
@@ -117,30 +124,40 @@ package enum ClockSync {
             }
             return Result(succeeded: succeeded, failed: failed)
         }
+        try? await eventLoopGroup.shutdownGracefully()
+        return result
     }
 
-    private static func syncContainer(id: String) async throws {
-        let client = ContainerClient()
-        let eventLoopGroup = MultiThreadedEventLoopGroup(numberOfThreads: 1)
-        do {
-            let handle = try await client.dial(id: id, port: Vminitd.port)
-            let agent = try Vminitd(connection: handle, group: eventLoopGroup)
-            do {
-                var hostTime = timeval()
-                guard gettimeofday(&hostTime, nil) == 0 else {
-                    throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EINVAL)
+    private static func syncContainer(id: String, eventLoopGroup: EventLoopGroup) async throws {
+        try await withThrowingTaskGroup(of: Void.self) { group in
+            group.addTask {
+                let client = ContainerClient()
+                let handle = try await client.dial(id: id, port: Vminitd.port)
+                let agent = try Vminitd(connection: handle, group: eventLoopGroup)
+                do {
+                    var hostTime = timeval()
+                    guard gettimeofday(&hostTime, nil) == 0 else {
+                        throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EINVAL)
+                    }
+                    try await agent.setTime(
+                        sec: Int64(hostTime.tv_sec),
+                        usec: Int32(hostTime.tv_usec)
+                    )
+                    try await agent.close()
+                } catch {
+                    try? await agent.close()
+                    throw error
                 }
-                try await agent.setTime(sec: Int64(hostTime.tv_sec), usec: Int32(hostTime.tv_usec))
-                try await agent.close()
-            } catch {
-                try? await agent.close()
-                throw error
             }
-        } catch {
-            try? await eventLoopGroup.shutdownGracefully()
-            throw error
+            group.addTask {
+                try await Task.sleep(for: syncOperationTimeout)
+                throw SyncTimedOut()
+            }
+            guard try await group.next() != nil else {
+                throw SyncTimedOut()
+            }
+            group.cancelAll()
         }
-        try? await eventLoopGroup.shutdownGracefully()
     }
 
     private static func emitFailureWarning() {

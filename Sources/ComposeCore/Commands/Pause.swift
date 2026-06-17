@@ -32,17 +32,14 @@ public struct Pause: AsyncParsableCommand {
     public func run() async throws {
         try await ComposeCommandClockSync.execute(
             cliNoClockSync: clockSyncOptions.isDisabled,
-            dryRun: dryRunOptions.isEnabled
+            dryRun: dryRunOptions.isEnabled,
+            cliNoOslog: osLogOptions.isDisabled
         ) {
-            OsLogConfiguration.apply(
-                cliNoOslog: osLogOptions.isDisabled,
-                dryRun: dryRunOptions.isEnabled
-            )
             try parallelOptions.validate()
-            var machineContext = try await machineOptions.resolveContext().machineContext
-            if machineContext.isMachineMode, !dryRunOptions.isEnabled, !machineContext.isMachineRunning {
-                machineContext = try await machineContext.ensureBooted()
-            }
+            guard let machineContext = try await machineOptions
+                .resolveContext(stopped: .gracefulExit)
+                .machineContextIfReady
+            else { return }
             let context = try projectOptions.resolvedLabelCommandContext(
                 profileFilterRequested: profileOptions.profileFilterRequested,
                 profiles: profileOptions.profiles,

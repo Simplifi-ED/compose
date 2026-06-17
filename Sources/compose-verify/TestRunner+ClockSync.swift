@@ -43,10 +43,13 @@ extension TestRunner {
             ),
             "CLI disable wins over COMPOSE_CLOCK_SYNC=1"
         )
-        ClockSyncConfiguration.apply(cliNoClockSync: false)
+        ClockSyncConfiguration.apply(cliNoClockSync: false, environment: [:])
         expect(ClockSyncConfiguration.sessionEnabled, "clock sync enabled after apply")
-        ClockSyncConfiguration.apply(cliNoClockSync: true)
-        expect(!ClockSyncConfiguration.sessionEnabled, "apply honors CLI disable")
+        ClockSyncConfiguration.apply(
+            cliNoClockSync: true,
+            environment: [ClockSyncConfiguration.environmentVariableName: "1"]
+        )
+        expect(!ClockSyncConfiguration.sessionEnabled, "apply honors CLI disable over env")
     }
 
     private mutating func runClockSyncDiscoveryTests() {

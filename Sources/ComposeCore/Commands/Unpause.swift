@@ -32,12 +32,9 @@ public struct Unpause: AsyncParsableCommand {
     public func run() async throws {
         try await ComposeCommandClockSync.execute(
             cliNoClockSync: clockSyncOptions.isDisabled,
-            dryRun: dryRunOptions.isEnabled
+            dryRun: dryRunOptions.isEnabled,
+            cliNoOslog: osLogOptions.isDisabled
         ) {
-            OsLogConfiguration.apply(
-                cliNoOslog: osLogOptions.isDisabled,
-                dryRun: dryRunOptions.isEnabled
-            )
             try parallelOptions.validate()
             var machineContext = try await machineOptions.resolveContext().machineContext
             if machineContext.isMachineMode, !dryRunOptions.isEnabled, !machineContext.isMachineRunning {

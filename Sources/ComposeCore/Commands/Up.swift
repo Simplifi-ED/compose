@@ -54,12 +54,9 @@ public struct Up: AsyncParsableCommand {
         try await ComposeCommandClockSync.execute(
             cliNoClockSync: clockSyncOptions.isDisabled,
             dryRun: dryRunOptions.isEnabled,
-            eagerSync: false
+            eagerSync: false,
+            cliNoOslog: osLogOptions.isDisabled
         ) {
-            OsLogConfiguration.apply(
-                cliNoOslog: osLogOptions.isDisabled,
-                dryRun: dryRunOptions.isEnabled
-            )
             try parallelOptions.validate()
             try hostDNSOptions.validateMachineCompatibility(machineName: machineOptions.resolvedMachineName)
             let machineContext = try await machineOptions.resolveContext().machineContext

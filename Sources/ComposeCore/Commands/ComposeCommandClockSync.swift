@@ -1,17 +1,15 @@
 import Foundation
 
 package enum ComposeCommandClockSync {
-    package static func apply(cliNoClockSync: Bool) {
-        ClockSyncConfiguration.apply(cliNoClockSync: cliNoClockSync)
-    }
-
     package static func execute<R>(
         cliNoClockSync: Bool,
         dryRun: Bool = false,
         eagerSync: Bool = true,
+        cliNoOslog: Bool = false,
         _ body: () async throws -> R
     ) async throws -> R {
-        apply(cliNoClockSync: cliNoClockSync)
+        ClockSyncConfiguration.apply(cliNoClockSync: cliNoClockSync)
+        OsLogConfiguration.apply(cliNoOslog: cliNoOslog, dryRun: dryRun)
         guard ClockSyncConfiguration.sessionEnabled, !dryRun else {
             return try await body()
         }

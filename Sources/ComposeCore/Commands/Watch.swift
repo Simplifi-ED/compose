@@ -29,8 +29,10 @@ public struct Watch: AsyncParsableCommand {
     var services: [String] = []
 
     public func run() async throws {
-        try await ComposeCommandClockSync.execute(cliNoClockSync: clockSyncOptions.isDisabled) {
-            OsLogConfiguration.apply(cliNoOslog: osLogOptions.isDisabled)
+        try await ComposeCommandClockSync.execute(
+            cliNoClockSync: clockSyncOptions.isDisabled,
+            cliNoOslog: osLogOptions.isDisabled
+        ) {
             try machineOptions.rejectIfUnsupported(commandName: "watch")
             let fileURLs = try projectOptions.resolvedFileURLs()
             let composeFile = try ComposeParser.parse(fileURLs: fileURLs)

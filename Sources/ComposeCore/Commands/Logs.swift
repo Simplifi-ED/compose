@@ -42,8 +42,10 @@ public struct Logs: AsyncParsableCommand {
     }
 
     public func run() async throws {
-        try await ComposeCommandClockSync.execute(cliNoClockSync: clockSyncOptions.isDisabled) {
-            OsLogConfiguration.apply(cliNoOslog: osLogOptions.isDisabled)
+        try await ComposeCommandClockSync.execute(
+            cliNoClockSync: clockSyncOptions.isDisabled,
+            cliNoOslog: osLogOptions.isDisabled
+        ) {
             guard let machineContext = try await machineOptions
                 .resolveContext(stopped: .gracefulExit)
                 .machineContextIfReady

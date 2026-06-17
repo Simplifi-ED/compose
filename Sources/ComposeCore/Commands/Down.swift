@@ -50,12 +50,9 @@ public struct Down: AsyncParsableCommand {
     public func run() async throws {
         try await ComposeCommandClockSync.execute(
             cliNoClockSync: clockSyncOptions.isDisabled,
-            dryRun: dryRunOptions.isEnabled
+            dryRun: dryRunOptions.isEnabled,
+            cliNoOslog: osLogOptions.isDisabled
         ) {
-            OsLogConfiguration.apply(
-                cliNoOslog: osLogOptions.isDisabled,
-                dryRun: dryRunOptions.isEnabled
-            )
             try parallelOptions.validate()
             let request = try downRequest(dryRun: dryRunOptions.isEnabled)
             let shutdown = try await ProjectDownRun.resolveShutdown(request: request)

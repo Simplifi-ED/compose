@@ -52,12 +52,9 @@ public struct Exec: AsyncParsableCommand {
     public func run() async throws {
         try await ComposeCommandClockSync.execute(
             cliNoClockSync: clockSyncOptions.isDisabled,
-            dryRun: dryRunOptions.isEnabled
+            dryRun: dryRunOptions.isEnabled,
+            cliNoOslog: osLogOptions.isDisabled
         ) {
-            OsLogConfiguration.apply(
-                cliNoOslog: osLogOptions.isDisabled,
-                dryRun: dryRunOptions.isEnabled
-            )
             let machineContext = try await machineOptions
                 .resolveContext(stopped: .requireRunning)
                 .machineContext
