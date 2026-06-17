@@ -232,4 +232,27 @@ extension TestRunner {
             }
         )
     }
+
+    mutating func expectUpPlanError(
+        _ label: String,
+        fixtureName: String,
+        machineName: String? = nil,
+        matching: (ComposeError) -> Bool
+    ) throws {
+        let composeDirectory = Self.fixtureURL(fixtureName).deletingLastPathComponent()
+        expectComposeError(label, matching: matching) {
+            let composeFile = try ComposeParser.parse(fileURL: Self.fixtureURL(fixtureName))
+            _ = try ServicePlanner.buildUpPlan(
+                context: ServicePlanner.PlanningContext(
+                    composeFile: composeFile,
+                    projectName: "demo",
+                    composeDirectory: composeDirectory,
+                    machineName: machineName
+                ),
+                serviceName: "web",
+                service: composeFile.services["web"]!,
+                replicaIndex: 1
+            )
+        }
+    }
 }

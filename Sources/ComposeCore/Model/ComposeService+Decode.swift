@@ -171,6 +171,15 @@ extension ComposeService: Decodable {
         } catch let error as ComposeError {
             throw error
         } catch {
+            if let composeError = ComposeParser.extractComposeError(from: error) {
+                throw composeError
+            }
+            if error is DecodingError {
+                throw ComposeError.invalidField(
+                    "deploy",
+                    reason: "invalid nested deploy value (\(error))"
+                )
+            }
             throw ComposeError.invalidField(
                 "deploy",
                 reason: "expected a map with replicas/resources values"

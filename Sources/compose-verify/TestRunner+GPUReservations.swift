@@ -23,10 +23,9 @@ extension TestRunner {
     }
 
     private mutating func runGPUReservationPlanTests() throws {
-        try expectGPUReservationPlanError(
+        try expectUpPlanError(
             "unsupported gpu reservation rejected at plan time",
-            fixtureName: "resources-gpu-reservation-compose.yml",
-            machineName: nil
+            fixtureName: "resources-gpu-reservation-compose.yml"
         ) {
             if case .invalidField("deploy.resources.reservations.devices", let reason) = $0 {
                 return Self.matchesUnsupportedGPUReason(reason)
@@ -34,7 +33,7 @@ extension TestRunner {
             }
             return false
         }
-        try expectGPUReservationPlanError(
+        try expectUpPlanError(
             "unsupported gpu reservation rejected for machine mode",
             fixtureName: "resources-gpu-reservation-compose.yml",
             machineName: "dev"
@@ -105,122 +104,91 @@ extension TestRunner {
     }
 
     private mutating func runGPUReservationMergeTests() throws {
-        try runGPUReservationMergeAddDeviceTests()
-        try runGPUReservationMergePreserveBaseTests()
-        try runGPUReservationMergeClearBaseTests()
-    }
-
-    private mutating func runGPUReservationMergeAddDeviceTests() throws {
-        let tempDir = try Self.makeGPUReservationMergeDirectory()
-        defer { try? FileManager.default.removeItem(at: tempDir) }
-
-        let basePath = tempDir.appendingPathComponent("base.yml")
-        try """
+        let gpuBase = """
         services:
           web:
             image: docker.io/library/alpine:3.24
             command: sleep 300
             deploy:
               resources:
-                limits:
-                  cpus: "2"
-        """.write(to: basePath, atomically: true, encoding: .utf8)
-
-        let overridePath = tempDir.appendingPathComponent("override.yml")
-        try """
-        services:
-          web:
-            deploy:
-              resources:
-                limits:
-                  memory: 1G
                 reservations:
                   devices:
                     - driver: apple
                       capabilities: [gpu]
-        """.write(to: overridePath, atomically: true, encoding: .utf8)
+        """
 
-        let merged = try ComposeParser.parse(fileURLs: [basePath, overridePath])
-        let limits = merged.services["web"]?.deploy?.resources?.limits
-        let reservations = merged.services["web"]?.deploy?.resources?.reservations?.devices
+        let addDevice = try Self.mergeGPUReservationFixtures(
+            base: """
+            services:
+              web:
+                image: docker.io/library/alpine:3.24
+                command: sleep 300
+                deploy:
+                  resources:
+                    limits:
+                      cpus: "2"
+            """,
+            override: """
+            services:
+              web:
+                deploy:
+                  resources:
+                    limits:
+                      memory: 1G
+                    reservations:
+                      devices:
+                        - driver: apple
+                          capabilities: [gpu]
+            """
+        )
+        let limits = addDevice.services["web"]?.deploy?.resources?.limits
+        let reservations = addDevice.services["web"]?.deploy?.resources?.reservations?.devices
         expect(limits?.cpus == "2", "merge retains base cpus")
         expect(limits?.memory == "1G", "merge applies override memory")
         expect(reservations?.count == 1, "merge applies gpu reservation device")
         expect(reservations?.first?.driver == "apple", "merge keeps gpu reservation driver")
-    }
 
-    private mutating func runGPUReservationMergePreserveBaseTests() throws {
-        let tempDir = try Self.makeGPUReservationMergeDirectory()
-        defer { try? FileManager.default.removeItem(at: tempDir) }
-
-        let gpuBasePath = tempDir.appendingPathComponent("gpu-base.yml")
-        try """
-        services:
-          web:
-            image: docker.io/library/alpine:3.24
-            command: sleep 300
-            deploy:
-              resources:
-                reservations:
-                  devices:
-                    - driver: apple
-                      capabilities: [gpu]
-        """.write(to: gpuBasePath, atomically: true, encoding: .utf8)
-
-        let limitsOnlyOverridePath = tempDir.appendingPathComponent("limits-only-override.yml")
-        try """
-        services:
-          web:
-            deploy:
-              resources:
-                limits:
-                  memory: 1G
-        """.write(to: limitsOnlyOverridePath, atomically: true, encoding: .utf8)
-
-        let baseRetained = try ComposeParser.parse(fileURLs: [gpuBasePath, limitsOnlyOverridePath])
-        let baseReservations = baseRetained.services["web"]?.deploy?.resources?.reservations?.devices
+        let preserveBase = try Self.mergeGPUReservationFixtures(
+            base: gpuBase,
+            override: """
+            services:
+              web:
+                deploy:
+                  resources:
+                    limits:
+                      memory: 1G
+            """
+        )
+        let baseReservations = preserveBase.services["web"]?.deploy?.resources?.reservations?.devices
         expect(baseReservations?.count == 1, "merge retains base gpu reservation when override omits reservations")
         expect(baseReservations?.first?.driver == "apple", "merge retains base gpu reservation driver")
-    }
 
-    private mutating func runGPUReservationMergeClearBaseTests() throws {
-        let tempDir = try Self.makeGPUReservationMergeDirectory()
-        defer { try? FileManager.default.removeItem(at: tempDir) }
-
-        let gpuBasePath = tempDir.appendingPathComponent("gpu-base.yml")
-        try """
-        services:
-          web:
-            image: docker.io/library/alpine:3.24
-            command: sleep 300
-            deploy:
-              resources:
-                reservations:
-                  devices:
-                    - driver: apple
-                      capabilities: [gpu]
-        """.write(to: gpuBasePath, atomically: true, encoding: .utf8)
-
-        let emptyDevicesOverridePath = tempDir.appendingPathComponent("empty-devices-override.yml")
-        try """
-        services:
-          web:
-            deploy:
-              resources:
-                reservations:
-                  devices: []
-        """.write(to: emptyDevicesOverridePath, atomically: true, encoding: .utf8)
-
-        let cleared = try ComposeParser.parse(fileURLs: [gpuBasePath, emptyDevicesOverridePath])
+        let cleared = try Self.mergeGPUReservationFixtures(
+            base: gpuBase,
+            override: """
+            services:
+              web:
+                deploy:
+                  resources:
+                    reservations:
+                      devices: []
+            """
+        )
         let clearedDevices = cleared.services["web"]?.deploy?.resources?.reservations?.devices
         expect(clearedDevices?.isEmpty == true, "merge override with empty devices clears base gpu reservation")
     }
 
-    private static func makeGPUReservationMergeDirectory() throws -> URL {
+    private static func mergeGPUReservationFixtures(base: String, override: String) throws -> ComposeFile {
         let tempDir = FileManager.default.temporaryDirectory
             .appendingPathComponent("compose-verify-gpu-merge-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
-        return tempDir
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let basePath = tempDir.appendingPathComponent("base.yml")
+        let overridePath = tempDir.appendingPathComponent("override.yml")
+        try base.write(to: basePath, atomically: true, encoding: .utf8)
+        try override.write(to: overridePath, atomically: true, encoding: .utf8)
+        return try ComposeParser.parse(fileURLs: [basePath, overridePath])
     }
 
     private mutating func runGPUReservationDryRunTests() throws {
@@ -246,28 +214,5 @@ extension TestRunner {
                 )
             }
         )
-    }
-
-    private mutating func expectGPUReservationPlanError(
-        _ label: String,
-        fixtureName: String,
-        machineName: String?,
-        matching: (ComposeError) -> Bool
-    ) throws {
-        let composeDirectory = Self.fixtureURL("resources-limits-compose.yml").deletingLastPathComponent()
-        expectComposeError(label, matching: matching) {
-            let composeFile = try ComposeParser.parse(fileURL: Self.fixtureURL(fixtureName))
-            _ = try ServicePlanner.buildUpPlan(
-                context: ServicePlanner.PlanningContext(
-                    composeFile: composeFile,
-                    projectName: "demo",
-                    composeDirectory: composeDirectory,
-                    machineName: machineName
-                ),
-                serviceName: "web",
-                service: composeFile.services["web"]!,
-                replicaIndex: 1
-            )
-        }
     }
 }
