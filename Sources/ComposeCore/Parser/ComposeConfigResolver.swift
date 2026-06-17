@@ -81,6 +81,11 @@ public enum ComposeConfigResolver {
             scaleOverrides: scaleOverrides,
             processEnvironment: processEnvironment
         )
+        // ponytail: limits validate in scaledActiveServices for every config resolve; GPU reservations
+        // validate only on --quiet so non-quiet config can still emit the reservation block.
+        if quiet {
+            try validateRuntimeUnsupportedReservationsForQuietConfig(composeFile.services)
+        }
         guard !quiet else { return nil }
         return try ComposeSerializer.yamlString(from: composeFile)
     }
@@ -113,6 +118,14 @@ public enum ComposeConfigResolver {
             adjusted[serviceName] = scaled
         }
         return adjusted
+    }
+
+    private static func validateRuntimeUnsupportedReservationsForQuietConfig(
+        _ services: [String: ComposeService]
+    ) throws {
+        for service in services.values {
+            try DeployGPUPlanning.validateReservations(service.deploy?.resources?.reservations)
+        }
     }
 
     private static func applyScale(

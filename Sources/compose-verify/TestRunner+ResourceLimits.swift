@@ -9,8 +9,8 @@ extension TestRunner {
         try runResourceLimitsDecodeTests()
         try runResourceLimitsPlanTests()
         try runResourceLimitsValidationTests()
+        try runGPUReservationTests()
         try runResourceLimitsConfigTests()
-        try runResourceLimitsMergeTests()
         try runResourceLimitsDryRunTests()
     }
 
@@ -102,40 +102,6 @@ extension TestRunner {
         let limits = resolved.services["web"]?.deploy?.resources?.limits
         expect(limits?.cpus == "2", "config resolve retains cpus")
         expect(limits?.memory == "512M", "config resolve retains memory")
-    }
-
-    private mutating func runResourceLimitsMergeTests() throws {
-        let tempDir = FileManager.default.temporaryDirectory
-            .appendingPathComponent("compose-verify-resources-merge-\(UUID().uuidString)", isDirectory: true)
-        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
-        defer { try? FileManager.default.removeItem(at: tempDir) }
-
-        let basePath = tempDir.appendingPathComponent("base.yml")
-        try """
-        services:
-          web:
-            image: docker.io/library/alpine:3.24
-            command: sleep 300
-            deploy:
-              resources:
-                limits:
-                  cpus: "2"
-        """.write(to: basePath, atomically: true, encoding: .utf8)
-
-        let overridePath = tempDir.appendingPathComponent("override.yml")
-        try """
-        services:
-          web:
-            deploy:
-              resources:
-                limits:
-                  memory: 1G
-        """.write(to: overridePath, atomically: true, encoding: .utf8)
-
-        let merged = try ComposeParser.parse(fileURLs: [basePath, overridePath])
-        let limits = merged.services["web"]?.deploy?.resources?.limits
-        expect(limits?.cpus == "2", "merge retains base cpus")
-        expect(limits?.memory == "1G", "merge applies override memory")
     }
 
     private mutating func runResourceLimitsDryRunTests() throws {

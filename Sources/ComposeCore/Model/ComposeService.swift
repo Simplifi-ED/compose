@@ -172,7 +172,8 @@ public struct ComposeService: Sendable, Equatable {
     }
 
     func withDeploy(replicas: Int) -> ComposeService {
-        ComposeService(
+        let existingResources = deploy?.resources
+        return ComposeService(
             image: image,
             build: build,
             command: command,
@@ -182,7 +183,7 @@ public struct ComposeService: Sendable, Equatable {
             containerName: containerName,
             dependsOn: dependsOn,
             profiles: profiles,
-            deploy: ComposeDeploy(replicas: replicas),
+            deploy: ComposeDeploy(replicas: replicas, resources: existingResources),
             healthcheck: healthcheck,
             configs: configs,
             secrets: secrets,

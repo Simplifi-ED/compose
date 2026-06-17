@@ -232,4 +232,33 @@ extension TestRunner {
             }
         )
     }
+
+    mutating func expectUpPlanError(
+        _ label: String,
+        fixtureName: String,
+        machineName: String? = nil,
+        matching: (ComposeError) -> Bool
+    ) throws {
+        let composeDirectory = Self.fixtureURL(fixtureName).deletingLastPathComponent()
+        expectComposeError(label, matching: matching) {
+            let composeFile = try ComposeParser.parse(fileURL: Self.fixtureURL(fixtureName))
+            guard let webService = composeFile.services["web"] else {
+                throw ComposeError.invalidField(
+                    "services.web",
+                    reason: "fixture must define a 'web' service for plan assertions"
+                )
+            }
+            _ = try ServicePlanner.buildUpPlan(
+                context: ServicePlanner.PlanningContext(
+                    composeFile: composeFile,
+                    projectName: "demo",
+                    composeDirectory: composeDirectory,
+                    machineName: machineName
+                ),
+                serviceName: "web",
+                service: webService,
+                replicaIndex: 1
+            )
+        }
+    }
 }

@@ -11,7 +11,7 @@ extension TestRunner {
     }
 
     private mutating func runResourceLimitsErrorTests() throws {
-        try expectResourceLimitPlanError(
+        try expectUpPlanError(
             "invalid memory limit at plan time",
             fixtureName: "resources-bad-memory-compose.yml"
         ) {
@@ -20,7 +20,7 @@ extension TestRunner {
             }
             return false
         }
-        try expectResourceLimitPlanError(
+        try expectUpPlanError(
             "fractional cpu rejected at plan time",
             fixtureName: "resources-fractional-cpu-compose.yml"
         ) {
@@ -29,7 +29,7 @@ extension TestRunner {
             }
             return false
         }
-        try expectResourceLimitPlanError(
+        try expectUpPlanError(
             "millicore cpu rejected at plan time",
             fixtureName: "resources-millicore-cpu-compose.yml"
         ) {
@@ -67,7 +67,7 @@ extension TestRunner {
         )
         expect(runArgumentValue(decimalPlan.runArguments, flag: "--cpus") == "2", "2.0 normalizes to whole cpu 2")
 
-        try expectResourceLimitPlanError(
+        try expectUpPlanError(
             "zero cpu rejected at plan time",
             fixtureName: "resources-zero-cpu-compose.yml"
         ) {
@@ -76,7 +76,7 @@ extension TestRunner {
             }
             return false
         }
-        try expectResourceLimitPlanError(
+        try expectUpPlanError(
             "empty cpu rejected at plan time",
             fixtureName: "resources-empty-cpu-compose.yml"
         ) {
@@ -158,24 +158,4 @@ extension TestRunner {
         expect(quietOutput == nil, "config quiet skips yaml for valid limits")
     }
 
-    private mutating func expectResourceLimitPlanError(
-        _ label: String,
-        fixtureName: String,
-        matching: (ComposeError) -> Bool
-    ) throws {
-        let composeDirectory = Self.fixtureURL("resources-limits-compose.yml").deletingLastPathComponent()
-        expectComposeError(label, matching: matching) {
-            let composeFile = try ComposeParser.parse(fileURL: Self.fixtureURL(fixtureName))
-            _ = try ServicePlanner.buildUpPlan(
-                context: ServicePlanner.PlanningContext(
-                    composeFile: composeFile,
-                    projectName: "demo",
-                    composeDirectory: composeDirectory
-                ),
-                serviceName: "web",
-                service: composeFile.services["web"]!,
-                replicaIndex: 1
-            )
-        }
-    }
 }

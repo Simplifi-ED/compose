@@ -417,7 +417,27 @@ services:
 
 **Memory:** compose size strings (`512M`, `1G`, bare byte counts). Invalid values fail at plan time.
 
-Limits apply to every replica when scaling. `compose config` (including `--quiet`) validates limits the same way as `up` and `run` — invalid values error before any container starts.
+Limits apply to every replica when scaling. `compose config` (including `--quiet`) validates limits the same way as `up` and `run` — invalid values error before any container starts. GPU reservations use a different validation path (see below).
+
+### GPU reservations (Metal passthrough)
+
+Compose parses `deploy.resources.reservations.devices` for Apple GPU intent:
+
+```yaml
+services:
+  web:
+    image: docker.io/library/alpine:3.24
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: apple
+              capabilities: [gpu]
+```
+
+- Supported schema: `driver: apple` and `capabilities: [gpu]` only. Other drivers (for example `nvidia`) fail at parse time. Extra device fields (`count`, `device_ids`, …) are ignored.
+- Default is off; GPU access is never enabled unless explicitly requested.
+- `compose config` preserves the reservation block and validates CPU/memory limits; runtime GPU support is checked only on `compose config --quiet`, `up`, `run`, and `up --dry-run`.
 
 ---
 
@@ -815,6 +835,7 @@ Exit codes: `0` = all services stopped cleanly · `130` = SIGINT · `143` = SIGT
 | `depends_on` (list; long-form `service_started`, `service_healthy`, `service_completed_successfully`†) | ✅ |
 | `healthcheck` | ✅ |
 | `profiles`, `deploy.replicas`, `deploy.resources.limits` (`cpus`, `memory`) | ✅ |
+| `deploy.resources.reservations.devices` (`driver: apple`, `capabilities: [gpu]`) | ✅ parse/config; runtime support pending |
 | `configs`, `secrets` (local `file:`) | ✅ |
 | `develop.watch` | ✅ |
 | `name:` (project name; overridden by `-p` / `COMPOSE_PROJECT_NAME`) | ✅ |
@@ -844,6 +865,8 @@ Release builds of `bin/compose` are **ad-hoc signed** (`codesign -s -`) with emb
 
 - `com.apple.security.network.server` — compose does not bind TCP listeners; port publishing is handled by the `container` runtime (local Mach XPC uses `compose-xpc`; see [docs/xpc-clients.md](docs/xpc-clients.md))
 - `com.apple.security.files.user-selected.read-write` — powerbox access only; does not cover headless CLI paths or bind mounts
+
+GPU/Metal passthrough is opt-in only through `deploy.resources.reservations.devices`. Enabling GPU exposure increases the workload attack surface, so compose keeps it disabled by default and requires explicit declaration.
 
 For the full entitlement matrix, sandbox blocker register, and spike results, see [`docs/entitlements-audit.md`](docs/entitlements-audit.md). Opt-in sandbox spike: `./scripts/smoke-sandbox-entitlements.sh`.
 

@@ -51,6 +51,10 @@ enum ServiceRunMapping {
         if configuration.service.useInit == true {
             arguments.append("--init")
         }
+        try DeployGPUPlanning.validateReservations(
+            configuration.service.deploy?.resources?.reservations,
+            machineName: configuration.machineName
+        )
         arguments.append(contentsOf: try DeployResourceLimitsPlanning.validatedRunFlags(
             limits: configuration.service.deploy?.resources?.limits
         ))

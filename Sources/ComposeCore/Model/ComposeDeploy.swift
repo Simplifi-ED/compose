@@ -2,9 +2,10 @@ import Foundation
 
 /// Subset of the compose `deploy` block the plugin understands.
 ///
-/// Reads `replicas` and `resources.limits` (`cpus`, `memory`). Other `deploy` keys
-/// (reservations, placement, update_config, ...) are ignored rather than rejected
-/// so production compose files keep parsing.
+/// Reads `replicas`, `resources.limits` (`cpus`, `memory`), and
+/// `resources.reservations.devices` (`driver: apple`, `capabilities: [gpu]`).
+/// Other `deploy` keys are ignored rather than rejected so production compose
+/// files keep parsing.
 public struct ComposeDeploy: Sendable, Equatable {
     public let replicas: Int?
     public let resources: ComposeDeployResources?
@@ -15,7 +16,7 @@ public struct ComposeDeploy: Sendable, Equatable {
     }
 
     var hasExportableContent: Bool {
-        replicas != nil || resources?.limits?.hasContent == true
+        replicas != nil || resources?.hasContent == true
     }
 }
 
