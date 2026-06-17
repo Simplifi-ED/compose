@@ -171,7 +171,10 @@ extension ComposeService: Decodable {
         } catch let error as ComposeError {
             throw error
         } catch {
-            throw ComposeError.invalidField("deploy", reason: "expected a map with an integer replicas value")
+            throw ComposeError.invalidField(
+                "deploy",
+                reason: "expected a map with replicas/resources values"
+            )
         }
     }
 

@@ -37,7 +37,7 @@ extension ComposeDeploy: Encodable {
         guard hasExportableContent else { return }
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encodeIfPresent(replicas, forKey: .replicas)
-        if let resources, resources.limits?.hasContent == true {
+        if let resources, resources.hasContent {
             try container.encode(resources, forKey: .resources)
         }
     }

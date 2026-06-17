@@ -54,6 +54,10 @@ enum ServiceRunMapping {
         arguments.append(contentsOf: try DeployResourceLimitsPlanning.validatedRunFlags(
             limits: configuration.service.deploy?.resources?.limits
         ))
+        try DeployGPUPlanning.validateReservations(
+            configuration.service.deploy?.resources?.reservations,
+            machineName: configuration.machineName
+        )
         arguments.append(contentsOf: try PlatformPlanning.validatedRunFlags(
             platform: configuration.service.platform
         ))

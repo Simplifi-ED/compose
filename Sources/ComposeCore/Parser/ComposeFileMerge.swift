@@ -157,21 +157,31 @@ enum ComposeFileMerge {
         base: ComposeDeployResources?,
         override: ComposeDeployResources?
     ) -> ComposeDeployResources? {
+        let mergedLimits: ComposeResourceLimits?
         switch (base?.limits, override?.limits) {
         case (nil, nil):
-            return nil
+            mergedLimits = nil
         case (let baseLimits?, nil):
-            return ComposeDeployResources(limits: baseLimits)
+            mergedLimits = baseLimits
         case (nil, let overrideLimits?):
-            return ComposeDeployResources(limits: overrideLimits)
+            mergedLimits = overrideLimits
         case (let baseLimits?, let overrideLimits?):
-            return ComposeDeployResources(
-                limits: ComposeResourceLimits(
-                    cpus: overrideLimits.cpus ?? baseLimits.cpus,
-                    memory: overrideLimits.memory ?? baseLimits.memory
-                )
+            mergedLimits = ComposeResourceLimits(
+                cpus: overrideLimits.cpus ?? baseLimits.cpus,
+                memory: overrideLimits.memory ?? baseLimits.memory
             )
         }
+
+        // ponytail: whole reservations block wins from override file (unlike per-field limits merge).
+        let mergedReservations = override?.reservations ?? base?.reservations
+        if mergedLimits == nil, mergedReservations == nil {
+            return nil
+        }
+
+        return ComposeDeployResources(
+            limits: mergedLimits,
+            reservations: mergedReservations
+        )
     }
 
     static func merge(
