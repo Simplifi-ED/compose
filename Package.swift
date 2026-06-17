@@ -9,6 +9,7 @@ let package = Package(
         .package(url: "https://github.com/apple/containerization.git", exact: "0.33.3"),
         .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.3.0"),
         .package(url: "https://github.com/jpsim/Yams.git", from: "6.2.1"),
+        .package(url: "https://github.com/apple/swift-nio.git", from: "2.80.0"),
     ],
     targets: [
         .target(
@@ -21,6 +22,8 @@ let package = Package(
                 .product(name: "Containerization", package: "containerization"),
                 .product(name: "ContainerizationArchive", package: "containerization"),
                 .product(name: "ContainerizationOS", package: "containerization"),
+                .product(name: "NIOCore", package: "swift-nio"),
+                .product(name: "NIOPosix", package: "swift-nio"),
                 .product(name: "Yams", package: "Yams"),
             ],
             path: "Sources/ComposeCore"

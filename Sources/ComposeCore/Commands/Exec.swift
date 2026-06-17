@@ -19,6 +19,9 @@ public struct Exec: AsyncParsableCommand {
     var osLogOptions: OsLogOptions
 
     @OptionGroup
+    var clockSyncOptions: ClockSyncOptions
+
+    @OptionGroup
     var machineOptions: MachineOptions
 
     @Flag(name: .short, help: "Keep STDIN open even if not attached.")
@@ -47,39 +50,44 @@ public struct Exec: AsyncParsableCommand {
     }
 
     public func run() async throws {
-        OsLogConfiguration.apply(
-            cliNoOslog: osLogOptions.isDisabled,
+        try await ComposeCommandClockSync.execute(
+            cliNoClockSync: clockSyncOptions.isDisabled,
             dryRun: dryRunOptions.isEnabled
-        )
-        let machineContext = try await machineOptions
-            .resolveContext(stopped: .requireRunning)
-            .machineContext
-        let context = try projectOptions.resolvedLabelCommandContext(
-            skipComposeFileOnExplicitProject: true,
-            machineContext: machineContext
-        )
-        let containers = try await ContainerDiscovery.projectContainers(
-            forProject: context.projectName,
-            machineContext: machineContext
-        )
-        let target = try ExecContainerResolver.resolve(
-            projectName: context.projectName,
-            serviceName: service,
-            containers: containers
-        )
+        ) {
+            OsLogConfiguration.apply(
+                cliNoOslog: osLogOptions.isDisabled,
+                dryRun: dryRunOptions.isEnabled
+            )
+            let machineContext = try await machineOptions
+                .resolveContext(stopped: .requireRunning)
+                .machineContext
+            let context = try projectOptions.resolvedLabelCommandContext(
+                skipComposeFileOnExplicitProject: true,
+                machineContext: machineContext
+            )
+            let containers = try await ContainerDiscovery.projectContainers(
+                forProject: context.projectName,
+                machineContext: machineContext
+            )
+            let target = try ExecContainerResolver.resolve(
+                projectName: context.projectName,
+                serviceName: service,
+                containers: containers
+            )
 
-        if dryRunOptions.isEnabled {
-            let manifest = DryRunManifest(machineName: machineContext.machineName)
-            await manifest.recordExec(container: target.name, command: command)
-            await manifest.printLines()
-            return
+            if dryRunOptions.isEnabled {
+                let manifest = DryRunManifest(machineName: machineContext.machineName)
+                await manifest.recordExec(container: target.name, command: command)
+                await manifest.printLines()
+                return
+            }
+
+            try await runExecSession(
+                target: target,
+                context: context,
+                machineContext: machineContext
+            )
         }
-
-        try await runExecSession(
-            target: target,
-            context: context,
-            machineContext: machineContext
-        )
     }
 
     private func runExecSession(

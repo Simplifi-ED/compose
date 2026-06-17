@@ -82,6 +82,7 @@ extension Up {
         for line in UpStartupSummary.lines(for: plans) {
             print(line)
         }
+        await ClockSyncCoordinator.shared.syncIfNeeded(reason: .afterUp)
         try await attachIfRequested(
             projectName: projectName,
             composeFile: composeFile,

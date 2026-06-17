@@ -36,6 +36,9 @@ public struct Up: AsyncParsableCommand {
     var osLogOptions: OsLogOptions
 
     @OptionGroup
+    var clockSyncOptions: ClockSyncOptions
+
+    @OptionGroup
     var machineOptions: MachineOptions
 
     @OptionGroup
@@ -48,43 +51,49 @@ public struct Up: AsyncParsableCommand {
     var attach = false
 
     public func run() async throws {
-        OsLogConfiguration.apply(
-            cliNoOslog: osLogOptions.isDisabled,
-            dryRun: dryRunOptions.isEnabled
-        )
-        try parallelOptions.validate()
-        try hostDNSOptions.validateMachineCompatibility(machineName: machineOptions.resolvedMachineName)
-        let machineContext = try await machineOptions.resolveContext().machineContext
-        let startup = try resolveStartupPlan(
-            machineName: machineOptions.resolvedMachineName,
-            dryRun: dryRunOptions.isEnabled
-        )
+        try await ComposeCommandClockSync.execute(
+            cliNoClockSync: clockSyncOptions.isDisabled,
+            dryRun: dryRunOptions.isEnabled,
+            eagerSync: false
+        ) {
+            OsLogConfiguration.apply(
+                cliNoOslog: osLogOptions.isDisabled,
+                dryRun: dryRunOptions.isEnabled
+            )
+            try parallelOptions.validate()
+            try hostDNSOptions.validateMachineCompatibility(machineName: machineOptions.resolvedMachineName)
+            let machineContext = try await machineOptions.resolveContext().machineContext
+            let startup = try resolveStartupPlan(
+                machineName: machineOptions.resolvedMachineName,
+                dryRun: dryRunOptions.isEnabled
+            )
 
-        if dryRunOptions.isEnabled {
-            try await runDryRun(
-                DryRunInput(
-                    projectName: startup.projectName,
-                    composeFile: startup.composeFile,
-                    layers: startup.layers,
-                    healthContext: startup.healthContext,
-                    buildPlans: startup.buildPlans,
-                    networkPlans: startup.networkPlans,
-                    volumePlans: startup.volumePlans,
-                    fileURLs: startup.fileURLs,
-                    machineContext: machineContext,
+            if dryRunOptions.isEnabled {
+                try await runDryRun(
+                    DryRunInput(
+                        projectName: startup.projectName,
+                        composeFile: startup.composeFile,
+                        layers: startup.layers,
+                        healthContext: startup.healthContext,
+                        buildPlans: startup.buildPlans,
+                        networkPlans: startup.networkPlans,
+                        volumePlans: startup.volumePlans,
+                        fileURLs: startup.fileURLs,
+                        machineContext: machineContext,
+                        installHostDNS: hostDNSOptions.isEnabled
+                    )
+                )
+                return
+            }
+
+            let bootedContext = try await machineContext.ensureBooted()
+            try await runLive(
+                LiveInput(
+                    plan: startup,
+                    machineContext: bootedContext,
                     installHostDNS: hostDNSOptions.isEnabled
                 )
             )
-            return
         }
-
-        let bootedContext = try await machineContext.ensureBooted()
-        try await runLive(
-            LiveInput(
-                plan: startup,
-                machineContext: bootedContext,
-                installHostDNS: hostDNSOptions.isEnabled
-            )
-        )
     }
 }

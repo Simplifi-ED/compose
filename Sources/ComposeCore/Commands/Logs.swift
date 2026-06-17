@@ -20,6 +20,9 @@ public struct Logs: AsyncParsableCommand {
     @OptionGroup
     var osLogOptions: OsLogOptions
 
+    @OptionGroup
+    var clockSyncOptions: ClockSyncOptions
+
     @Flag(name: .long, help: "Stream new log lines.")
     var follow = false
 
@@ -39,49 +42,51 @@ public struct Logs: AsyncParsableCommand {
     }
 
     public func run() async throws {
-        OsLogConfiguration.apply(cliNoOslog: osLogOptions.isDisabled)
-        guard let machineContext = try await machineOptions
-            .resolveContext(stopped: .gracefulExit)
-            .machineContextIfReady
-        else { return }
-        let context = try projectOptions.resolvedLabelCommandContext(
-            skipComposeFileOnExplicitProject: true,
-            profileFilterRequested: profileOptions.profileFilterRequested,
-            profiles: profileOptions.profiles,
-            machineContext: machineContext
-        )
-        let containers = try await ContainerDiscovery.projectContainers(
-            forProject: context.projectName,
-            machineContext: machineContext
-        )
-        let filter = try projectOptions.resolvedQueryServiceFilter(
-            context: context,
-            profileOptions: profileOptions,
-            positionalServices: services
-        )
-        let sources = makeLogSources(from: containers, filter: filter)
-        guard !sources.isEmpty else { return }
-
-        let mode = TerminalMode.resolve()
-        let options = LogStreamOptions(
-            tail: tail,
-            follow: follow,
-            boot: boot,
-            mode: mode,
-            machineContext: machineContext
-        )
-
-        if follow {
-            _ = try await LogFollowSession.runUntilCancelled(
-                sources: sources,
-                options: options,
-                policy: .cancelOnly,
-                onQuietCancel: {
-                    fputs("Log follow ended.\n", stderr)
-                }
+        try await ComposeCommandClockSync.execute(cliNoClockSync: clockSyncOptions.isDisabled) {
+            OsLogConfiguration.apply(cliNoOslog: osLogOptions.isDisabled)
+            guard let machineContext = try await machineOptions
+                .resolveContext(stopped: .gracefulExit)
+                .machineContextIfReady
+            else { return }
+            let context = try projectOptions.resolvedLabelCommandContext(
+                skipComposeFileOnExplicitProject: true,
+                profileFilterRequested: profileOptions.profileFilterRequested,
+                profiles: profileOptions.profiles,
+                machineContext: machineContext
             )
-        } else {
-            try await LogMultiplexer.run(sources: sources, options: options)
+            let containers = try await ContainerDiscovery.projectContainers(
+                forProject: context.projectName,
+                machineContext: machineContext
+            )
+            let filter = try projectOptions.resolvedQueryServiceFilter(
+                context: context,
+                profileOptions: profileOptions,
+                positionalServices: services
+            )
+            let sources = makeLogSources(from: containers, filter: filter)
+            guard !sources.isEmpty else { return }
+
+            let mode = TerminalMode.resolve()
+            let options = LogStreamOptions(
+                tail: tail,
+                follow: follow,
+                boot: boot,
+                mode: mode,
+                machineContext: machineContext
+            )
+
+            if follow {
+                _ = try await LogFollowSession.runUntilCancelled(
+                    sources: sources,
+                    options: options,
+                    policy: .cancelOnly,
+                    onQuietCancel: {
+                        fputs("Log follow ended.\n", stderr)
+                    }
+                )
+            } else {
+                try await LogMultiplexer.run(sources: sources, options: options)
+            }
         }
     }
 }

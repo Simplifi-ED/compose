@@ -232,6 +232,7 @@ do {
     runner.runRunTests()
     runner.runSignalsTests()
     runner.runOsLogConfigurationTests()
+    runner.runClockSyncTests()
     runner.runXPCTests()
 } catch {
     fputs("FAIL: unexpected error: \(error)\n", stderr)
