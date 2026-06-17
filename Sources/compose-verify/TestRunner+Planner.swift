@@ -242,6 +242,12 @@ extension TestRunner {
         let composeDirectory = Self.fixtureURL(fixtureName).deletingLastPathComponent()
         expectComposeError(label, matching: matching) {
             let composeFile = try ComposeParser.parse(fileURL: Self.fixtureURL(fixtureName))
+            guard let webService = composeFile.services["web"] else {
+                throw ComposeError.invalidField(
+                    "services.web",
+                    reason: "fixture must define a 'web' service for plan assertions"
+                )
+            }
             _ = try ServicePlanner.buildUpPlan(
                 context: ServicePlanner.PlanningContext(
                     composeFile: composeFile,
@@ -250,7 +256,7 @@ extension TestRunner {
                     machineName: machineName
                 ),
                 serviceName: "web",
-                service: composeFile.services["web"]!,
+                service: webService,
                 replicaIndex: 1
             )
         }
