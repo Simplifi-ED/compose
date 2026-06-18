@@ -22,6 +22,9 @@ public struct Run: AsyncParsableCommand {
     var osLogOptions: OsLogOptions
 
     @OptionGroup
+    var clockSyncOptions: ClockSyncOptions
+
+    @OptionGroup
     var machineOptions: MachineOptions
 
     @Flag(name: .long, help: "Remove the container after it exits.")
@@ -50,39 +53,41 @@ public struct Run: AsyncParsableCommand {
     }
 
     public func run() async throws {
-        OsLogConfiguration.apply(
-            cliNoOslog: osLogOptions.isDisabled,
-            dryRun: dryRunOptions.isEnabled
-        )
-        try machineOptions.rejectIfUnsupported(commandName: "run")
-        let resolved = try resolveRun()
+        try await ComposeCommandClockSync.execute(
+            cliNoClockSync: clockSyncOptions.isDisabled,
+            dryRun: dryRunOptions.isEnabled,
+            cliNoOslog: osLogOptions.isDisabled
+        ) {
+            try machineOptions.rejectIfUnsupported(commandName: "run")
+            let resolved = try resolveRun()
 
-        if dryRunOptions.isEnabled {
-            try await runDryRun(
+            if dryRunOptions.isEnabled {
+                try await runDryRun(
+                    buildPlans: resolved.buildPlans,
+                    networkPlans: resolved.networkPlans,
+                    volumePlans: resolved.volumePlans,
+                    plan: resolved.plan
+                )
+                return
+            }
+
+            try await prepareRunResources(
                 buildPlans: resolved.buildPlans,
                 networkPlans: resolved.networkPlans,
                 volumePlans: resolved.volumePlans,
-                plan: resolved.plan
+                projectName: resolved.projectName
             )
-            return
+
+            try await RunSession.run(
+                plan: resolved.plan,
+                shutdownContext: RunShutdownContext(
+                    containerID: resolved.plan.name,
+                    projectName: resolved.projectName,
+                    options: GracefulStopOptions(graceSeconds: timeout)
+                ),
+                useInteractivePTY: resolvedIOFlags().useInteractivePTY
+            )
         }
-
-        try await prepareRunResources(
-            buildPlans: resolved.buildPlans,
-            networkPlans: resolved.networkPlans,
-            volumePlans: resolved.volumePlans,
-            projectName: resolved.projectName
-        )
-
-        try await RunSession.run(
-            plan: resolved.plan,
-            shutdownContext: RunShutdownContext(
-                containerID: resolved.plan.name,
-                projectName: resolved.projectName,
-                options: GracefulStopOptions(graceSeconds: timeout)
-            ),
-            useInteractivePTY: resolvedIOFlags().useInteractivePTY
-        )
     }
 
     private func resolvedIOFlags() -> InteractiveSession.IOFlags {

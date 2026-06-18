@@ -24,6 +24,9 @@ public struct Events: AsyncParsableCommand {
     @OptionGroup
     var osLogOptions: OsLogOptions
 
+    @OptionGroup
+    var clockSyncOptions: ClockSyncOptions
+
     @Flag(name: .long, help: "Keep streaming events until interrupted.")
     var follow = false
 
@@ -46,45 +49,49 @@ public struct Events: AsyncParsableCommand {
     }
 
     public func run() async throws {
-        OsLogConfiguration.apply(cliNoOslog: osLogOptions.isDisabled)
-        guard let machineContext = try await machineOptions
-            .resolveContext(stopped: .gracefulExit)
-            .machineContextIfReady
-        else { return }
-        let context = try projectOptions.resolvedLabelCommandContext(
-            skipComposeFileOnExplicitProject: true,
-            profileFilterRequested: profileOptions.profileFilterRequested,
-            profiles: profileOptions.profiles,
-            machineContext: machineContext
-        )
-        let filter = try projectOptions.resolvedQueryServiceFilter(
-            context: context,
-            profileOptions: profileOptions,
-            positionalServices: services
-        )
-        if let filter, filter.isEmpty {
-            return
-        }
-
-        let timeoutDuration = timeout.map { Duration.seconds($0) }
-        let options = ProjectEventsOptions(
-            projectName: context.projectName,
-            serviceFilter: filter,
-            machineContext: machineContext,
-            follow: follow,
-            timeout: timeoutDuration
-        )
-
-        if follow {
-            _ = try await ProjectEventsSession.runUntilCancelled(
-                options: options,
-                policy: .cancelOnly,
-                onQuietCancel: {
-                    fputs("Events stream ended.\n", stderr)
-                }
+        try await ComposeCommandClockSync.execute(
+            cliNoClockSync: clockSyncOptions.isDisabled,
+            cliNoOslog: osLogOptions.isDisabled
+        ) {
+            guard let machineContext = try await machineOptions
+                .resolveContext(stopped: .gracefulExit)
+                .machineContextIfReady
+            else { return }
+            let context = try projectOptions.resolvedLabelCommandContext(
+                skipComposeFileOnExplicitProject: true,
+                profileFilterRequested: profileOptions.profileFilterRequested,
+                profiles: profileOptions.profiles,
+                machineContext: machineContext
             )
-        } else {
-            try await ProjectEventsSession.run(options: options)
+            let filter = try projectOptions.resolvedQueryServiceFilter(
+                context: context,
+                profileOptions: profileOptions,
+                positionalServices: services
+            )
+            if let filter, filter.isEmpty {
+                return
+            }
+
+            let timeoutDuration = timeout.map { Duration.seconds($0) }
+            let options = ProjectEventsOptions(
+                projectName: context.projectName,
+                serviceFilter: filter,
+                machineContext: machineContext,
+                follow: follow,
+                timeout: timeoutDuration
+            )
+
+            if follow {
+                _ = try await ProjectEventsSession.runUntilCancelled(
+                    options: options,
+                    policy: .cancelOnly,
+                    onQuietCancel: {
+                        fputs("Events stream ended.\n", stderr)
+                    }
+                )
+            } else {
+                try await ProjectEventsSession.run(options: options)
+            }
         }
     }
 }

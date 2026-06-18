@@ -24,36 +24,41 @@ public struct Pause: AsyncParsableCommand {
     var osLogOptions: OsLogOptions
 
     @OptionGroup
+    var clockSyncOptions: ClockSyncOptions
+
+    @OptionGroup
     var machineOptions: MachineOptions
 
     public func run() async throws {
-        OsLogConfiguration.apply(
-            cliNoOslog: osLogOptions.isDisabled,
-            dryRun: dryRunOptions.isEnabled
-        )
-        try parallelOptions.validate()
-        var machineContext = try await machineOptions.resolveContext().machineContext
-        if machineContext.isMachineMode, !dryRunOptions.isEnabled, !machineContext.isMachineRunning {
-            machineContext = try await machineContext.ensureBooted()
-        }
-        let context = try projectOptions.resolvedLabelCommandContext(
-            profileFilterRequested: profileOptions.profileFilterRequested,
-            profiles: profileOptions.profiles,
-            machineContext: machineContext
-        )
-        try await ProjectPauseRun.run(
-            ProjectPauseRequest(
-                operation: .pause,
-                scope: ProjectPauseScope(
-                    context: context,
-                    profileFilterRequested: profileOptions.profileFilterRequested,
-                    activeProfiles: profileOptions.activeProfileSet,
-                    tearsDownAll: profileOptions.tearsDownAll
-                ),
-                execution: WaveExecutionPolicy(maxConcurrent: parallelOptions.resolvedMaxConcurrent()),
-                dryRunEnabled: dryRunOptions.isEnabled,
+        try await ComposeCommandClockSync.execute(
+            cliNoClockSync: clockSyncOptions.isDisabled,
+            dryRun: dryRunOptions.isEnabled,
+            cliNoOslog: osLogOptions.isDisabled
+        ) {
+            try parallelOptions.validate()
+            guard let machineContext = try await machineOptions
+                .resolveContext(stopped: .gracefulExit)
+                .machineContextIfReady
+            else { return }
+            let context = try projectOptions.resolvedLabelCommandContext(
+                profileFilterRequested: profileOptions.profileFilterRequested,
+                profiles: profileOptions.profiles,
                 machineContext: machineContext
             )
-        )
+            try await ProjectPauseRun.run(
+                ProjectPauseRequest(
+                    operation: .pause,
+                    scope: ProjectPauseScope(
+                        context: context,
+                        profileFilterRequested: profileOptions.profileFilterRequested,
+                        activeProfiles: profileOptions.activeProfileSet,
+                        tearsDownAll: profileOptions.tearsDownAll
+                    ),
+                    execution: WaveExecutionPolicy(maxConcurrent: parallelOptions.resolvedMaxConcurrent()),
+                    dryRunEnabled: dryRunOptions.isEnabled,
+                    machineContext: machineContext
+                )
+            )
+        }
     }
 }

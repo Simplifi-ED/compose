@@ -15,6 +15,9 @@ public struct Cp: AsyncParsableCommand {
     var dryRunOptions: DryRunOptions
 
     @OptionGroup
+    var clockSyncOptions: ClockSyncOptions
+
+    @OptionGroup
     var machineOptions: MachineOptions
 
     @Option(
@@ -45,18 +48,23 @@ public struct Cp: AsyncParsableCommand {
     }
 
     public func run() async throws {
-        let srcRef = try CpPathRef.parse(source)
-        let dstRef = try CpPathRef.parse(destination)
+        try await ComposeCommandClockSync.execute(
+            cliNoClockSync: clockSyncOptions.isDisabled,
+            dryRun: dryRunOptions.isEnabled
+        ) {
+            let srcRef = try CpPathRef.parse(source)
+            let dstRef = try CpPathRef.parse(destination)
 
-        switch (srcRef, dstRef) {
-        case (.service, .service):
-            throw ComposeError.cpContainerToContainer
-        case (.local, .local):
-            throw ComposeError.cpLocalToLocal
-        case (.service, .local):
-            try await runCopy(direction: .copyOut, localRef: dstRef, serviceRef: srcRef)
-        case (.local, .service):
-            try await runCopy(direction: .copyIn, localRef: srcRef, serviceRef: dstRef)
+            switch (srcRef, dstRef) {
+            case (.service, .service):
+                throw ComposeError.cpContainerToContainer
+            case (.local, .local):
+                throw ComposeError.cpLocalToLocal
+            case (.service, .local):
+                try await runCopy(direction: .copyOut, localRef: dstRef, serviceRef: srcRef)
+            case (.local, .service):
+                try await runCopy(direction: .copyIn, localRef: srcRef, serviceRef: dstRef)
+            }
         }
     }
 

@@ -481,7 +481,7 @@ Variables are substituted in compose files before parsing. Each `-f` file loads 
 | `${VAR-default}` | Uses `default` only if unset |
 | `$$` | Literal `$` |
 
-Process environment (not compose `${}` substitution): `COMPOSE_FILE`, `COMPOSE_PROJECT_NAME`, `COMPOSE_PROFILES` (comma-separated; merged with `--profile`), and `COMPOSE_OSLOG` (set to `0` to disable Unified Logging telemetry).
+Process environment (not compose `${}` substitution): `COMPOSE_FILE`, `COMPOSE_PROJECT_NAME`, `COMPOSE_PROFILES` (comma-separated; merged with `--profile`), `COMPOSE_OSLOG` (set to `0` to disable Unified Logging telemetry), and `COMPOSE_CLOCK_SYNC` (set to `0` to disable guest clock sync after Mac wake).
 
 ### Unified Logging
 
@@ -495,6 +495,8 @@ log show --last 5m --info --predicate 'subsystem == "com.simplifi-ed.container-c
 Categories: `orchestration`, `lifecycle`, `signals`, `volumes`, `networks`, `build`.
 
 Disable telemetry with `COMPOSE_OSLOG=0` or `--no-oslog` on `up`, `down`, `run`, and other commands that support the flag. `compose up --dry-run` does not emit lifecycle execution events. Secrets, environment values, and build args are never written to the unified log.
+
+On macOS, compose reconciles guest VM clocks after sleep/wake for compose-managed running containers (process-scoped while a CLI is running, plus eager sync when you run runtime commands after wake). Disable with `COMPOSE_CLOCK_SYNC=0` or `--no-clock-sync`. See [`docs/clock-sync-manual-test.md`](docs/clock-sync-manual-test.md).
 
 ### Instruments signposts
 

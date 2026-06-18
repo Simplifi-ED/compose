@@ -30,6 +30,9 @@ public struct Down: AsyncParsableCommand {
     var osLogOptions: OsLogOptions
 
     @OptionGroup
+    var clockSyncOptions: ClockSyncOptions
+
+    @OptionGroup
     var machineOptions: MachineOptions
 
     @Flag(
@@ -45,26 +48,28 @@ public struct Down: AsyncParsableCommand {
     var trim = false
 
     public func run() async throws {
-        OsLogConfiguration.apply(
-            cliNoOslog: osLogOptions.isDisabled,
-            dryRun: dryRunOptions.isEnabled
-        )
-        try parallelOptions.validate()
-        let request = try downRequest(dryRun: dryRunOptions.isEnabled)
-        let shutdown = try await ProjectDownRun.resolveShutdown(request: request)
+        try await ComposeCommandClockSync.execute(
+            cliNoClockSync: clockSyncOptions.isDisabled,
+            dryRun: dryRunOptions.isEnabled,
+            cliNoOslog: osLogOptions.isDisabled
+        ) {
+            try parallelOptions.validate()
+            let request = try downRequest(dryRun: dryRunOptions.isEnabled)
+            let shutdown = try await ProjectDownRun.resolveShutdown(request: request)
 
-        if dryRunOptions.isEnabled {
-            try await runDryRun(
-                context: shutdown.labelContext,
-                discovered: shutdown.discovered,
-                containers: shutdown.containers,
-                orphanNames: shutdown.orphanNames,
-                machineContext: shutdown.machineContext
-            )
-            return
+            if dryRunOptions.isEnabled {
+                try await runDryRun(
+                    context: shutdown.labelContext,
+                    discovered: shutdown.discovered,
+                    containers: shutdown.containers,
+                    orphanNames: shutdown.orphanNames,
+                    machineContext: shutdown.machineContext
+                )
+                return
+            }
+
+            try await executeShutdown(request: request, shutdown: shutdown)
         }
-
-        try await executeShutdown(request: request, shutdown: shutdown)
     }
 
     private func downRequest(dryRun: Bool) throws -> ProjectDownRequest {

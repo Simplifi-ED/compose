@@ -26,18 +26,20 @@ public struct XpcServe: AsyncParsableCommand {
     var binary: String?
 
     public func run() async throws {
-        let helper = try resolvedComposeXPCBinary()
-        defer {
-            try? ComposeXPCLaunchAgent.uninstall()
-        }
-        try ComposeXPCLaunchAgent.startService(composeXPCBinary: helper)
-        fputs(
-            "compose XPC listening (Mach service: \(ComposeXPCConstants.machServiceName))\n",
-            stderr
-        )
-        _ = try await SignalForwarding.runUntilCancelled(policy: .cancelOnly) {
-            while true {
-                try await Task.sleep(for: .seconds(3600))
+        try await ComposeCommandClockSync.execute(cliNoClockSync: false) {
+            let helper = try resolvedComposeXPCBinary()
+            defer {
+                try? ComposeXPCLaunchAgent.uninstall()
+            }
+            try ComposeXPCLaunchAgent.startService(composeXPCBinary: helper)
+            fputs(
+                "compose XPC listening (Mach service: \(ComposeXPCConstants.machServiceName))\n",
+                stderr
+            )
+            _ = try await SignalForwarding.runUntilCancelled(policy: .cancelOnly) {
+                while true {
+                    try await Task.sleep(for: .seconds(3600))
+                }
             }
         }
     }

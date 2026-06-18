@@ -10,7 +10,8 @@ extension TestRunner {
         project: String,
         service: String,
         status: RuntimeStatus,
-        id: String? = nil
+        id: String? = nil,
+        extraLabels: [String: String] = [:]
     ) -> ContainerSnapshot {
         let containerID = id ?? "\(project)_\(service)_1"
         let image = ImageDescription(
@@ -32,6 +33,9 @@ extension TestRunner {
             ComposeLabels.project: project,
             ComposeLabels.service: service
         ]
+        for (key, value) in extraLabels {
+            configuration.labels[key] = value
+        }
         return ContainerSnapshot(
             configuration: configuration,
             status: status,
