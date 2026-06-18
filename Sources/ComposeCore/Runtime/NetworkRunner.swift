@@ -54,6 +54,9 @@ package enum NetworkRunner {
         projectName: String,
         client: NetworkClient
     ) async throws {
+        if plan.mode == .bridge {
+            throw ComposeError.bridgeNetworksUnsupported(network: plan.logicalName)
+        }
         do {
             let configuration = try NetworkConfiguration(
                 name: plan.runtimeName,

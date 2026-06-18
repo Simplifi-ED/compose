@@ -38,7 +38,8 @@ extension Up {
             projectName: input.plan.projectName,
             composeFile: input.plan.composeFile,
             fileURLs: input.plan.fileURLs,
-            machineContext: input.machineContext
+            machineContext: input.machineContext,
+            input: input
         )
     }
 
@@ -77,12 +78,16 @@ extension Up {
         projectName: String,
         composeFile: ComposeFile,
         fileURLs: [URL],
-        machineContext: MachineContext
+        machineContext: MachineContext,
+        input: LiveInput? = nil
     ) async throws {
         for line in UpStartupSummary.lines(for: plans) {
             print(line)
         }
         await ClockSyncCoordinator.shared.syncIfNeeded(reason: .afterUp)
+        if let input {
+            await refreshBridgeHostDNSIfRequested(input, machineContext: machineContext)
+        }
         try await attachIfRequested(
             projectName: projectName,
             composeFile: composeFile,

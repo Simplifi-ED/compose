@@ -9,6 +9,7 @@ extension TestRunner {
         runPsFilterTests()
         runPsStateFormatTests()
         runPsPortFormatTests()
+        runPsIPFormatTests()
         runPsTableOutputTests()
         runPsEmptyProjectTests()
     }
@@ -18,13 +19,15 @@ extension TestRunner {
             name: "demo_web",
             serviceName: "web",
             status: .running,
-            publishedPorts: []
+            publishedPorts: [],
+            networkAttachments: []
         )
         let legacy = ProjectContainer(
             name: "legacy",
             serviceName: nil,
             status: .stopped,
-            publishedPorts: []
+            publishedPorts: [],
+            networkAttachments: []
         )
         let rows = ProjectStatus.rows(from: [web, legacy], filter: nil)
         expect(rows.count == 2, "row build includes all project containers")
@@ -107,12 +110,56 @@ extension TestRunner {
         }
     }
 
+    private mutating func runPsIPFormatTests() {
+        do {
+            let cidr = try CIDRv4("192.168.64.32/24")
+            let attachment = Attachment(
+                network: "demo_backend",
+                hostname: "demo_web_1",
+                ipv4Address: cidr,
+                ipv4Gateway: try IPv4Address("192.168.64.1"),
+                ipv6Address: nil,
+                macAddress: nil
+            )
+            let container = ProjectContainer(
+                name: "demo_web_1",
+                serviceName: "web",
+                status: .running,
+                publishedPorts: [],
+                networkAttachments: [attachment]
+            )
+            expect(
+                ProjectStatus.formatIP(container: container, projectName: nil, composeFile: nil) == "192.168.64.32",
+                "running container formats primary IPv4"
+            )
+            let stopped = ProjectContainer(
+                name: "demo_web_1",
+                serviceName: "web",
+                status: .stopped,
+                publishedPorts: [],
+                networkAttachments: [attachment]
+            )
+            expect(
+                ProjectStatus.formatIP(container: stopped, projectName: nil, composeFile: nil).isEmpty,
+                "stopped container omits IP"
+            )
+            expect(
+                ContainerNetworkDiscovery.ipv4HostAddress(cidr) == "192.168.64.32",
+                "container network discovery host address"
+            )
+        } catch {
+            fputs("FAIL: unexpected IP fixture error: \(error)\n", stderr)
+            failures += 1
+        }
+    }
+
     private mutating func runPsTableOutputTests() {
         let table = ProjectStatus.defaultTable()
         let row = ProjectStatusRow(
             name: "demo_web",
             service: "web",
             state: "running",
+            ipAddress: "192.168.64.32",
             ports: "127.0.0.1:18080->80/tcp"
         )
         let plain = table.formatRow(row.cells)
@@ -121,7 +168,7 @@ extension TestRunner {
         expect(!plain.contains("\u{001B}["), "table row has no escape sequences")
 
         let longPorts = String(repeating: "9", count: 40)
-        let truncated = table.formatRow(["demo_web", "web", "running", longPorts])
+        let truncated = table.formatRow(["demo_web", "web", "running", "", longPorts])
         expect(truncated.hasSuffix("…"), "long ports cell truncates without wrapping")
         expect(!truncated.contains("\n"), "table row is single line")
 

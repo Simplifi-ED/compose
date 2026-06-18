@@ -61,25 +61,6 @@ package enum HostDNSPlanning {
         )
     }
 
-    package static func plans(
-        composeFile: ComposeFile,
-        activeServiceNames: Set<String>
-    ) -> [Plan] {
-        var result: [Plan] = []
-        for serviceName in activeServiceNames.sorted() {
-            guard let service = composeFile.services[serviceName], !service.hostnames.isEmpty else {
-                continue
-            }
-            guard let hostPort = firstStaticHostPort(service: service) else { continue }
-            for hostname in service.hostnames {
-                result.append(
-                    Plan(serviceName: serviceName, hostname: normalizedHostname(hostname), hostPort: hostPort)
-                )
-            }
-        }
-        return result
-    }
-
     package static func warnings(
         composeFile: ComposeFile,
         activeServiceNames: Set<String>
@@ -167,63 +148,91 @@ package enum HostDNSPlanning {
         var firstError: ComposeError?
     }
 
+    private struct HostnameCollectionState {
+        var hostnameOwners: [String: [String]] = [:]
+        var collected = CollectedIssues()
+    }
+
     private static func collectIssues(
         composeFile: ComposeFile,
         activeServiceNames: Set<String>,
         strict: Bool
     ) -> CollectedIssues {
-        var collected = CollectedIssues()
-        var hostnameOwners: [String: [String]] = [:]
+        var state = HostnameCollectionState()
 
         for serviceName in activeServiceNames.sorted() {
             guard let service = composeFile.services[serviceName], !service.hostnames.isEmpty else {
                 continue
             }
-            let hasStaticPort = firstStaticHostPort(service: service) != nil
-            for rawHostname in service.hostnames {
-                let hostname = normalizedHostname(rawHostname)
-                if let reason = invalidHostnameReason(rawHostname) {
-                    record(
-                        &collected,
-                        strict: strict,
-                        error: .invalidHostDNSHostname(hostname: rawHostname, reason: reason),
-                        warning: "Invalid hostname '\(rawHostname)': \(reason)"
-                    )
-                    continue
-                }
-                if !isDevSuffixHostname(hostname) {
-                    collected.warnings.append(
-                        HostDNSWarning(
-                            message:
-                                "Warning: Host '\(hostname)' is not a dev suffix "
-                                + "(.local, .test, .localhost, .invalid, .example); "
-                                + "mapping it to 127.0.0.1 affects the whole machine while this project is up. "
-                                + "Prefer .local or .test."
-                        )
-                    )
-                }
-                if !hasStaticPort {
-                    record(
-                        &collected,
-                        strict: strict,
-                        error: .hostDNSNoPublishedPort(service: serviceName, hostname: hostname),
-                        warning: "Service '\(serviceName)' declares host '\(hostname)' but has no published host port"
-                    )
-                }
-                hostnameOwners[hostname, default: []].append(serviceName)
-            }
+            collectServiceHostIssues(
+                serviceName: serviceName,
+                service: service,
+                composeFile: composeFile,
+                strict: strict,
+                state: &state
+            )
         }
 
-        for (hostname, services) in hostnameOwners where services.count > 1 {
+        for (hostname, services) in state.hostnameOwners where services.count > 1 {
             let sorted = services.sorted()
             record(
-                &collected,
+                &state.collected,
                 strict: strict,
                 error: .duplicateHostDNSHostname(hostname: hostname, services: sorted),
                 warning: "Host '\(hostname)' is declared by multiple services: \(sorted.joined(separator: ", "))"
             )
         }
-        return collected
+        return state.collected
+    }
+
+    private static func collectServiceHostIssues(
+        serviceName: String,
+        service: ComposeService,
+        composeFile: ComposeFile,
+        strict: Bool,
+        state: inout HostnameCollectionState
+    ) {
+        let onBridge = NetworkPlanning.serviceUsesBridgeNetwork(composeFile: composeFile, service: service)
+        let hasStaticPort = firstStaticHostPort(service: service) != nil
+        if onBridge, (service.deploy?.replicas ?? 1) > 1 {
+            record(
+                &state.collected,
+                strict: strict,
+                error: .invalidField(
+                    "x-compose.hosts",
+                    reason:
+                        "Service '\(serviceName)' uses bridge networking with multiple replicas; "
+                        + "host DNS maps one arbitrary replica IP"
+                ),
+                warning:
+                    "Service '\(serviceName)' uses bridge networking with multiple replicas; "
+                    + "host DNS maps one arbitrary replica IP"
+            )
+        }
+        for rawHostname in service.hostnames {
+            let hostname = normalizedHostname(rawHostname)
+            if let reason = invalidHostnameReason(rawHostname) {
+                record(
+                    &state.collected,
+                    strict: strict,
+                    error: .invalidHostDNSHostname(hostname: rawHostname, reason: reason),
+                    warning: "Invalid hostname '\(rawHostname)': \(reason)"
+                )
+                continue
+            }
+            if let warning = nonDevSuffixBridgeWarning(hostname: hostname, onBridge: onBridge) {
+                state.collected.warnings.append(warning)
+            }
+            if !onBridge, !hasStaticPort {
+                record(
+                    &state.collected,
+                    strict: strict,
+                    error: .hostDNSNoPublishedPort(service: serviceName, hostname: hostname),
+                    warning: "Service '\(serviceName)' declares host '\(hostname)' but has no published host port"
+                )
+            }
+            state.hostnameOwners[hostname, default: []].append(serviceName)
+        }
     }
 
     private static func record(
@@ -247,7 +256,7 @@ package enum HostDNSPlanning {
         HostDNSHostnameValidation.invalidHostnameReason(hostname)
     }
 
-    private static func firstStaticHostPort(service: ComposeService) -> String? {
+    package static func firstStaticHostPort(service: ComposeService) -> String? {
         for port in service.ports {
             guard let spec = ComposeBindingKeys.parsePortSpec(port), let hostPort = spec.hostPort else {
                 continue

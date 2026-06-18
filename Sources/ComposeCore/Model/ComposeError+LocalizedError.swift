@@ -164,6 +164,11 @@ extension ComposeError {
         case .networksRequireMacOS26:
             return "Custom networks require macOS 26 or newer. "
                 + "Remove networks: from the compose file, or upgrade macOS."
+        case .bridgeNetworksUnsupported(let network):
+            return "Bridged network '\(network)' isn't supported by container 1.0.0 yet. "
+                + "See docs/bridged-network-spike.md and https://github.com/apple/container/pull/1463."
+        case .bridgeNetworksUnsupportedWithMachine:
+            return "Bridged networks aren't supported with --machine. Run on the host sandbox instead."
         case .invalidCpPath(let reason):
             return "Invalid cp path: \(reason)."
         case .cpHostPathOutsideCWD(let path):

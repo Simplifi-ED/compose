@@ -19,17 +19,20 @@ public struct ProjectContainer: Sendable {
     public let serviceName: String?
     public let status: RuntimeStatus
     public let publishedPorts: [PublishPort]
+    public let networkAttachments: [Attachment]
 
     public init(
         name: String,
         serviceName: String?,
         status: RuntimeStatus,
-        publishedPorts: [PublishPort]
+        publishedPorts: [PublishPort],
+        networkAttachments: [Attachment] = []
     ) {
         self.name = name
         self.serviceName = serviceName
         self.status = status
         self.publishedPorts = publishedPorts
+        self.networkAttachments = networkAttachments
     }
 }
 
@@ -64,7 +67,8 @@ public enum ContainerDiscovery {
                     name: snapshot.id,
                     serviceName: snapshot.configuration.labels[ComposeLabels.service],
                     status: snapshot.status,
-                    publishedPorts: snapshot.configuration.publishedPorts
+                    publishedPorts: snapshot.configuration.publishedPorts,
+                    networkAttachments: snapshot.networks
                 )
             }
             .sorted { $0.name < $1.name }

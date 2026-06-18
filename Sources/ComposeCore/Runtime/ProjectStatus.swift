@@ -5,14 +5,16 @@ public struct ProjectStatusRow: Sendable, Equatable {
     public let name: String
     public let service: String
     public let state: String
+    public let ipAddress: String
     public let ports: String
 
-    public var cells: [String] { [name, service, state, ports] }
+    public var cells: [String] { [name, service, state, ipAddress, ports] }
 
-    public init(name: String, service: String, state: String, ports: String) {
+    public init(name: String, service: String, state: String, ipAddress: String, ports: String) {
         self.name = name
         self.service = service
         self.state = state
+        self.ipAddress = ipAddress
         self.ports = ports
     }
 }
@@ -46,7 +48,9 @@ public enum ProjectStatus {
 
     public static func rows(
         from containers: [ProjectContainer],
-        filter: Set<String>?
+        filter: Set<String>?,
+        projectName: String? = nil,
+        composeFile: ComposeFile? = nil
     ) -> [ProjectStatusRow] {
         let filtered = filteredContainers(from: containers, filter: filter)
 
@@ -55,6 +59,11 @@ public enum ProjectStatus {
                 name: container.name,
                 service: container.serviceName ?? "",
                 state: formatState(container.status),
+                ipAddress: formatIP(
+                    container: container,
+                    projectName: projectName,
+                    composeFile: composeFile
+                ),
                 ports: formatPorts(container.publishedPorts)
             )
         }
@@ -62,6 +71,23 @@ public enum ProjectStatus {
 
     public static func formatState(_ status: RuntimeStatus) -> String {
         status.rawValue
+    }
+
+    public static func formatIP(
+        container: ProjectContainer,
+        projectName: String?,
+        composeFile: ComposeFile?
+    ) -> String {
+        guard container.status == .running else { return "" }
+        if let projectName, let composeFile,
+           let address = ContainerNetworkDiscovery.primaryIPv4HostAddress(
+               for: container,
+               projectName: projectName,
+               composeFile: composeFile
+           ) {
+            return address
+        }
+        return ContainerNetworkDiscovery.primaryIPv4HostAddress(from: container.networkAttachments) ?? ""
     }
 
     public static func formatPorts(_ ports: [PublishPort]) -> String {
@@ -73,6 +99,7 @@ public enum ProjectStatus {
             TableFormat.Column(title: "NAME", width: 24),
             TableFormat.Column(title: "SERVICE", width: 12),
             TableFormat.Column(title: "STATE", width: 10, alignment: .right),
+            TableFormat.Column(title: "IP", width: 18),
             TableFormat.Column(title: "PORTS", width: 32)
         ])
     }

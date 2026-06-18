@@ -36,6 +36,10 @@ smoke-networks: ## install plugin + live compose networks runtime checks (macOS 
 	bash ./scripts/install.sh
 	bash ./scripts/smoke-networks.sh
 
+smoke-networks-bridge: ## install plugin + bridged network smoke (skips if upstream bridge unavailable)
+	bash ./scripts/install.sh
+	bash ./scripts/smoke-networks-bridge.sh
+
 smoke-volumes-named: ## install plugin + live compose named volume runtime checks
 	bash ./scripts/install.sh
 	bash ./scripts/smoke-named-volumes.sh

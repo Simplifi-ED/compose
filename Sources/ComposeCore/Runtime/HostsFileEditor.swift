@@ -29,13 +29,12 @@ package enum HostsFileEditor {
     package static func mergeBlock(
         content: String,
         identity: HostDNSPlanning.BlockIdentity,
-        hostnames: [String]
+        planned: [HostDNSPlanning.Plan]
     ) -> String {
-        let normalized = hostnames.map { HostDNSPlanning.normalizedHostname($0) }
         let block = formattedBlock(
             projectName: identity.projectName,
             projectID: identity.projectID,
-            hostnames: normalized
+            planned: planned
         )
         let lineList = splitLines(content)
         if let range = blockRange(in: lineList, projectID: identity.projectID) {
@@ -49,6 +48,18 @@ package enum HostsFileEditor {
             return block + "\n"
         }
         return trimmed + "\n\n" + block + "\n"
+    }
+
+    package static func mergeBlock(
+        content: String,
+        identity: HostDNSPlanning.BlockIdentity,
+        hostnames: [String]
+    ) -> String {
+        let normalized = hostnames.map { HostDNSPlanning.normalizedHostname($0) }
+        let planned = normalized.map {
+            HostDNSPlanning.Plan(serviceName: "", hostname: $0, hostPort: "")
+        }
+        return mergeBlock(content: content, identity: identity, planned: planned)
     }
 
     package static func removeBlock(content: String, projectID: String) -> String {
@@ -70,11 +81,11 @@ package enum HostsFileEditor {
         guard let range = blockRange(in: lineList, projectID: projectID),
               let parsed = parseBeginMarker(lineList[range.lowerBound])
         else { return nil }
-        let hostLine = lineList[safe: range.lowerBound + 1] ?? ""
+        let hostnames = hostnamesFromBlock(lines: lineList, range: range)
         return ManagedBlock(
             projectName: parsed.projectName,
             projectID: parsed.projectID,
-            hostnames: hostnamesFromLine(hostLine),
+            hostnames: hostnames,
             beginLine: lineList[range.lowerBound],
             endLine: lineList[range.upperBound - 1]
         )
@@ -97,12 +108,12 @@ package enum HostsFileEditor {
                 index += 1
                 continue
             }
-            let hostLine = lineList[safe: range.lowerBound + 1] ?? ""
+            let hostnames = hostnamesFromBlock(lines: lineList, range: range)
             blocks.append(
                 ManagedBlock(
                     projectName: parsed.projectName,
                     projectID: parsed.projectID,
-                    hostnames: hostnamesFromLine(hostLine),
+                    hostnames: hostnames,
                     beginLine: lineList[range.lowerBound],
                     endLine: lineList[range.upperBound - 1]
                 )
@@ -164,8 +175,7 @@ package enum HostsFileEditor {
                 index += 1
                 continue
             }
-            let hostLine = lineList[safe: range.lowerBound + 1] ?? ""
-            let otherHostnames = Set(hostnamesFromLine(hostLine))
+            let otherHostnames = Set(hostnamesFromBlock(lines: lineList, range: range))
             for hostname in hostnames where otherHostnames.contains(hostname) {
                 conflicts.append(
                     ExternalConflict(

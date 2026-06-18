@@ -36,12 +36,20 @@ package struct ComposeXPCContainerRow: Codable, Sendable, Equatable {
     package let service: String
     package let state: String
     package let ports: String
+    package let ipAddress: String?
 
-    package init(name: String, service: String, state: String, ports: String) {
+    package init(
+        name: String,
+        service: String,
+        state: String,
+        ports: String,
+        ipAddress: String? = nil
+    ) {
         self.name = name
         self.service = service
         self.state = state
         self.ports = ports
+        self.ipAddress = ipAddress
     }
 }
 

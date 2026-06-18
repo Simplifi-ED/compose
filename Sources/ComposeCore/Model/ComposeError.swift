@@ -59,6 +59,8 @@ public enum ComposeError: LocalizedError, Sendable {
     case includeNetworkConflict(name: String, includePath: String, definedIn: String)
     case networkCreateFailed(network: String, underlying: Error)
     case networksRequireMacOS26
+    case bridgeNetworksUnsupported(network: String)
+    case bridgeNetworksUnsupportedWithMachine
     case invalidCpPath(reason: String)
     case cpHostPathOutsideCWD(path: String)
     case cpSourceNotFound(path: String)

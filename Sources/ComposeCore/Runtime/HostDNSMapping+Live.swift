@@ -21,7 +21,8 @@ extension HostDNSMapping {
 
     static func installLive(
         identity: HostDNSPlanning.BlockIdentity,
-        planned: [HostDNSPlanning.Plan]
+        planned: [HostDNSPlanning.Plan],
+        label: String = "loopback"
     ) throws {
         try HostsFileEditor.withHostsLock {
             let hostsContent = try HostsFileEditor.readHostsFile()
@@ -35,7 +36,7 @@ extension HostDNSMapping {
             let merged = HostsFileEditor.mergeBlock(
                 content: hostsContent,
                 identity: identity,
-                hostnames: planned.map(\.hostname)
+                planned: planned
             )
             try HostsFileEditor.apply(mergedContent: merged)
         }
@@ -50,7 +51,8 @@ extension HostDNSMapping {
         }
         fputs(
             "Installed host DNS for \(planned.count) hostname(s) "
-                + "(project \(identity.projectName), id \(identity.projectID)).\n",
+                + "(\(label == "bridge" ? "container bridge addresses" : "loopback"), "
+                + "project \(identity.projectName), id \(identity.projectID)).\n",
             stderr
         )
     }

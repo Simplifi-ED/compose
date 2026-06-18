@@ -17,6 +17,22 @@ package enum HostDNSMapping {
         activeServiceNames: Set<String>,
         dryRunManifest: DryRunManifest? = nil
     ) async throws {
+        try await installLoopbackMappings(
+            composeFile: composeFile,
+            projectName: projectName,
+            firstComposeFileURL: firstComposeFileURL,
+            activeServiceNames: activeServiceNames,
+            dryRunManifest: dryRunManifest
+        )
+    }
+
+    package static func installLoopbackMappings(
+        composeFile: ComposeFile,
+        projectName: String,
+        firstComposeFileURL: URL,
+        activeServiceNames: Set<String>,
+        dryRunManifest: DryRunManifest? = nil
+    ) async throws {
         try validateHostDNSPlatform()
         let identity = HostDNSPlanning.blockIdentity(
             projectName: projectName,
@@ -29,12 +45,17 @@ package enum HostDNSMapping {
         for warning in devWarnings {
             fputs("\(warning.message)\n", stderr)
         }
-        let planned = HostDNSPlanning.plans(
+        let planned = HostDNSPlanning.loopbackPlans(
             composeFile: composeFile,
             activeServiceNames: activeServiceNames
         )
         guard !planned.isEmpty else {
-            fputs("No x-compose.hosts declared; skipping host DNS.\n", stderr)
+            if !HostDNSPlanning.hasBridgeHostDeclarations(
+                composeFile: composeFile,
+                activeServiceNames: activeServiceNames
+            ) {
+                fputs("No x-compose.hosts declared; skipping host DNS.\n", stderr)
+            }
             return
         }
         if let dryRunManifest {
@@ -46,7 +67,42 @@ package enum HostDNSMapping {
             return
         }
 
-        try installLive(identity: identity, planned: planned)
+        try installLive(identity: identity, planned: planned, label: "loopback")
+    }
+
+    package static func refreshBridgeMappings(
+        composeFile: ComposeFile,
+        projectName: String,
+        firstComposeFileURL: URL,
+        activeServiceNames: Set<String>,
+        serviceAddresses: [String: String],
+        dryRunManifest: DryRunManifest? = nil
+    ) async throws {
+        try validateHostDNSPlatform()
+        let identity = HostDNSPlanning.blockIdentity(
+            projectName: projectName,
+            firstComposeFileURL: firstComposeFileURL
+        )
+        let loopback = HostDNSPlanning.loopbackPlans(
+            composeFile: composeFile,
+            activeServiceNames: activeServiceNames
+        )
+        let bridge = HostDNSPlanning.bridgePlans(
+            composeFile: composeFile,
+            activeServiceNames: activeServiceNames,
+            serviceAddresses: serviceAddresses
+        )
+        guard !bridge.isEmpty else { return }
+        let planned = loopback + bridge
+        if let dryRunManifest {
+            await dryRunManifest.recordHostDNSInstall(
+                projectName: identity.projectName,
+                projectID: identity.projectID,
+                hostnames: planned.map(\.hostname)
+            )
+            return
+        }
+        try installLive(identity: identity, planned: planned, label: "bridge")
     }
 
     package static func removeProjectMappings(
@@ -138,7 +194,7 @@ package enum HostDNSMapping {
             Warning: couldn't remove host DNS mappings (\(reason)).
             Remove this block from /etc/hosts manually:
               \(identity.beginMarker)
-              \(HostsFileEditor.loopbackIP) …
+              …
               \(identity.endMarker)
             Or run: container compose down (accept the prompt when asked for /etc/hosts access)
             Ownership: \(ownershipPath)

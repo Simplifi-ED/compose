@@ -36,15 +36,7 @@ extension Up {
             machineContext: input.machineContext
         )
 
-        if input.installHostDNS {
-            try await HostDNSMapping.installAll(
-                composeFile: input.composeFile,
-                projectName: input.projectName,
-                firstComposeFileURL: input.fileURLs[0],
-                activeServiceNames: Set(input.layers.flatMap { $0 }.map(\.serviceName)),
-                dryRunManifest: manifest
-            )
-        }
+        try await recordDryRunHostDNSIfRequested(input, manifest: manifest)
 
         if workspaceHygiene.shouldRemoveOrphans {
             try await recordOrphanTeardowns(
@@ -96,5 +88,53 @@ extension Up {
         for orphan in orphans {
             await manifest.recordTeardown(orphan.name, reason: .orphan)
         }
+    }
+}
+
+private extension Up {
+    func recordDryRunHostDNSIfRequested(_ input: DryRunInput, manifest: DryRunManifest) async throws {
+        guard input.installHostDNS else { return }
+        let activeServiceNames = Set(input.layers.flatMap { $0 }.map(\.serviceName))
+        try await HostDNSMapping.installAll(
+            composeFile: input.composeFile,
+            projectName: input.projectName,
+            firstComposeFileURL: input.fileURLs[0],
+            activeServiceNames: activeServiceNames,
+            dryRunManifest: manifest
+        )
+        guard HostDNSPlanning.hasBridgeHostDeclarations(
+            composeFile: input.composeFile,
+            activeServiceNames: activeServiceNames
+        ) else {
+            return
+        }
+        try await HostDNSMapping.refreshBridgeMappings(
+            composeFile: input.composeFile,
+            projectName: input.projectName,
+            firstComposeFileURL: input.fileURLs[0],
+            activeServiceNames: activeServiceNames,
+            serviceAddresses: bridgeHostDNSDryRunAddresses(
+                composeFile: input.composeFile,
+                activeServiceNames: activeServiceNames
+            ),
+            dryRunManifest: manifest
+        )
+    }
+
+    func bridgeHostDNSDryRunAddresses(
+        composeFile: ComposeFile,
+        activeServiceNames: Set<String>
+    ) -> [String: String] {
+        var result: [String: String] = [:]
+        for serviceName in activeServiceNames {
+            guard let service = composeFile.services[serviceName],
+                  !service.hostnames.isEmpty,
+                  NetworkPlanning.serviceUsesBridgeNetwork(composeFile: composeFile, service: service)
+            else {
+                continue
+            }
+            result[serviceName] = "0.0.0.0"
+        }
+        return result
     }
 }

@@ -28,7 +28,12 @@ package enum ProjectListRun {
             context: context,
             inputs: request.inputs
         )
-        let rows = ProjectStatus.rows(from: containers, filter: filter)
+        let rows = ProjectStatus.rows(
+            from: containers,
+            filter: filter,
+            projectName: context.projectName,
+            composeFile: context.composeFile
+        )
         return ProjectListResult(rows: rows, warnings: warnings)
     }
 }
