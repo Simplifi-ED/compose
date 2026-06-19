@@ -63,16 +63,25 @@ extension HostDNSPlanning {
         }
     }
 
+    package static func bridgeHostServices(
+        composeFile: ComposeFile,
+        activeServiceNames: Set<String>
+    ) -> Set<String> {
+        Set(
+            activeServiceNames.filter { serviceName in
+                guard let service = composeFile.services[serviceName], !service.hostnames.isEmpty else {
+                    return false
+                }
+                return NetworkPlanning.serviceUsesBridgeNetwork(composeFile: composeFile, service: service)
+            }
+        )
+    }
+
     package static func hasBridgeHostDeclarations(
         composeFile: ComposeFile,
         activeServiceNames: Set<String>
     ) -> Bool {
-        activeServiceNames.contains { serviceName in
-            guard let service = composeFile.services[serviceName], !service.hostnames.isEmpty else {
-                return false
-            }
-            return NetworkPlanning.serviceUsesBridgeNetwork(composeFile: composeFile, service: service)
-        }
+        !bridgeHostServices(composeFile: composeFile, activeServiceNames: activeServiceNames).isEmpty
     }
 
     package static func nonDevSuffixBridgeWarning(hostname: String, onBridge: Bool) -> HostDNSWarning? {

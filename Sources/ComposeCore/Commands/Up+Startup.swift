@@ -23,16 +23,10 @@ extension Up {
             projectName: input.plan.projectName,
             machineContext: input.machineContext
         )
-        try await installHostDNSIfRequested(input)
-        do {
-            try await orchestrateStartup(
-                plan: input.plan,
-                machineContext: input.machineContext
-            )
-        } catch {
-            await rollbackHostDNSIfNeeded(input, unless: error)
-            throw error
-        }
+        try await orchestrateStartup(
+            plan: input.plan,
+            machineContext: input.machineContext
+        )
         try await finishStartup(
             plans: input.plan.plans,
             projectName: input.plan.projectName,
@@ -86,7 +80,7 @@ extension Up {
         }
         await ClockSyncCoordinator.shared.syncIfNeeded(reason: .afterUp)
         if let input {
-            await refreshBridgeHostDNSIfRequested(input, machineContext: machineContext)
+            await installHostDNSAfterStartupIfRequested(input, machineContext: machineContext)
         }
         try await attachIfRequested(
             projectName: projectName,

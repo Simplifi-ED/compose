@@ -183,6 +183,7 @@ extension TestRunner {
         let table = ProjectStatus.defaultTable()
         let header = table.formatHeader(mode: .plain)
         expect(header.contains("NAME"), "empty project still formats header")
+        expect(header.contains("IP"), "header includes IP column")
         expect(header.contains("PORTS"), "header includes ports column")
     }
 }

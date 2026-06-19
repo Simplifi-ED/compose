@@ -104,4 +104,4 @@ ping -c1 "$(container compose ps -q | head -1)"  # or read IP from ps
 
 - Upstream bridge not in 1.0.0: runtime gate + clear error with upstream link.
 - DHCP race: bounded retry; warn if IP still empty.
-- Double admin prompt for `--host-dns` mixed NAT+bridge: loopback pre-start, bridge refresh post-start.
+- Mixed NAT + bridge: single post-start `--host-dns` install maps loopback and bridge IPs in one `/etc/hosts` block.
