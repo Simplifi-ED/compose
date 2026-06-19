@@ -76,12 +76,26 @@ extension TestRunner {
     private mutating func runNetworkBridgeParserTests() throws {
         let xCompose = try ComposeParser.parse(fileURL: Self.fixtureURL("networks-bridge-compose.yml"))
         expect(xCompose.networks["backend"]?.mode == .bridge, "x-compose.network.mode bridge")
-        let bridgePlans = try NetworkPlanning.plans(
-            composeFile: xCompose,
-            projectName: "demo",
-            activeServiceNames: ["client", "server"]
-        )
-        expect(bridgePlans.first?.mode == .bridge, "bridge network plan mode")
+        if #available(macOS 26, *) {
+            let bridgePlans = try NetworkPlanning.plans(
+                composeFile: xCompose,
+                projectName: "demo",
+                activeServiceNames: ["client", "server"]
+            )
+            expect(bridgePlans.first?.mode == .bridge, "bridge network plan mode")
+        } else {
+            expectComposeError(
+                "bridge network plans require macOS 26",
+                matching: { if case .networksRequireMacOS26 = $0 { true } else { false } },
+                body: {
+                    _ = try NetworkPlanning.plans(
+                        composeFile: xCompose,
+                        projectName: "demo",
+                        activeServiceNames: ["client", "server"]
+                    )
+                }
+            )
+        }
 
         let driver = try ComposeParser.parse(fileURL: Self.fixtureURL("networks-bridge-driver-compose.yml"))
         expect(driver.networks["backend"]?.mode == .bridge, "driver bridge alias")

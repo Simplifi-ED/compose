@@ -78,8 +78,10 @@ package enum ContainerNetworkDiscovery {
     package static func resolveBridgeServiceIPv4Addresses(
         projectName: String,
         composeFile: ComposeFile,
+        expectedBridgeServices: Set<String>,
         listContainers: @Sendable () async throws -> [ProjectContainer]
     ) async -> [String: String] {
+        guard !expectedBridgeServices.isEmpty else { return [:] }
         for attempt in 0..<bridgeIPRetryCount {
             let containers = try? await listContainers()
             let addresses = resolveServiceIPv4Addresses(
@@ -87,30 +89,12 @@ package enum ContainerNetworkDiscovery {
                 composeFile: composeFile,
                 containers: containers ?? []
             )
-            let bridgeServices = bridgeServiceNames(composeFile: composeFile, containers: containers ?? [])
-            let missing = bridgeServices.filter { addresses[$0] == nil }
+            let missing = expectedBridgeServices.filter { addresses[$0] == nil }
             if missing.isEmpty || attempt == bridgeIPRetryCount - 1 {
-                return addresses.filter { bridgeServices.contains($0.key) }
+                return addresses.filter { expectedBridgeServices.contains($0.key) }
             }
             try? await Task.sleep(nanoseconds: bridgeIPRetryDelayNanoseconds)
         }
         return [:]
-    }
-
-    package static func bridgeServiceNames(
-        composeFile: ComposeFile,
-        containers: [ProjectContainer]
-    ) -> Set<String> {
-        Set(
-            containers.compactMap { container -> String? in
-                guard let serviceName = container.serviceName,
-                      let service = composeFile.services[serviceName],
-                      NetworkPlanning.serviceUsesBridgeNetwork(composeFile: composeFile, service: service)
-                else {
-                    return nil
-                }
-                return serviceName
-            }
-        )
     }
 }

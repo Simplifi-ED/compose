@@ -1,4 +1,6 @@
 import ComposeCore
+import ContainerResource
+import ContainerizationExtras
 import Foundation
 
 extension TestRunner {
@@ -6,6 +8,7 @@ extension TestRunner {
         try runHostDNSParserTests()
         try runHostDNSPlanningTests()
         try runHostDNSBridgePlanningTests()
+        runBridgeIPDiscoveryRetryTests()
         try runHostDNSEditorTests()
         runHostDNSMultiLineBlockTests()
         try runHostDNSConfigTests()
@@ -105,6 +108,63 @@ extension TestRunner {
             planned: bridgePlans
         )
         expect(merged.contains("10.0.0.42 api.demo.local"), "hosts block uses bridge IP")
+    }
+
+    private mutating func runBridgeIPDiscoveryRetryTests() {
+        do {
+            let bridgeNetwork = ComposeNetwork(mode: .bridge)
+            let service = ComposeService(
+                image: "nginx:1.27.3",
+                command: nil,
+                ports: [],
+                environment: nil,
+                containerName: nil,
+                networks: ["backend"],
+                hostnames: ["api.demo.local"]
+            )
+            let composeFile = ComposeFile(
+                name: nil,
+                services: ["api": service],
+                networks: ["backend": bridgeNetwork]
+            )
+            let cidr = try CIDRv4("10.0.0.42/24")
+            let attachment = Attachment(
+                network: "demo_backend",
+                hostname: "demo_api_1",
+                ipv4Address: cidr,
+                ipv4Gateway: try IPv4Address("10.0.0.1"),
+                ipv6Address: nil,
+                macAddress: nil
+            )
+            let populated = ProjectContainer(
+                name: "demo_api_1",
+                serviceName: "api",
+                status: .running,
+                publishedPorts: [],
+                networkAttachments: [attachment]
+            )
+            final class ListCallCounter: @unchecked Sendable {
+                var count = 0
+            }
+            let counter = ListCallCounter()
+            let addresses = blockingAwait {
+                await ContainerNetworkDiscovery.resolveBridgeServiceIPv4Addresses(
+                    projectName: "demo",
+                    composeFile: composeFile,
+                    expectedBridgeServices: ["api"],
+                    listContainers: {
+                        counter.count += 1
+                        if counter.count < 2 { return [] }
+                        return [populated]
+                    }
+                )
+            }
+            expect(counter.count >= 2, "bridge IP discovery retries after empty listing")
+            expect(addresses["api"] == "10.0.0.42", "bridge IP discovery resolves after retry")
+        } catch {
+            fputs("FAIL: unexpected bridge IP discovery fixture error: \(error)\n", stderr)
+            failures += 1
+        }
     }
 
     private mutating func runHostDNSPlanningStrictTests() throws {

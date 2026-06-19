@@ -43,8 +43,6 @@ extension ComposeNetwork: Encodable {
 }
 
 enum ComposeNetworkDecoder {
-    private static let supportedRootKeys: Set<String> = ["external", "driver", "x-compose"]
-
     /// Decodes the root `networks:` map. Entries may be null, empty maps, or
     /// `external: false`; `external: true` is rejected and other options warn.
     static func decodeMap<Key: CodingKey>(

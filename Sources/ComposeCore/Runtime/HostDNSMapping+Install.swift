@@ -77,6 +77,7 @@ extension HostDNSMapping {
         let serviceAddresses = await ContainerNetworkDiscovery.resolveBridgeServiceIPv4Addresses(
             projectName: projectName,
             composeFile: composeFile,
+            expectedBridgeServices: bridgeServices,
             listContainers: listContainers
         )
         warnMissingBridgeAddresses(
