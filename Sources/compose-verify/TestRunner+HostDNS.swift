@@ -69,21 +69,7 @@ extension TestRunner {
     }
 
     private mutating func runHostDNSBridgePlanningTests() throws {
-        let bridgeNetwork = ComposeNetwork(mode: .bridge)
-        let service = ComposeService(
-            image: "nginx:1.27.3",
-            command: nil,
-            ports: [],
-            environment: nil,
-            containerName: nil,
-            networks: ["backend"],
-            hostnames: ["api.demo.local"]
-        )
-        let composeFile = ComposeFile(
-            name: nil,
-            services: ["api": service],
-            networks: ["backend": bridgeNetwork]
-        )
+        let composeFile = Self.bridgeAPIHostDNSComposeFile()
         let strictWarnings = HostDNSPlanning.warnings(
             composeFile: composeFile,
             activeServiceNames: ["api"]
@@ -112,37 +98,8 @@ extension TestRunner {
 
     private mutating func runBridgeIPDiscoveryRetryTests() {
         do {
-            let bridgeNetwork = ComposeNetwork(mode: .bridge)
-            let service = ComposeService(
-                image: "nginx:1.27.3",
-                command: nil,
-                ports: [],
-                environment: nil,
-                containerName: nil,
-                networks: ["backend"],
-                hostnames: ["api.demo.local"]
-            )
-            let composeFile = ComposeFile(
-                name: nil,
-                services: ["api": service],
-                networks: ["backend": bridgeNetwork]
-            )
-            let cidr = try CIDRv4("10.0.0.42/24")
-            let attachment = Attachment(
-                network: "demo_backend",
-                hostname: "demo_api_1",
-                ipv4Address: cidr,
-                ipv4Gateway: try IPv4Address("10.0.0.1"),
-                ipv6Address: nil,
-                macAddress: nil
-            )
-            let populated = ProjectContainer(
-                name: "demo_api_1",
-                serviceName: "api",
-                status: .running,
-                publishedPorts: [],
-                networkAttachments: [attachment]
-            )
+            let composeFile = Self.bridgeAPIHostDNSComposeFile()
+            let populated = try Self.bridgeAPIPopulatedContainer()
             final class ListCallCounter: @unchecked Sendable {
                 var count = 0
             }
@@ -165,6 +122,43 @@ extension TestRunner {
             fputs("FAIL: unexpected bridge IP discovery fixture error: \(error)\n", stderr)
             failures += 1
         }
+    }
+
+    private static func bridgeAPIHostDNSComposeFile() -> ComposeFile {
+        let bridgeNetwork = ComposeNetwork(mode: .bridge)
+        let service = ComposeService(
+            image: "nginx:1.27.3",
+            command: nil,
+            ports: [],
+            environment: nil,
+            containerName: nil,
+            networks: ["backend"],
+            hostnames: ["api.demo.local"]
+        )
+        return ComposeFile(
+            name: nil,
+            services: ["api": service],
+            networks: ["backend": bridgeNetwork]
+        )
+    }
+
+    private static func bridgeAPIPopulatedContainer() throws -> ProjectContainer {
+        let cidr = try CIDRv4("10.0.0.42/24")
+        let attachment = Attachment(
+            network: "demo_backend",
+            hostname: "demo_api_1",
+            ipv4Address: cidr,
+            ipv4Gateway: try IPv4Address("10.0.0.1"),
+            ipv6Address: nil,
+            macAddress: nil
+        )
+        return ProjectContainer(
+            name: "demo_api_1",
+            serviceName: "api",
+            status: .running,
+            publishedPorts: [],
+            networkAttachments: [attachment]
+        )
     }
 
     private mutating func runHostDNSPlanningStrictTests() throws {
