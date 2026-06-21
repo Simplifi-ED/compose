@@ -117,6 +117,25 @@ container compose up --machine dev -f compose.yaml
 
 `watch`, `run`, `top`, `stats`, `config`, `save`, and `load` reject `--machine`.
 
+### Ps (`compose ps`)
+
+Lists project containers in a fixed-width table:
+
+| Column | Meaning |
+|--------|---------|
+| NAME | Container name (`{project}_{service}_{index}`) |
+| SERVICE | Compose service name |
+| STATE | Runtime status (`running`, `stopped`, …) |
+| IP | Primary IPv4 from container network attachments (empty when stopped or unavailable) |
+| PORTS | Published host ports (`host:port->container/port/proto`) |
+
+**Breaking change (v0.0.x):** the **IP** column was added between **STATE** and **PORTS**. Scripts that parse column positions by index must use the new layout or match on header names.
+
+```bash
+container compose ps -p demo
+container compose ps -p demo web db
+```
+
 ### Top / Stats (`compose top`, `compose stats`)
 
 `stats` is an alias for `top` — same flags, output, and behavior. Streams live resource usage for project containers (Docker Compose `stats` equivalent).
@@ -142,7 +161,7 @@ Stopped containers show `--` for resource columns. Ctrl+C ends the stream withou
 
 ### Host DNS (`up --host-dns`)
 
-Maps declared service hostnames to `127.0.0.1` on the **macOS host** so browsers can reach published ports by name (e.g. `http://web.demo.local:8080`). In-container DNS from compose `networks:` is separate — this feature does not change VM/container resolver behavior.
+Maps declared service hostnames on the **macOS host** so browsers can reach services by name. **NAT** services map to `127.0.0.1` (use published ports, e.g. `http://web.demo.local:8080`). **Bridged** services map to the container's routable bridge IP after startup (no published port required). One privileged `/etc/hosts` install runs **after** startup waves complete (single admin prompt per `up`).
 
 Declare hostnames per service:
 
@@ -768,10 +787,12 @@ services:
 | Naming | `backend` in project `demo` → `demo_backend` |
 | Default | Services without `networks:` join the builtin `default` network |
 | DNS | Containers resolve each other by **container name** (`demo_db_1`), not Docker-style service shorthand (`db`) |
+| Bridge mode | `x-compose.network.mode: bridge` on a root network (or `driver: bridge`); requires macOS 26+ and a `container` build with bridge create (see `docs/bridged-network-spike.md`) |
+| `compose ps` | Includes an **IP** column when runtime attachments are available |
 | Cleanup | `compose down` removes project networks after containers; `-p`-only `down` (no compose file) leaves them — remove with `container network rm` |
 | Requirements | Custom networks need macOS 26 or newer |
 
-**Not supported:** network drivers, `aliases`, static IP addresses, `priority`, `network_mode`, `external: true`, cross-project sharing.
+**Not supported:** network drivers (except `driver: bridge` sugar), `aliases`, static IP addresses, `priority`, `network_mode`, `external: true`, cross-project sharing.
 
 ---
 

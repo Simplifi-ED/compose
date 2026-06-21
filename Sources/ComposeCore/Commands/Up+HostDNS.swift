@@ -1,37 +1,43 @@
-import ArgumentParser
 import Foundation
 
 extension Up {
-    func installHostDNSIfRequested(_ input: LiveInput) async throws {
+    func installHostDNSAfterStartupIfRequested(
+        _ input: LiveInput,
+        machineContext: MachineContext
+    ) async {
         guard input.installHostDNS else { return }
+        let activeServiceNames = Set(input.plan.plans.map(\.serviceName))
         do {
-            try await HostDNSMapping.installAll(
+            try await HostDNSMapping.installAfterStartup(
                 composeFile: input.plan.composeFile,
                 projectName: input.plan.projectName,
                 firstComposeFileURL: input.plan.fileURLs[0],
-                activeServiceNames: Set(input.plan.plans.map(\.serviceName))
+                activeServiceNames: activeServiceNames,
+                listContainers: {
+                    try await ContainerDiscovery.projectContainers(
+                        forProject: input.plan.projectName,
+                        machineContext: machineContext
+                    )
+                }
             )
         } catch let error as ComposeError {
             switch error {
             case .hostDNSElevationCancelled:
                 fputs(
-                    """
-                    Warning: Host DNS install cancelled. Containers will start without host mappings.\n
-                    """,
+                    "Warning: Host DNS install cancelled. Containers are running without host mappings.\n",
                     stderr
                 )
             default:
-                throw error
+                fputs(
+                    "Warning: Host DNS install failed: \(error.localizedDescription)\n",
+                    stderr
+                )
             }
+        } catch {
+            fputs(
+                "Warning: Host DNS install failed: \(error.localizedDescription)\n",
+                stderr
+            )
         }
-    }
-
-    func rollbackHostDNSIfNeeded(_ input: LiveInput, unless error: Error) async {
-        guard input.installHostDNS else { return }
-        if error is ExitCode { return }
-        await HostDNSMapping.removeProjectMappings(
-            projectName: input.plan.projectName,
-            firstComposeFileURL: input.plan.fileURLs[0]
-        )
     }
 }

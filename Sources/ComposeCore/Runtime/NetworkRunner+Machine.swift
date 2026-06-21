@@ -10,6 +10,9 @@ extension NetworkRunner {
     ) async throws {
         let booted = try machineContext.bootedContext()
         for plan in plans {
+            if plan.mode == .bridge {
+                throw ComposeError.bridgeNetworksUnsupported(network: plan.logicalName)
+            }
             if let resource = try await machineNetworkResource(
                 snapshot: booted.snapshot,
                 name: plan.runtimeName

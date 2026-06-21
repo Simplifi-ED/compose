@@ -10,45 +10,6 @@ package enum HostDNSMapping {
         package let installedAt: String
     }
 
-    package static func installAll(
-        composeFile: ComposeFile,
-        projectName: String,
-        firstComposeFileURL: URL,
-        activeServiceNames: Set<String>,
-        dryRunManifest: DryRunManifest? = nil
-    ) async throws {
-        try validateHostDNSPlatform()
-        let identity = HostDNSPlanning.blockIdentity(
-            projectName: projectName,
-            firstComposeFileURL: firstComposeFileURL
-        )
-        let devWarnings = try HostDNSPlanning.validateForInstall(
-            composeFile: composeFile,
-            activeServiceNames: activeServiceNames
-        )
-        for warning in devWarnings {
-            fputs("\(warning.message)\n", stderr)
-        }
-        let planned = HostDNSPlanning.plans(
-            composeFile: composeFile,
-            activeServiceNames: activeServiceNames
-        )
-        guard !planned.isEmpty else {
-            fputs("No x-compose.hosts declared; skipping host DNS.\n", stderr)
-            return
-        }
-        if let dryRunManifest {
-            await dryRunManifest.recordHostDNSInstall(
-                projectName: identity.projectName,
-                projectID: identity.projectID,
-                hostnames: planned.map(\.hostname)
-            )
-            return
-        }
-
-        try installLive(identity: identity, planned: planned)
-    }
-
     package static func removeProjectMappings(
         projectName: String,
         firstComposeFileURL: URL?,
@@ -138,7 +99,7 @@ package enum HostDNSMapping {
             Warning: couldn't remove host DNS mappings (\(reason)).
             Remove this block from /etc/hosts manually:
               \(identity.beginMarker)
-              \(HostsFileEditor.loopbackIP) …
+              …
               \(identity.endMarker)
             Or run: container compose down (accept the prompt when asked for /etc/hosts access)
             Ownership: \(ownershipPath)
@@ -149,7 +110,7 @@ package enum HostDNSMapping {
         fputs("\(message)\n", stderr)
     }
 
-    private static func validateHostDNSPlatform() throws {
+    package static func validateHostDNSPlatform() throws {
         #if !os(macOS)
         throw ComposeError.hostDNSUnsupportedPlatform
         #endif

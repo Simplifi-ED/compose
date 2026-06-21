@@ -36,16 +36,6 @@ extension Up {
             machineContext: input.machineContext
         )
 
-        if input.installHostDNS {
-            try await HostDNSMapping.installAll(
-                composeFile: input.composeFile,
-                projectName: input.projectName,
-                firstComposeFileURL: input.fileURLs[0],
-                activeServiceNames: Set(input.layers.flatMap { $0 }.map(\.serviceName)),
-                dryRunManifest: manifest
-            )
-        }
-
         if workspaceHygiene.shouldRemoveOrphans {
             try await recordOrphanTeardowns(
                 manifest: manifest,
@@ -65,6 +55,16 @@ extension Up {
                 await manifest.setUpWaveIndex(index)
             }
         )
+        if input.installHostDNS {
+            let activeServiceNames = Set(input.layers.flatMap { $0 }.map(\.serviceName))
+            try await HostDNSMapping.installAfterStartup(
+                composeFile: input.composeFile,
+                projectName: input.projectName,
+                firstComposeFileURL: input.fileURLs[0],
+                activeServiceNames: activeServiceNames,
+                dryRunManifest: manifest
+            )
+        }
         await manifest.printLines()
     }
 

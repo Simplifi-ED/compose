@@ -1,0 +1,17 @@
+networks:
+  backend:
+    x-compose:
+      network:
+        mode: bridge
+
+services:
+  server:
+    image: docker.io/library/alpine:3.24
+    command: sleep 300
+    networks: [backend]
+  client:
+    image: docker.io/library/alpine:3.24
+    command: sleep 300
+    networks: [backend]
+    depends_on:
+      - server

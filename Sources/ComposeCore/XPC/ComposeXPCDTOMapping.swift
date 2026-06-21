@@ -22,7 +22,8 @@ package enum ComposeXPCDTOMapping {
             name: row.name,
             service: row.service,
             state: row.state,
-            ports: row.ports
+            ports: row.ports,
+            ipAddress: row.ipAddress.isEmpty ? nil : row.ipAddress
         )
     }
 }

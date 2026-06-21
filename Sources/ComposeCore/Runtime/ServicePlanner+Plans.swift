@@ -95,7 +95,8 @@ extension ServicePlanner {
         )
         try NetworkPlanning.validate(
             composeFile: context.composeFile,
-            activeServiceNames: [serviceName]
+            activeServiceNames: [serviceName],
+            machineName: context.machineName
         )
         try PlatformPlanning.validate(
             services: context.composeFile.services,

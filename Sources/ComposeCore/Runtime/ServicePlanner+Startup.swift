@@ -14,7 +14,8 @@ extension ServicePlanner {
         )
         try NetworkPlanning.validate(
             composeFile: composeFile,
-            activeServiceNames: activeServiceNames
+            activeServiceNames: activeServiceNames,
+            machineName: machineName
         )
         try VolumePlanning.validate(
             composeFile: composeFile,

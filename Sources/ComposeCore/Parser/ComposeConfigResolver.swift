@@ -50,7 +50,41 @@ public enum ComposeConfigResolver {
             volumes: parsed.volumes
         )
         emitHostDNSWarnings(composeFile: composeFile, activeServiceNames: activeServiceNames)
+        emitBridgeNetworkWarnings(composeFile: composeFile, activeServiceNames: activeServiceNames)
         return composeFile
+    }
+
+    package static func emitBridgeNetworkWarnings(
+        composeFile: ComposeFile,
+        activeServiceNames: Set<String>
+    ) {
+        for serviceName in activeServiceNames.sorted() {
+            guard let service = composeFile.services[serviceName] else { continue }
+            guard NetworkPlanning.serviceUsesBridgeNetwork(composeFile: composeFile, service: service) else {
+                continue
+            }
+            if service.ports.contains(where: { ComposeBindingKeys.parsePortSpec($0)?.hostPort != nil }) {
+                fputs(
+                    "warning: service '\(serviceName)' is on a bridged network and publishes host ports; "
+                        + "host port mapping is usually redundant when the container has a routable IP\n",
+                    stderr
+                )
+            }
+            if #available(macOS 26, *) {
+                continue
+            }
+            fputs(
+                "warning: service '\(serviceName)' uses a bridged network; bridged networks require macOS 26+\n",
+                stderr
+            )
+        }
+        if NetworkPlanning.hasBridgeNetwork(composeFile: composeFile, activeServiceNames: activeServiceNames) {
+            fputs(
+                "warning: bridged network create requires a container build with bridge mode "
+                    + "(see docs/bridged-network-spike.md)\n",
+                stderr
+            )
+        }
     }
 
     package static func emitHostDNSWarnings(

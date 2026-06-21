@@ -9,10 +9,12 @@ package enum NetworkPlanning {
         package let logicalName: String
         /// Project-scoped runtime name: `{project}_{logical}`.
         package let runtimeName: String
+        package let mode: NetworkAttachmentMode
 
-        package init(logicalName: String, runtimeName: String) {
+        package init(logicalName: String, runtimeName: String, mode: NetworkAttachmentMode = .nat) {
             self.logicalName = logicalName
             self.runtimeName = runtimeName
+            self.mode = mode
         }
     }
 
@@ -28,19 +30,64 @@ package enum NetworkPlanning {
         return runtimeName
     }
 
+    package static func networkMode(
+        composeFile: ComposeFile,
+        networkName: String
+    ) -> NetworkAttachmentMode {
+        composeFile.networks[networkName]?.mode ?? .nat
+    }
+
+    package static func firstBridgeNetworkName(
+        composeFile: ComposeFile,
+        service: ComposeService
+    ) -> String? {
+        service.networks.first { networkMode(composeFile: composeFile, networkName: $0) == .bridge }
+    }
+
+    package static func serviceUsesBridgeNetwork(
+        composeFile: ComposeFile,
+        service: ComposeService
+    ) -> Bool {
+        service.networks.contains { networkMode(composeFile: composeFile, networkName: $0) == .bridge }
+    }
+
+    package static func hasBridgeNetwork(
+        composeFile: ComposeFile,
+        activeServiceNames: Set<String>
+    ) -> Bool {
+        var referenced: Set<String> = []
+        for serviceName in activeServiceNames {
+            guard let service = composeFile.services[serviceName] else { continue }
+            referenced.formUnion(service.networks)
+        }
+        return referenced.contains { networkMode(composeFile: composeFile, networkName: $0) == .bridge }
+    }
+
     /// Rejects service memberships that reference networks missing from root `networks:`.
-    package static func validate(composeFile: ComposeFile, activeServiceNames: Set<String>) throws {
+    package static func validate(
+        composeFile: ComposeFile,
+        activeServiceNames: Set<String>,
+        machineName: String? = nil
+    ) throws {
         for serviceName in activeServiceNames.sorted() {
             guard let service = composeFile.services[serviceName] else { continue }
             for networkName in service.networks where composeFile.networks[networkName] == nil {
                 throw ComposeError.undefinedNetwork(service: serviceName, network: networkName)
             }
         }
+        if machineName != nil, hasBridgeNetwork(composeFile: composeFile, activeServiceNames: activeServiceNames) {
+            throw ComposeError.bridgeNetworksUnsupportedWithMachine
+        }
+        if hasBridgeNetwork(composeFile: composeFile, activeServiceNames: activeServiceNames) {
+            guard #available(macOS 26, *) else {
+                throw ComposeError.networksRequireMacOS26
+            }
+        }
     }
 
     /// Unique networks referenced by active services, sorted by logical name.
     ///
-    /// Call ``validate(composeFile:activeServiceNames:)`` before planning when
+    /// Call ``validate(composeFile:activeServiceNames:machineName:)`` before planning when
     /// undefined memberships must be rejected (for example `up` and `run`).
     package static func plans(
         composeFile: ComposeFile,
@@ -56,7 +103,8 @@ package enum NetworkPlanning {
         return try referenced.sorted().map { logicalName in
             Plan(
                 logicalName: logicalName,
-                runtimeName: try runtimeNetworkName(projectName: projectName, networkName: logicalName)
+                runtimeName: try runtimeNetworkName(projectName: projectName, networkName: logicalName),
+                mode: networkMode(composeFile: composeFile, networkName: logicalName)
             )
         }
     }

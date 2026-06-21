@@ -5,6 +5,7 @@ import Foundation
 extension TestRunner {
     mutating func runNetworkTests() throws {
         try runNetworkParserTests()
+        try runNetworkBridgeParserTests()
         try runNetworkParserErrorTests()
         try runNetworkNameTests()
         try runNetworkPlanningTests()
@@ -72,6 +73,46 @@ extension TestRunner {
         )
     }
 
+    private mutating func runNetworkBridgeParserTests() throws {
+        let xCompose = try ComposeParser.parse(fileURL: Self.fixtureURL("networks-bridge-compose.yml"))
+        expect(xCompose.networks["backend"]?.mode == .bridge, "x-compose.network.mode bridge")
+        if #available(macOS 26, *) {
+            let bridgePlans = try NetworkPlanning.plans(
+                composeFile: xCompose,
+                projectName: "demo",
+                activeServiceNames: ["client", "server"]
+            )
+            expect(bridgePlans.first?.mode == .bridge, "bridge network plan mode")
+        } else {
+            expectComposeError(
+                "bridge network plans require macOS 26",
+                matching: { if case .networksRequireMacOS26 = $0 { true } else { false } },
+                body: {
+                    _ = try NetworkPlanning.plans(
+                        composeFile: xCompose,
+                        projectName: "demo",
+                        activeServiceNames: ["client", "server"]
+                    )
+                }
+            )
+        }
+
+        let driver = try ComposeParser.parse(fileURL: Self.fixtureURL("networks-bridge-driver-compose.yml"))
+        expect(driver.networks["backend"]?.mode == .bridge, "driver bridge alias")
+
+        expectComposeError(
+            "bridge network with machine",
+            matching: { if case .bridgeNetworksUnsupportedWithMachine = $0 { true } else { false } },
+            body: {
+                try NetworkPlanning.validate(
+                    composeFile: xCompose,
+                    activeServiceNames: ["client", "server"],
+                    machineName: "dev"
+                )
+            }
+        )
+    }
+
     private mutating func runNetworkPlanningTests() throws {
         let fixture = try ComposeParser.parse(fileURL: Self.fixtureURL("networks-compose.yml"))
         let plans = try NetworkPlanning.plans(
@@ -82,6 +123,7 @@ extension TestRunner {
         expect(plans.count == 1, "one shared network plan")
         expect(plans.first?.logicalName == "backend", "plan logical name")
         expect(plans.first?.runtimeName == "demo_backend", "plan runtime name")
+        expect(plans.first?.mode == .nat, "default network mode is nat")
 
         let undefined = try ComposeParser.parse(fileURL: Self.fixtureURL("networks-undefined-compose.yml"))
         expectComposeError(

@@ -10,12 +10,39 @@ extension HostsFileEditor {
     static func formattedBlock(
         projectName: String,
         projectID: String,
-        hostnames: [String]
+        planned: [HostDNSPlanning.Plan]
     ) -> String {
         let begin = beginMarker(projectName: projectName, projectID: projectID)
         let end = endMarker(projectName: projectName, projectID: projectID)
-        let hostLine = "\(loopbackIP) " + hostnames.joined(separator: " ")
-        return [begin, hostLine, end].joined(separator: "\n")
+        let addressLines = addressLines(from: planned)
+        let hostLines = addressLines.map { "\($0.address) " + $0.hostnames.joined(separator: " ") }
+        return ([begin] + hostLines + [end]).joined(separator: "\n")
+    }
+
+    static func formattedBlock(
+        projectName: String,
+        projectID: String,
+        hostnames: [String]
+    ) -> String {
+        formattedBlock(
+            projectName: projectName,
+            projectID: projectID,
+            planned: hostnames.map {
+                HostDNSPlanning.Plan(serviceName: "", hostname: $0, hostPort: "")
+            }
+        )
+    }
+
+    static func addressLines(
+        from planned: [HostDNSPlanning.Plan]
+    ) -> [(address: String, hostnames: [String])] {
+        var grouped: [String: [String]] = [:]
+        for plan in planned {
+            grouped[plan.targetIP, default: []].append(plan.hostname)
+        }
+        return grouped.keys.sorted().map { address in
+            (address, grouped[address, default: []].sorted())
+        }
     }
 
     static func parseBeginMarker(_ line: String) -> (projectName: String, projectID: String)? {
@@ -84,6 +111,15 @@ extension HostsFileEditor {
             }
         }
         return entries
+    }
+
+    static func hostnamesFromBlock(lines: [String], range: Range<Int>) -> [String] {
+        guard range.count >= 2 else { return [] }
+        var hostnames: [String] = []
+        for index in (range.lowerBound + 1)..<(range.upperBound - 1) {
+            hostnames.append(contentsOf: hostnamesFromLine(lines[index]))
+        }
+        return hostnames
     }
 
     static func hostnamesFromLine(_ line: String) -> [String] {
