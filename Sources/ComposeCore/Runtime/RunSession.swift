@@ -9,8 +9,8 @@ package enum RunSession {
         shutdownContext: RunShutdownContext,
         useInteractivePTY: Bool = false,
         imagePullOutput: ImagePullOutput? = nil,
-        runContainer: @escaping @Sendable (ServicePlan) async throws -> Int32 = { plan in
-            try await defaultRunContainer(plan: plan)
+        runContainer: @escaping @Sendable (ServicePlan, ImagePullOutput?) async throws -> Int32 = { plan, imagePullOutput in
+            try await defaultRunContainer(plan: plan, imagePullOutput: imagePullOutput)
         },
         stopRunContainer: @escaping @Sendable (RunShutdownContext) async throws -> Void = {
             try await RunShutdownContext.stopAndRemove(context: $0)
@@ -27,10 +27,7 @@ package enum RunSession {
                 if let imagePullOutput {
                     try await ImagePullRunner.pullMissing(plans: [plan], output: imagePullOutput)
                 }
-                if let imagePullOutput {
-                    return try await defaultRunContainer(plan: plan, imagePullOutput: imagePullOutput)
-                }
-                return try await runContainer(plan)
+                return try await runContainer(plan, imagePullOutput)
             }
         )
     }

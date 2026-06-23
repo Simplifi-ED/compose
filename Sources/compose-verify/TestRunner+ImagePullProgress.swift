@@ -130,8 +130,12 @@ extension TestRunner {
         ]
         let targets = ImagePullRunner.pullTargets(for: plans)
         expect(targets.count == 2, "image pull targets dedupe by image and normalized platform")
-        expect(targets[0].reference == "nginx", "first pull target preserves wave order")
-        expect(targets[0].platform == "linux/amd64", "pull target captures platform flag")
+        if let firstTarget = targets.first {
+            expect(firstTarget.reference == "nginx", "first pull target preserves wave order")
+            expect(firstTarget.platform == "linux/amd64", "pull target captures platform flag")
+        } else {
+            expect(false, "first pull target is missing")
+        }
     }
 
     private mutating func runImagePullRuntimeProgressInsertionTests() {
@@ -154,11 +158,17 @@ extension TestRunner {
                 imagePullOutput: .headlessHost
             )
             let imageIndex = arguments.firstIndex(of: "nginx")
-            let progressIndex = arguments.firstIndex(of: "--progress")
+            let progressFlags = arguments.enumerated().filter { $0.element == "--progress" }
+            expect(progressFlags.count == 1, "runtime progress flag is inserted exactly once")
+            let progressIndex = progressFlags.first?.offset
             expect(progressIndex != nil && imageIndex != nil, "runtime progress flag is inserted")
             if let progressIndex, let imageIndex {
                 expect(progressIndex < imageIndex, "runtime progress flag is inserted before image token")
-                expect(arguments[progressIndex + 1] == "none", "runtime progress flag disables upstream bar")
+                let valueIndex = progressIndex + 1
+                expect(valueIndex < arguments.count, "runtime progress flag has a value")
+                if valueIndex < arguments.count {
+                    expect(arguments[valueIndex] == "none", "runtime progress flag disables upstream bar")
+                }
             }
         } catch {
             fputs("FAIL: unexpected progress insertion error: \(error)\n", stderr)
@@ -188,7 +198,11 @@ extension TestRunner {
             let progressFlags = arguments.enumerated().filter { $0.element == "--progress" }
             expect(progressFlags.count == 1, "existing runtime progress flag is not duplicated")
             if let progressIndex = progressFlags.first?.offset {
-                expect(arguments[progressIndex + 1] == "plain", "existing runtime progress flag is preserved")
+                let valueIndex = progressIndex + 1
+                expect(valueIndex < arguments.count, "existing runtime progress flag has a value")
+                if valueIndex < arguments.count {
+                    expect(arguments[valueIndex] == "plain", "existing runtime progress flag is preserved")
+                }
             }
         } catch {
             fputs("FAIL: unexpected progress guard error: \(error)\n", stderr)

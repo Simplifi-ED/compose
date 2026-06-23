@@ -57,13 +57,24 @@ extension ServiceRunner {
             return
         }
         try await ContainerTeardown.teardownRespectingCancellation(id: plan.name, machineContext: machineContext) {
-            let runArguments = try ComposeFileStaging.preparedRunArguments(
-                for: plan,
-                imagePullOutput: imagePullOutput
-            )
-            let command: Application.ContainerRun
             do {
-                command = try Application.ContainerRun.parse(runArguments)
+                let runArguments = try ComposeFileStaging.preparedRunArguments(
+                    for: plan,
+                    imagePullOutput: imagePullOutput
+                )
+                let command = try Application.ContainerRun.parse(runArguments)
+                try await command.run()
+                OsLogTelemetry.enabled {
+                    OsLogTelemetry.lifecycle.info(
+                        """
+                        event=container_start project=\(plan.projectName, privacy: .public) \
+                        service=\(plan.serviceName, privacy: .public) \
+                        container=\(plan.name, privacy: .public) \
+                        replica=\(plan.replicaIndex, privacy: .public) \
+                        machine=\(machine, privacy: .public)
+                        """
+                    )
+                }
             } catch {
                 ComposeFileStaging.removeContainerStaging(
                     projectName: plan.projectName,
@@ -80,18 +91,6 @@ extension ServiceRunner {
                     )
                 }
                 throw error
-            }
-            try await command.run()
-            OsLogTelemetry.enabled {
-                OsLogTelemetry.lifecycle.info(
-                    """
-                    event=container_start project=\(plan.projectName, privacy: .public) \
-                    service=\(plan.serviceName, privacy: .public) \
-                    container=\(plan.name, privacy: .public) \
-                    replica=\(plan.replicaIndex, privacy: .public) \
-                    machine=\(machine, privacy: .public)
-                    """
-                )
             }
         }
     }

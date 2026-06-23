@@ -107,9 +107,32 @@ package enum ComposeFileStaging {
             )
         }
         let runtimeFlags = runArguments[..<imageIndex]
-        guard !runtimeFlags.contains("--progress") else { return }
-        guard !runtimeFlags.contains(where: { $0.hasPrefix("--progress=") }) else { return }
-        runArguments.insert(contentsOf: ["--progress", "none"], at: imageIndex)
+        if !runtimeFlags.contains("--progress"),
+           !runtimeFlags.contains(where: { $0.hasPrefix("--progress=") })
+        {
+            runArguments.insert(contentsOf: ["--progress", "none"], at: imageIndex)
+        }
+        guard let updatedImageIndex = runArguments.firstIndex(of: image) else { return }
+        stripRuntimeProgressFlags(after: updatedImageIndex, in: &runArguments)
+    }
+
+    private static func stripRuntimeProgressFlags(after imageIndex: Int, in runArguments: inout [String]) {
+        var index = imageIndex + 1
+        while index < runArguments.count {
+            let argument = runArguments[index]
+            if argument == "--progress" {
+                runArguments.remove(at: index)
+                if index < runArguments.count, !runArguments[index].hasPrefix("-") {
+                    runArguments.remove(at: index)
+                }
+                continue
+            }
+            if argument.hasPrefix("--progress=") {
+                runArguments.remove(at: index)
+                continue
+            }
+            index += 1
+        }
     }
 
     package static func removeContainerStaging(projectName: String, containerName: String) {
