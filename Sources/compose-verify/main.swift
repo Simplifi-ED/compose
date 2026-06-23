@@ -220,6 +220,7 @@ do {
     runner.runTerminalTests()
     runner.runDoctorTests()
     runner.runProgressTests()
+    runner.runImagePullProgressTests()
     runner.runPsTests()
     runner.runLogsTests()
     runner.runEventsTests()

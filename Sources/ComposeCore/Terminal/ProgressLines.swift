@@ -3,22 +3,16 @@ import Foundation
 /// Streams per-service orchestration status to stderr during `up`/`down` waves.
 ///
 /// All writes are funneled through this actor so parallel service completions
-/// cannot interleave escape sequences. Image pulls inside `ContainerRun` may emit
-/// their own progress; `--progress none` silences orchestration lines if the two
-/// ever stack.
+/// cannot interleave escape sequences. Compose-owned image pull progress finishes
+/// before startup wave progress starts.
 package actor ProgressLines {
-    private static let tickInterval: Duration = .milliseconds(100)
-
     private let display: ProgressDisplay
     private let phase: ProgressPhase
-    private let write: @Sendable (String) -> Void
+    private let renderer: StackedProgressRenderer
 
     private var services: [String] = []
     private var statuses: [String: ProgressStatus] = [:]
     private var prefixWidth = ANSIPrefix.defaultWidth
-    private var inPlaceWriter = InPlaceTerminalWriter()
-    private var spinnerIndex = 0
-    private var ticker: Task<Void, Never>?
 
     private var formatMode: TerminalMode {
         display == .interactive ? .interactive : .plain
@@ -31,44 +25,41 @@ package actor ProgressLines {
     ) {
         self.display = display
         self.phase = phase
-        self.write = write
+        self.renderer = StackedProgressRenderer(display: display, write: write)
     }
 
-    package func beginWave(wave: Int, total: Int, services: [String]) {
+    package func beginWave(wave: Int, total: Int, services: [String]) async {
         guard display != .silent else { return }
         self.services = services
         statuses = Dictionary(services.map { ($0, ProgressStatus.inProgress) }, uniquingKeysWith: { first, _ in first })
         prefixWidth = max(ANSIPrefix.defaultWidth, services.map(\.count).max() ?? 0)
-        inPlaceWriter.reset()
 
-        switch display {
-        case .plain:
+        await renderer.begin(keys: services, lineProvider: {
+            await self.currentLines()
+        }, plainBootstrap: {
+            var lines: [String] = []
             if total > 1 {
-                write(ProgressFormat.waveHeader(wave: wave, total: total) + "\n")
+                lines.append(ProgressFormat.waveHeader(wave: wave, total: total))
             }
             for service in services {
-                write(line(for: service, status: .inProgress) + "\n")
+                lines.append(await self.line(for: service, status: .inProgress))
             }
-        case .interactive:
-            render()
-            startTicker()
-        case .silent:
-            break
-        }
+            return lines
+        })
     }
 
-    package func markComplete(service: String, succeeded: Bool) {
+    package func markComplete(service: String, succeeded: Bool) async {
         guard display != .silent, statuses[service] != nil else { return }
         let status: ProgressStatus = succeeded ? .succeeded : .failed
         statuses[service] = status
 
         switch display {
         case .plain:
-            write(line(for: service, status: status) + "\n")
+            await renderer.writePlain(await line(for: service, status: status))
         case .interactive:
-            render()
+            await renderer.refreshInteractive()
             if statuses.values.allSatisfy({ $0 != .inProgress }) {
-                stopTicker()
+                await renderer.finishInteractive()
             }
         case .silent:
             break
@@ -76,60 +67,38 @@ package actor ProgressLines {
     }
 
     /// Stops the spinner and leaves the final per-service lines in place.
-    package func finishWave() {
-        guard display == .interactive else { return }
-        stopTicker()
-        render()
+    package func finishWave() async {
+        await renderer.finishInteractive()
         resetState()
     }
 
     /// Stops any in-flight rendering; safe to call after success or failure.
-    package func finish() {
-        finishWave()
+    package func finish() async {
+        await finishWave()
     }
 
-    private func line(for service: String, status: ProgressStatus) -> String {
-        ProgressFormat.statusLine(
+    private func line(for service: String, status: ProgressStatus) async -> String {
+        let spinnerFrame = await renderer.interactiveSpinnerFrame
+        return ProgressFormat.statusLine(
             service: service,
             status: status,
             phase: phase,
             mode: formatMode,
             width: prefixWidth,
-            spinnerFrame: ProgressFormat.spinnerFrames[spinnerIndex % ProgressFormat.spinnerFrames.count]
+            spinnerFrame: spinnerFrame
         )
     }
 
-    private func render() {
-        var output = inPlaceWriter.beginRedraw(newLineCount: services.count)
+    private func currentLines() async -> [String] {
+        var lines: [String] = []
         for service in services {
-            output += InPlaceTerminalWriter.formattedLine(
-                line(for: service, status: statuses[service] ?? .inProgress)
-            )
+            lines.append(await line(for: service, status: statuses[service] ?? .inProgress))
         }
-        inPlaceWriter.commit(lineCount: services.count)
-        write(output)
+        return lines
     }
 
     private func resetState() {
         services = []
         statuses = [:]
-        inPlaceWriter.reset()
-    }
-
-    private func startTicker() {
-        stopTicker()
-        ticker = Task {
-            while !Task.isCancelled {
-                try? await Task.sleep(for: Self.tickInterval)
-                guard !Task.isCancelled else { return }
-                spinnerIndex += 1
-                render()
-            }
-        }
-    }
-
-    private func stopTicker() {
-        ticker?.cancel()
-        ticker = nil
     }
 }

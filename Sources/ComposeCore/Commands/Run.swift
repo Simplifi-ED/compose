@@ -85,7 +85,8 @@ public struct Run: AsyncParsableCommand {
                     projectName: resolved.projectName,
                     options: GracefulStopOptions(graceSeconds: timeout)
                 ),
-                useInteractivePTY: resolvedIOFlags().useInteractivePTY
+                useInteractivePTY: resolvedIOFlags().useInteractivePTY,
+                imagePullOutput: progressOptions.resolvedImagePullOutput()
             )
         }
     }

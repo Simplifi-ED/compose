@@ -15,6 +15,7 @@ extension ServiceRunner {
     package static func orchestrateUp(
         layers: [[ServicePlan]],
         progress: WaveProgressHandlers?,
+        imagePullOutput: ImagePullOutput? = nil,
         healthContext: HealthWaitContext?,
         execution: WaveExecutionPolicy = .unlimited,
         hooks: UpOperationHooks,
@@ -22,6 +23,13 @@ extension ServiceRunner {
     ) async throws {
         var startedWaves: [[String]] = []
         do {
+            if let imagePullOutput {
+                try await ImagePullRunner.pullMissing(
+                    plans: layers.flatMap { $0 },
+                    output: imagePullOutput,
+                    maxConcurrent: execution.maxConcurrent
+                )
+            }
             for (index, layer) in layers.enumerated() {
                 try await runStartupWave(
                     StartupWaveRequest(
