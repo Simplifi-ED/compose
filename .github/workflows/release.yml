@@ -15,7 +15,7 @@ jobs:
     runs-on: macos-15
     steps:
       - name: Checkout Code
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       - name: Select Xcode 26 (Swift 6.2)
         run: |
@@ -51,7 +51,7 @@ jobs:
           shasum -a 256 dist/container-compose-macos-arm64.zip | awk '{print $1}' > dist/container-compose-macos-arm64.zip.sha256
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v3.0.0
+        uses: softprops/action-gh-release@718ea10b132b3b2eba29c1007bb80653f286566b # v3.0.1
         with:
           files: |
             dist/compose-plugin.tar.gz
@@ -68,7 +68,7 @@ jobs:
       contents: write
     steps:
       - name: Checkout Homebrew Tap
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           repository: Simplifi-ED/homebrew-compose
           token: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
