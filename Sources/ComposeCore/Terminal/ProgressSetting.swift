@@ -6,11 +6,11 @@ package enum ProgressSetting: String, CaseIterable, Sendable {
     case auto
     /// Newline-separated status lines without escape sequences.
     case plain
-    /// No orchestration progress on stderr (runtime image pulls may still print).
+    /// No compose-owned progress on stderr.
     case none
 }
 
-/// Resolved rendering style for orchestration progress on stderr.
+/// Resolved rendering style for compose-owned progress on stderr.
 package enum ProgressDisplay: Equatable, Sendable {
     case interactive
     case plain

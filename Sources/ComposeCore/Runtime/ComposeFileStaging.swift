@@ -51,7 +51,10 @@ package enum ComposeFileStaging {
         }
     }
 
-    package static func preparedRunArguments(for plan: ServicePlan) throws -> [String] {
+    package static func preparedRunArguments(
+        for plan: ServicePlan,
+        imagePullOutput: ImagePullOutput? = nil
+    ) throws -> [String] {
         var runArguments = plan.runArguments
         let staged = try stage(
             mounts: plan.fileMounts,
@@ -60,6 +63,9 @@ package enum ComposeFileStaging {
         )
         let volumeArgs = volumeArguments(for: staged)
         try insertVolumeArguments(into: &runArguments, image: plan.image, volumeArgs: volumeArgs)
+        if imagePullOutput?.suppressesRuntimeProgress == true {
+            try insertProgressNone(into: &runArguments, image: plan.image)
+        }
         return runArguments
     }
 
@@ -88,6 +94,44 @@ package enum ComposeFileStaging {
             )
         }
         runArguments.insert(contentsOf: volumeArgs, at: imageIndex)
+    }
+
+    static func insertProgressNone(
+        into runArguments: inout [String],
+        image: String
+    ) throws {
+        guard let imageIndex = runArguments.firstIndex(of: image) else {
+            throw ComposeError.invalidField(
+                "run arguments",
+                reason: "image token '\(image)' not found; progress flags must appear before the image"
+            )
+        }
+        let runtimeFlags = runArguments[..<imageIndex]
+        if !runtimeFlags.contains("--progress"),
+           !runtimeFlags.contains(where: { $0.hasPrefix("--progress=") }) {
+            runArguments.insert(contentsOf: ["--progress", "none"], at: imageIndex)
+        }
+        guard let updatedImageIndex = runArguments.firstIndex(of: image) else { return }
+        stripRuntimeProgressFlags(after: updatedImageIndex, in: &runArguments)
+    }
+
+    private static func stripRuntimeProgressFlags(after imageIndex: Int, in runArguments: inout [String]) {
+        var index = imageIndex + 1
+        while index < runArguments.count {
+            let argument = runArguments[index]
+            if argument == "--progress" {
+                runArguments.remove(at: index)
+                if index < runArguments.count, !runArguments[index].hasPrefix("-") {
+                    runArguments.remove(at: index)
+                }
+                continue
+            }
+            if argument.hasPrefix("--progress=") {
+                runArguments.remove(at: index)
+                continue
+            }
+            index += 1
+        }
     }
 
     package static func removeContainerStaging(projectName: String, containerName: String) {

@@ -69,9 +69,10 @@ extension Run {
         machineContext: MachineContext = .applicationSandbox
     ) async throws {
         if !buildPlans.isEmpty {
+            // ponytail: host run; ProgressSetting.none so compose owns pull stderr.
             try await BuildRunner.buildAll(
                 buildPlans,
-                progress: progressOptions.progress,
+                progress: ProgressSetting.none,
                 dryRunManifest: nil
             )
         }

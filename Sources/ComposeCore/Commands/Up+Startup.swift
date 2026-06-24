@@ -45,6 +45,7 @@ extension Up {
             display: progressOptions.resolvedDisplay(),
             phase: .starting
         )
+        let imagePullOutput = progressOptions.resolvedImagePullOutput()
         let request = ProjectUpRequest(
             inputs: projectOptions.composeCommandInputs(
                 profiles: profileOptions.profiles,
@@ -61,7 +62,10 @@ extension Up {
             try await ProjectUpRun.executeWaves(
                 plan: plan,
                 request: request,
-                execution: ProjectUpExecution(progress: orchestration.handlers),
+                execution: ProjectUpExecution(
+                    progress: orchestration.handlers,
+                    imagePullOutput: imagePullOutput
+                ),
                 machineContext: machineContext
             )
         }

@@ -32,33 +32,31 @@ public enum ServiceRunner {
         execution: WaveExecutionPolicy = .unlimited,
         machineContext: MachineContext = .applicationSandbox
     ) async throws {
-        let allPlans = layers.flatMap { $0 }
-        try await orchestrateUp(
+        try await up(
             layers: layers,
             progress: progress,
+            imagePullOutput: nil,
             healthContext: healthContext,
             execution: execution,
-            hooks: UpOperationHooks(
-                runContainer: { plan in
-                    try await runContainerWithFileMounts(plan, machineContext: machineContext)
-                },
-                rollbackTeardown: { name in
-                    if let plan = allPlans.first(where: { $0.name == name }) {
-                        ComposeFileStaging.removeContainerStaging(
-                            projectName: plan.projectName,
-                            containerName: name
-                        )
-                    }
-                    try await ContainerTeardown.teardown(id: name, machineContext: machineContext)
-                },
-                waitForDependencies: { gates, context in
-                    try await HealthWait.waitForDependencies(
-                        gates: gates,
-                        context: context,
-                        machineContext: machineContext
-                    )
-                }
-            )
+            machineContext: machineContext
+        )
+    }
+
+    package static func up(
+        layers: [[ServicePlan]],
+        progress: WaveProgressHandlers? = nil,
+        imagePullOutput: ImagePullOutput?,
+        healthContext: HealthWaitContext? = nil,
+        execution: WaveExecutionPolicy = .unlimited,
+        machineContext: MachineContext = .applicationSandbox
+    ) async throws {
+        try await upOnHost(
+            layers: layers,
+            progress: progress,
+            imagePullOutput: imagePullOutput,
+            healthContext: healthContext,
+            execution: execution,
+            machineContext: machineContext
         )
     }
 
@@ -78,52 +76,6 @@ public enum ServiceRunner {
             hooks: hooks,
             beforeWave: beforeWave
         )
-    }
-
-    package static func runContainerWithFileMounts(
-        _ plan: ServicePlan,
-        machineContext: MachineContext = .applicationSandbox
-    ) async throws {
-        let machine = machineContext.machineName ?? "host"
-        if machineContext.isMachineMode {
-            try await ComposeContainerGateway.runDetached(plan: plan, machineContext: machineContext)
-            return
-        }
-        try await ContainerTeardown.teardownRespectingCancellation(id: plan.name, machineContext: machineContext) {
-            let runArguments = try ComposeFileStaging.preparedRunArguments(for: plan)
-            let command: Application.ContainerRun
-            do {
-                command = try Application.ContainerRun.parse(runArguments)
-            } catch {
-                ComposeFileStaging.removeContainerStaging(
-                    projectName: plan.projectName,
-                    containerName: plan.name
-                )
-                OsLogTelemetry.enabled {
-                    OsLogTelemetry.lifecycle.error(
-                        """
-                        event=container_start_failed project=\(plan.projectName, privacy: .public) \
-                        service=\(plan.serviceName, privacy: .public) \
-                        container=\(plan.name, privacy: .public) \
-                        error_type=\(String(describing: type(of: error)), privacy: .public)
-                        """
-                    )
-                }
-                throw error
-            }
-            try await command.run()
-            OsLogTelemetry.enabled {
-                OsLogTelemetry.lifecycle.info(
-                    """
-                    event=container_start project=\(plan.projectName, privacy: .public) \
-                    service=\(plan.serviceName, privacy: .public) \
-                    container=\(plan.name, privacy: .public) \
-                    replica=\(plan.replicaIndex, privacy: .public) \
-                    machine=\(machine, privacy: .public)
-                    """
-                )
-            }
-        }
     }
 
     public static func down(

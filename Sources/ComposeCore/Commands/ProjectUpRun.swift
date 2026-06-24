@@ -24,9 +24,14 @@ package struct ProjectUpRequest: Sendable {
 
 package struct ProjectUpExecution: Sendable {
     package let progress: WaveProgressHandlers?
+    package let imagePullOutput: ImagePullOutput?
 
-    package init(progress: WaveProgressHandlers? = nil) {
+    package init(
+        progress: WaveProgressHandlers? = nil,
+        imagePullOutput: ImagePullOutput? = .headlessHost
+    ) {
         self.progress = progress
+        self.imagePullOutput = imagePullOutput
     }
 }
 
@@ -63,9 +68,10 @@ package enum ProjectUpRun {
         execution: ProjectUpExecution,
         machineContext: MachineContext
     ) async throws {
+        let hostComposeProgress = execution.imagePullOutput != nil && !machineContext.isMachineMode
         try await BuildRunner.buildAll(
             plan.buildPlans,
-            progress: nil,
+            progress: hostComposeProgress ? ProgressSetting.none : nil,
             dryRunManifest: nil,
             machineContext: machineContext
         )
@@ -106,6 +112,7 @@ package enum ProjectUpRun {
         try await ServiceRunner.up(
             layers: plan.layers,
             progress: execution.progress,
+            imagePullOutput: execution.imagePullOutput,
             healthContext: plan.healthContext,
             execution: wavePolicy,
             machineContext: machineContext
