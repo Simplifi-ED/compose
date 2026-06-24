@@ -117,6 +117,16 @@ container compose up --machine dev -f compose.yaml
 
 `watch`, `run`, `top`, `stats`, `config`, `save`, and `load` reject `--machine`.
 
+### Progress Output
+
+`up` and `run` render compose-owned progress on stderr with `--progress auto|plain|none`.
+
+- `auto` uses stacked native terminal lines on a TTY and plain text when stderr is redirected.
+- `plain` always writes newline-separated status lines without ANSI redraw.
+- `none` suppresses compose progress, including host-side image pull progress.
+
+Progress is ordered to avoid garbled output: build progress is owned by `container build`, missing host images are pulled and unpacked before startup waves, then service start/stop wave lines render. When stderr is not a TTY, image pulls emit fetch-layer lines during download and one completion line per image.
+
 ### Ps (`compose ps`)
 
 Lists project containers in a fixed-width table:

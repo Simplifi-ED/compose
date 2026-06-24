@@ -36,7 +36,7 @@ extension TestRunner {
                         projectName: "demo",
                         options: GracefulStopOptions()
                     ),
-                    runContainer: { _ in 7 }
+                    runContainer: { _, _ async throws -> Int32 in 7 }
                 )
                 return Int32.min
             } catch let exit as ExitCode {

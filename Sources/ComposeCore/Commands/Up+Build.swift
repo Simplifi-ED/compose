@@ -19,9 +19,14 @@ extension Up {
         dryRunManifest: DryRunManifest?,
         machineContext: MachineContext
     ) async throws {
+        let buildProgress: ProgressSetting? = {
+            guard dryRunManifest == nil else { return nil }
+            if machineContext.isMachineMode { return progressOptions.progress }
+            return ProgressSetting.none
+        }()
         try await BuildRunner.buildAll(
             buildPlans,
-            progress: dryRunManifest == nil ? progressOptions.progress : nil,
+            progress: buildProgress,
             dryRunManifest: dryRunManifest,
             machineContext: machineContext
         )

@@ -8,7 +8,11 @@ package enum RunSession {
         plan: ServicePlan,
         shutdownContext: RunShutdownContext,
         useInteractivePTY: Bool = false,
-        runContainer: @escaping @Sendable (ServicePlan) async throws -> Int32 = defaultRunContainer,
+        imagePullOutput: ImagePullOutput? = nil,
+        runContainer: @escaping @Sendable (ServicePlan, ImagePullOutput?) async throws -> Int32 =
+            { plan, imagePullOutput in
+                try await defaultRunContainer(plan: plan, imagePullOutput: imagePullOutput)
+            },
         stopRunContainer: @escaping @Sendable (RunShutdownContext) async throws -> Void = {
             try await RunShutdownContext.stopAndRemove(context: $0)
         }
@@ -21,16 +25,25 @@ package enum RunSession {
             },
             stopRunContainer: stopRunContainer,
             body: {
-                try await runContainer(plan)
+                if let imagePullOutput {
+                    try await ImagePullRunner.pullMissing(plans: [plan], output: imagePullOutput)
+                }
+                return try await runContainer(plan, imagePullOutput)
             }
         )
     }
 
-    package static func defaultRunContainer(plan: ServicePlan) async throws -> Int32 {
+    package static func defaultRunContainer(
+        plan: ServicePlan,
+        imagePullOutput: ImagePullOutput? = nil
+    ) async throws -> Int32 {
         // Remove a stale same-name container before start. Interrupt cleanup is owned by
         // `stopRunContainer` (graceful `--timeout`), not `teardownRespectingCancellation`.
         try await ContainerTeardown.teardown(id: plan.name)
-        let runArguments = try ComposeFileStaging.preparedRunArguments(for: plan)
+        let runArguments = try ComposeFileStaging.preparedRunArguments(
+            for: plan,
+            imagePullOutput: imagePullOutput
+        )
         let command: Application.ContainerRun
         do {
             command = try Application.ContainerRun.parse(runArguments)
