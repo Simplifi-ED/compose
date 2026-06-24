@@ -108,8 +108,7 @@ package enum ComposeFileStaging {
         }
         let runtimeFlags = runArguments[..<imageIndex]
         if !runtimeFlags.contains("--progress"),
-           !runtimeFlags.contains(where: { $0.hasPrefix("--progress=") })
-        {
+           !runtimeFlags.contains(where: { $0.hasPrefix("--progress=") }) {
             runArguments.insert(contentsOf: ["--progress", "none"], at: imageIndex)
         }
         guard let updatedImageIndex = runArguments.firstIndex(of: image) else { return }

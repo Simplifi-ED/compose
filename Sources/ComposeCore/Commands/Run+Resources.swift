@@ -69,7 +69,7 @@ extension Run {
         machineContext: MachineContext = .applicationSandbox
     ) async throws {
         if !buildPlans.isEmpty {
-            // ponytail: run is host-only (--machine rejected); silence container build bars so compose owns stderr for image pull.
+            // ponytail: host run; ProgressSetting.none so compose owns pull stderr.
             try await BuildRunner.buildAll(
                 buildPlans,
                 progress: ProgressSetting.none,
