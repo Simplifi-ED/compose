@@ -51,14 +51,25 @@ jobs:
           shasum -a 256 dist/container-compose-macos-arm64.zip | awk '{print $1}' > dist/container-compose-macos-arm64.zip.sha256
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@718ea10b132b3b2eba29c1007bb80653f286566b # v3.0.1
-        with:
-          files: |
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          ASSETS=(
             dist/compose-plugin.tar.gz
             dist/compose-plugin.tar.gz.sha256
             dist/container-compose-macos-arm64.zip
             dist/container-compose-macos-arm64.zip.sha256
-          generate_release_notes: true
+          )
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "${ASSETS[@]}" --clobber
+          else
+            gh release create "$TAG" \
+              --title "$TAG" \
+              --generate-notes \
+              "${ASSETS[@]}"
+          fi
 
   bump-homebrew-formula:
     needs: release
