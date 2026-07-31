@@ -66,6 +66,12 @@ package final class ComposeXPCService: NSObject, ComposeXPCProtocol {
         }
     }
 
+    package func scale(requestJSON: String, reply: @escaping (String?, NSError?) -> Void) {
+        runAsync(requestJSON: requestJSON, reply: reply) {
+            try await ComposeXPCHandlers.scaleJSON(requestJSON)
+        }
+    }
+
     private func runAsync(
         requestJSON: String,
         reply: @escaping (String?, NSError?) -> Void,

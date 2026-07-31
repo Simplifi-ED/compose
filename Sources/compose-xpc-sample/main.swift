@@ -11,10 +11,28 @@ struct ComposeXPCSample {
             exit(2)
         }
 
+        if options.operation == "up" || options.operation == "scale" {
+            guard !options.files.isEmpty else {
+                fputs("error: --file is required for \(options.operation)\n", stderr)
+                printUsage()
+                exit(2)
+            }
+        }
+        if options.operation == "scale" && options.scales.isEmpty {
+            fputs("error: --scale SERVICE=COUNT is required for scale\n", stderr)
+            printUsage()
+            exit(2)
+        }
+
         let requestJSON: String
         do {
             requestJSON = try ComposeXPCCodec.encode(
-                ComposeXPCProjectRequest(projectName: projectName)
+                ComposeXPCProjectRequest(
+                    projectName: projectName,
+                    files: options.files,
+                    dryRun: options.dryRun,
+                    scales: options.scales
+                )
             )
         } catch {
             fputs("error: \(error.localizedDescription)\n", stderr)
@@ -32,8 +50,11 @@ struct ComposeXPCSample {
 
     private struct Options {
         var useMach = false
+        var dryRun = false
         var projectName: String?
         var operation = "status"
+        var files: [String] = []
+        var scales: [String: Int] = [:]
     }
 
     private static func parseOptions() -> Options {
@@ -41,24 +62,68 @@ struct ComposeXPCSample {
         var arguments = CommandLine.arguments.dropFirst()
         while let arg = arguments.first {
             arguments = arguments.dropFirst()
-            switch arg {
-            case "--mach":
-                options.useMach = true
-            case "--project", "-p":
-                options.projectName = arguments.first
-                if options.projectName != nil { arguments = arguments.dropFirst() }
-            case "status", "ps", "up", "down":
-                options.operation = arg
-            case "--help", "-h":
-                printUsage()
-                exit(0)
-            default:
-                fputs("Unknown argument: \(arg)\n", stderr)
-                printUsage()
-                exit(2)
-            }
+            applyArgument(arg, arguments: &arguments, options: &options)
         }
         return options
+    }
+
+    private static func applyArgument(
+        _ arg: String,
+        arguments: inout ArraySlice<String>,
+        options: inout Options
+    ) {
+        if arg == "--mach" {
+            options.useMach = true
+            return
+        }
+        if arg == "--dry-run" {
+            options.dryRun = true
+            return
+        }
+        if arg == "--project" || arg == "-p" {
+            options.projectName = arguments.first
+            if options.projectName != nil { arguments = arguments.dropFirst() }
+            return
+        }
+        if arg == "--file" || arg == "-f" {
+            if let path = arguments.first {
+                options.files.append(path)
+                arguments = arguments.dropFirst()
+            }
+            return
+        }
+        if arg == "--scale" {
+            if let entry = arguments.first {
+                parseScaleEntry(entry, into: &options.scales)
+                arguments = arguments.dropFirst()
+            }
+            return
+        }
+        if arg == "status" || arg == "ps" || arg == "up" || arg == "down" || arg == "scale" {
+            options.operation = arg
+            return
+        }
+        if arg == "--help" || arg == "-h" {
+            printUsage()
+            exit(0)
+        }
+        fputs("Unknown argument: \(arg)\n", stderr)
+        printUsage()
+        exit(2)
+    }
+
+    private static func parseScaleEntry(_ entry: String, into scales: inout [String: Int]) {
+        guard let separator = entry.firstIndex(of: "=") else {
+            fputs("error: invalid --scale '\(entry)' (use SERVICE=COUNT)\n", stderr)
+            exit(2)
+        }
+        let service = String(entry[..<separator]).trimmingCharacters(in: .whitespaces)
+        let countText = String(entry[entry.index(after: separator)...]).trimmingCharacters(in: .whitespaces)
+        guard let count = Int(countText), count >= 1, !service.isEmpty else {
+            fputs("error: invalid --scale '\(entry)' (use SERVICE=COUNT)\n", stderr)
+            exit(2)
+        }
+        scales[service] = count
     }
 
     private static func invoke(operation: String, requestJSON: String, useMach: Bool) throws -> String {
@@ -111,6 +176,8 @@ struct ComposeXPCSample {
             proxy.up(requestJSON: requestJSON, reply: reply)
         case "down":
             proxy.down(requestJSON: requestJSON, reply: reply)
+        case "scale":
+            proxy.scale(requestJSON: requestJSON, reply: reply)
         default:
             fputs("error: unsupported operation \(operation)\n", stderr)
             exit(2)
@@ -120,7 +187,9 @@ struct ComposeXPCSample {
     private static func printUsage() {
         fputs(
             """
-            usage: compose-xpc-sample [--mach] --project NAME <status|ps|up|down>
+            usage: compose-xpc-sample [--mach] [--dry-run] --project NAME \\
+              [--file PATH ...] [--scale SERVICE=COUNT ...] \\
+              <status|ps|up|down|scale>
 
             """,
             stderr

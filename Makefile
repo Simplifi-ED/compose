@@ -3,7 +3,7 @@ WARNINGS_AS_ERRORS ?= true
 SWIFT ?= /usr/bin/swift
 SWIFT_FLAGS := $(if $(filter-out false,$(WARNINGS_AS_ERRORS)),-Xswiftc -warnings-as-errors)
 
-.PHONY: build lint test dist verify-codesign smoke smoke-xpc smoke-volumes smoke-volumes-named smoke-networks clean
+`.PHONY: build lint test dist verify-codesign smoke smoke-xpc smoke-volumes smoke-volumes-named smoke-networks smoke-scale clean
 
 build:
 	$(SWIFT) build -c $(BUILD_CONFIGURATION) $(SWIFT_FLAGS)
@@ -43,6 +43,10 @@ smoke-networks-bridge: ## install plugin + bridged network smoke (skips if upstr
 smoke-volumes-named: ## install plugin + live compose named volume runtime checks
 	bash ./scripts/install.sh
 	bash ./scripts/smoke-named-volumes.sh
+
+smoke-scale: ## install plugin + live compose scale delta reconcile checks
+	bash ./scripts/install.sh
+	bash ./scripts/smoke-scale.sh
 
 clean:
 	@rm -rf .build dist

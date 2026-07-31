@@ -43,6 +43,7 @@ public enum ComposeError: LocalizedError, Sendable {
     case containerNameNotSupportedWithReplicas(service: String, containerName: String)
     case staticPortBlocksScaling(service: String, port: String, replicas: Int)
     case scaleServiceRequiresProfile(service: String, requiredProfiles: [String])
+    case scaleRequiresTargets
     case healthCheckTimeout(dependency: String, container: String)
     case serviceStartTimeout(dependency: String, container: String)
     case serviceCompletedUnsuccessfully(dependency: String, container: String, exitCode: Int32)

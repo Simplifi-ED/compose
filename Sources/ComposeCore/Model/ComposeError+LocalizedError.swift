@@ -118,6 +118,8 @@ extension ComposeError {
             let names = Self.profileNamesDescription(requiredProfiles)
             let options = Self.profileActivationOptions(requiredProfiles)
             return "Service '\(service)' requires profile \(names). Enable it with \(options) to scale it."
+        case .scaleRequiresTargets:
+            return "scale requires at least one --scale SERVICE=COUNT (for example --scale web=3)."
         case .healthCheckTimeout(let dependency, let container):
             return "Service '\(dependency)' didn't become healthy in time (container '\(container)'). "
                 + "Check logs with compose logs \(dependency)."

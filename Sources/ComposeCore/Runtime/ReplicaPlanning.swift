@@ -71,4 +71,15 @@ enum ReplicaPlanning {
     ) -> String {
         "\(projectName)_\(serviceName)_\(index)"
     }
+
+    /// Parses replica index from a compose-indexed container name; nil when the name does not match.
+    static func replicaIndex(
+        projectName: String,
+        serviceName: String,
+        containerName: String
+    ) -> Int? {
+        let prefix = "\(projectName)_\(serviceName)_"
+        guard containerName.hasPrefix(prefix) else { return nil }
+        return Int(containerName.dropFirst(prefix.count))
+    }
 }

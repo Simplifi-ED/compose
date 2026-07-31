@@ -6,6 +6,7 @@ package enum ComposeSubcommandRegistry {
     package static let all: [any AsyncParsableCommand.Type] = [
         Up.self,
         Down.self,
+        Scale.self,
         Pause.self,
         Unpause.self,
         Ps.self,

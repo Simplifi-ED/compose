@@ -1,0 +1,9 @@
+{
+  "projectName": "scale-smoke",
+  "files": [
+    "/absolute/path/to/compose/fixtures/scale-smoke/compose.yml"
+  ],
+  "scales": {
+    "web": 3
+  }
+}

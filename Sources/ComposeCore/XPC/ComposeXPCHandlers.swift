@@ -50,6 +50,19 @@ package enum ComposeXPCHandlers {
         return try ComposeXPCCodec.encode(ComposeXPCDTOMapping.mutationResponse(from: result))
     }
 
+    package static func scaleJSON(_ requestJSON: String) async throws -> String {
+        let request = try ComposeXPCCodec.decodeRequest(requestJSON)
+        try validateScaleRequest(request)
+        let result = try await ProjectScaleRun.run(
+            ProjectScaleRequest(
+                inputs: inputs(from: request),
+                dryRun: request.dryRun,
+                scaleOverrides: request.scales
+            )
+        )
+        return try ComposeXPCCodec.encode(ComposeXPCDTOMapping.mutationResponse(from: result))
+    }
+
     package enum MutationOperation: Sendable {
         case startup
         case shutdown
@@ -61,6 +74,25 @@ package enum ComposeXPCHandlers {
             throw ComposeXPCError.invalidRequest(
                 "up requires at least one compose file path in files[] (the listener has no project working directory)."
             )
+        }
+    }
+
+    private static func validateScaleRequest(_ request: ComposeXPCProjectRequest) throws {
+        try ComposePathValidation.validateComposeFilePaths(request.files)
+        guard !request.files.isEmpty else {
+            throw ComposeXPCError.invalidRequest(
+                "scale requires files[] compose paths (listener has no project working directory)."
+            )
+        }
+        guard !request.scales.isEmpty else {
+            throw ComposeXPCError.invalidRequest("scale requires scales{} with at least one SERVICE=COUNT entry.")
+        }
+        for (service, count) in request.scales {
+            guard !service.isEmpty, count >= 1 else {
+                throw ComposeXPCError.invalidRequest(
+                    "Invalid scale entry '\(service)=\(count)'. Use positive integer counts."
+                )
+            }
         }
     }
 }

@@ -94,6 +94,7 @@ container compose down -f fixtures/minimal-compose.yml -p demo
 | Command | What it does |
 |---------|-------------|
 | `up` | Start all services (detached). Respects `depends_on` order. |
+| `scale` | Reconcile replica counts (delta start/stop; does not recreate healthy replicas). |
 | `down` | Stop and remove project containers. |
 | `ps` | List running containers for the project. |
 | `logs` | Stream or print service logs. |
@@ -268,7 +269,7 @@ Run a project inside an existing [container machine](https://github.com/apple/co
 
 | Action | Boots stopped machine? |
 |--------|------------------------|
-| `up`, `down` | Yes (mutating commands) |
+| `up`, `down`, `scale` | Yes (mutating commands) |
 | `ps`, `logs` | No — exits gracefully with "Machine stopped" |
 | `--dry-run` | No |
 | `exec`, `cp` | No — requires an already-running machine |
@@ -418,10 +419,58 @@ services:
 
 ```bash
 container compose up --scale web=5   # CLI overrides the file
+container compose scale --scale web=5   # reconcile replicas without recreating healthy ones
 container compose up --parallel 2    # start at most 2 containers per wave
 ```
 
+`compose scale` starts missing replica indices and stops excess ones only — running containers within the desired count are left untouched (unlike `compose up`, which tears down and recreates every planned container).
+
+### Autoscaling (external controllers)
+
+This plugin does **not** ship a built-in HPA controller or compose-file autoscale YAML. For metric-driven scaling, run a controller outside compose (custom script, Prometheus sidecar, or Kubernetes HPA if you migrate workloads).
+
+1. Poll `container compose stats` (CPU + memory; average across replicas).
+2. Call `container compose scale --scale SERVICE=COUNT` or XPC `scale` with `scales` in the JSON request.
+
+**CPU targets:** normalize by `deploy.resources.limits.cpus` when set; otherwise treat stats CPU % as per-core utilization. **Memory:** `usage / limit`. Services with **static host ports** (`8080:80`) cannot scale above one replica — exclude them from autoscale targets.
+
 **Important:** static host ports (`"8080:80"`) will conflict across replicas and fail at startup. Use container-only ports (`"80"`) when scaling.
+
+### Examples
+
+Runnable fixture: [`fixtures/scale-smoke/compose.yml`](fixtures/scale-smoke/compose.yml). Full walkthrough: [`docs/examples/README.md`](docs/examples/README.md).
+
+```bash
+# Start baseline replicas (web=2 from deploy.replicas)
+container compose up -f fixtures/scale-smoke/compose.yml -p scale-smoke
+
+# Add a third replica without recreating web_1 or web_2
+container compose scale -f fixtures/scale-smoke/compose.yml -p scale-smoke --scale web=3
+
+# Remove excess replicas (stops web_2 and web_3; web_1 keeps running)
+container compose scale -f fixtures/scale-smoke/compose.yml -p scale-smoke --scale web=1
+
+# Plan only
+container compose scale -f fixtures/scale-smoke/compose.yml -p scale-smoke \
+  --scale web=2 --dry-run
+
+# Static host port — errors above one replica
+container compose scale -f fixtures/scale-smoke/compose.yml -p scale-smoke --scale api=2
+
+container compose down -f fixtures/scale-smoke/compose.yml -p scale-smoke
+```
+
+External controller skeleton (demo loop): [`docs/examples/scale-external-controller.sh`](docs/examples/scale-external-controller.sh).
+
+XPC `scale` JSON samples: [`docs/examples/xpc-scale-request.json`](docs/examples/xpc-scale-request.json), [`docs/examples/xpc-scale-dry-run.json`](docs/examples/xpc-scale-dry-run.json).
+
+```bash
+# Terminal 1: container compose xpc serve
+compose-xpc-sample --project scale-smoke \
+  -f fixtures/scale-smoke/compose.yml --scale web=3 scale
+```
+
+Live check: `make smoke-scale`.
 
 Containers are always named `{project}_{service}_{index}` (e.g. `demo_web_1`, `demo_web_2`).
 

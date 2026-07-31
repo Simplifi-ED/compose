@@ -1,0 +1,24 @@
+# Scale smoke fixture — container-only ports, resource limits for external autoscaling demos.
+# Usage: see docs/examples/README.md and scripts/smoke-scale.sh
+
+name: scale-smoke
+
+services:
+  web:
+    image: docker.io/library/alpine:3.24
+    command: ["sh", "-c", "while true; do :; done"]
+    ports:
+      - "80"
+    deploy:
+      replicas: 2
+      resources:
+        limits:
+          cpus: "2"
+          memory: 256M
+
+  # Static host port — must stay at one replica (scale above 1 errors).
+  api:
+    image: docker.io/library/alpine:3.24
+    command: ["sleep", "infinity"]
+    ports:
+      - "18080:80"
