@@ -17,13 +17,18 @@ extension TestRunner {
     }
 
     private mutating func runScaleReconcileTests() throws {
+        try runScaleReconcileUpDownTests()
+        try runScaleReconcileEmptyTargetsTest()
+    }
+
+    private mutating func runScaleReconcileUpDownTests() throws {
         let fixturesDirectory = Self.fixtureURL("scale-compose.yml").deletingLastPathComponent()
         let fixture = try ComposeParser.parse(fileURL: Self.fixtureURL("scale-compose.yml"))
         let running = [
             ProjectContainer(name: "demo_web_1", serviceName: "web", status: .running, publishedPorts: []),
             ProjectContainer(name: "demo_web_2", serviceName: "web", status: .running, publishedPorts: [])
         ]
-        let scaleUp = try ScaleReconcile.plan(
+        let planningInput = ScaleReconcile.PlanningInput(
             composeFile: fixture,
             projectName: "demo",
             composeDirectory: fixturesDirectory,
@@ -33,35 +38,44 @@ extension TestRunner {
             machineName: nil,
             requireAgentReachability: false
         )
+        let scaleUp = try ScaleReconcile.plan(planningInput)
         expect(scaleUp.toStart.map(\.name) == ["demo_web_3"], "scale up starts only missing replica")
         expect(scaleUp.toStop.isEmpty, "scale up does not stop running replicas")
 
         let scaleDown = try ScaleReconcile.plan(
-            composeFile: fixture,
-            projectName: "demo",
-            composeDirectory: fixturesDirectory,
-            scaleOverrides: ["web": 1],
-            containers: running,
-            activeProfiles: [],
-            machineName: nil,
-            requireAgentReachability: false
+            ScaleReconcile.PlanningInput(
+                composeFile: fixture,
+                projectName: "demo",
+                composeDirectory: fixturesDirectory,
+                scaleOverrides: ["web": 1],
+                containers: running,
+                activeProfiles: [],
+                machineName: nil,
+                requireAgentReachability: false
+            )
         )
         expect(scaleDown.toStart.isEmpty, "scale down does not recreate running replicas")
         expect(scaleDown.toStop == ["demo_web_2"], "scale down stops excess replica indices")
+    }
 
+    private mutating func runScaleReconcileEmptyTargetsTest() throws {
+        let fixturesDirectory = Self.fixtureURL("scale-compose.yml").deletingLastPathComponent()
+        let fixture = try ComposeParser.parse(fileURL: Self.fixtureURL("scale-compose.yml"))
         expectComposeError(
             "scale requires targets",
             matching: { if case .scaleRequiresTargets = $0 { true } else { false } },
             body: {
                 _ = try ScaleReconcile.plan(
-                    composeFile: fixture,
-                    projectName: "demo",
-                    composeDirectory: fixturesDirectory,
-                    scaleOverrides: [:],
-                    containers: [],
-                    activeProfiles: [],
-                    machineName: nil,
-                    requireAgentReachability: false
+                    ScaleReconcile.PlanningInput(
+                        composeFile: fixture,
+                        projectName: "demo",
+                        composeDirectory: fixturesDirectory,
+                        scaleOverrides: [:],
+                        containers: [],
+                        activeProfiles: [],
+                        machineName: nil,
+                        requireAgentReachability: false
+                    )
                 )
             }
         )

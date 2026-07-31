@@ -28,9 +28,41 @@ package enum ProjectScaleRun {
             inputs: request.inputs,
             scaleOverrides: request.scaleOverrides,
             machineName: request.inputs.machineName,
-            requireExplicitFiles: true,
-            dryRun: request.dryRun
+            requireExplicitFiles: true
         )
+        let prepared = try await prepareReconcile(
+            plan: plan,
+            request: request
+        )
+        if request.dryRun {
+            return ProjectMutationResult(
+                affectedContainers: prepared.reconcilePlan.toStop + prepared.reconcilePlan.toStart.map(\.name)
+            )
+        }
+        try await provisionInfrastructure(
+            plan: plan,
+            machineContext: prepared.machineContext,
+            imagePullOutput: imagePullOutput
+        )
+        let affected = try await ScaleReconcile.execute(
+            plan: prepared.reconcilePlan,
+            projectName: plan.projectName,
+            imagePullOutput: imagePullOutput,
+            machineContext: prepared.machineContext,
+            maxConcurrent: request.maxConcurrent
+        )
+        return ProjectMutationResult(affectedContainers: affected)
+    }
+
+    private struct PreparedReconcile: Sendable {
+        let machineContext: MachineContext
+        let reconcilePlan: ScaleReconcile.Plan
+    }
+
+    private static func prepareReconcile(
+        plan: ProjectScalePlanning.Plan,
+        request: ProjectScaleRequest
+    ) async throws -> PreparedReconcile {
         let machineResolution = try await MachineContext.resolve(machineName: request.inputs.machineName)
         let machineContext: MachineContext
         if request.dryRun {
@@ -43,21 +75,25 @@ package enum ProjectScaleRun {
             machineContext: machineContext
         )
         let reconcilePlan = try ScaleReconcile.plan(
-            composeFile: plan.composeFile,
-            projectName: plan.projectName,
-            composeDirectory: plan.composeDirectory,
-            scaleOverrides: plan.scaleOverrides,
-            containers: containers,
-            activeProfiles: plan.activeProfiles,
-            machineName: request.inputs.machineName,
-            requireAgentReachability: !request.dryRun
-        )
-        if request.dryRun {
-            return ProjectMutationResult(
-                affectedContainers: reconcilePlan.toStop + reconcilePlan.toStart.map(\.name)
+            ScaleReconcile.PlanningInput(
+                composeFile: plan.composeFile,
+                projectName: plan.projectName,
+                composeDirectory: plan.composeDirectory,
+                scaleOverrides: plan.scaleOverrides,
+                containers: containers,
+                activeProfiles: plan.activeProfiles,
+                machineName: request.inputs.machineName,
+                requireAgentReachability: !request.dryRun
             )
-        }
+        )
+        return PreparedReconcile(machineContext: machineContext, reconcilePlan: reconcilePlan)
+    }
 
+    private static func provisionInfrastructure(
+        plan: ProjectScalePlanning.Plan,
+        machineContext: MachineContext,
+        imagePullOutput: ImagePullOutput?
+    ) async throws {
         try await BuildRunner.buildAll(
             plan.buildPlans,
             progress: imagePullOutput != nil && !machineContext.isMachineMode ? ProgressSetting.none : nil,
@@ -74,13 +110,5 @@ package enum ProjectScaleRun {
             projectName: plan.projectName,
             machineContext: machineContext
         )
-        let affected = try await ScaleReconcile.execute(
-            plan: reconcilePlan,
-            projectName: plan.projectName,
-            imagePullOutput: imagePullOutput,
-            machineContext: machineContext,
-            maxConcurrent: request.maxConcurrent
-        )
-        return ProjectMutationResult(affectedContainers: affected)
     }
 }

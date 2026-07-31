@@ -81,7 +81,7 @@ package enum ComposeXPCHandlers {
         try ComposePathValidation.validateComposeFilePaths(request.files)
         guard !request.files.isEmpty else {
             throw ComposeXPCError.invalidRequest(
-                "scale requires at least one compose file path in files[] (the listener has no project working directory)."
+                "scale requires files[] compose paths (listener has no project working directory)."
             )
         }
         guard !request.scales.isEmpty else {

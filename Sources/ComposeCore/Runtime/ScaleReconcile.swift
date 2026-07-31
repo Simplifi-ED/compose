@@ -12,94 +12,6 @@ package enum ScaleReconcile {
         }
     }
 
-    package static func plan(
-        composeFile: ComposeFile,
-        projectName: String,
-        composeDirectory: URL,
-        scaleOverrides: [String: Int],
-        containers: [ProjectContainer],
-        activeProfiles: Set<String>,
-        machineName: String?,
-        requireAgentReachability: Bool = true
-    ) throws -> Plan {
-        guard !scaleOverrides.isEmpty else {
-            throw ComposeError.scaleRequiresTargets
-        }
-        let activeServices = try ProfileFilter.activeServices(
-            from: composeFile.services,
-            activeProfiles: activeProfiles
-        )
-        let activeServiceNames = Set(activeServices.keys)
-        try ServicePlanner.validateStartupPlanning(
-            composeFile: composeFile,
-            activeServiceNames: activeServiceNames,
-            machineName: machineName,
-            scaleOverrides: scaleOverrides,
-            requireAgentReachability: requireAgentReachability
-        )
-        let context = ServicePlanner.PlanningContext(
-            composeFile: composeFile,
-            projectName: projectName,
-            composeDirectory: composeDirectory,
-            machineName: machineName,
-            requireAgentReachability: requireAgentReachability
-        )
-        var toStart: [ServicePlan] = []
-        var toStop: [String] = []
-        for serviceName in scaleOverrides.keys.sorted() {
-            guard let service = activeServices[serviceName] else { continue }
-            let desired = scaleOverrides[serviceName]!
-            try ReplicaPlanning.validateForUp(
-                serviceName: serviceName,
-                service: service,
-                replicas: desired
-            )
-            let serviceContainers = containers.filter { $0.serviceName == serviceName }
-            let runningIndices = Set(
-                serviceContainers
-                    .filter { $0.status == .running }
-                    .compactMap {
-                        ReplicaPlanning.replicaIndex(
-                            projectName: projectName,
-                            serviceName: serviceName,
-                            containerName: $0.name
-                        )
-                    }
-            )
-            for index in 1...desired where !runningIndices.contains(index) {
-                toStart.append(
-                    try ServicePlanner.buildUpPlan(
-                        context: context,
-                        serviceName: serviceName,
-                        service: service,
-                        replicaIndex: index
-                    )
-                )
-            }
-            for container in serviceContainers {
-                guard let index = ReplicaPlanning.replicaIndex(
-                    projectName: projectName,
-                    serviceName: serviceName,
-                    containerName: container.name
-                ) else { continue }
-                if index > desired {
-                    toStop.append(container.name)
-                }
-            }
-        }
-        toStop.sort { lhs, rhs in
-            trailingReplicaIndex(lhs) > trailingReplicaIndex(rhs)
-        }
-        return Plan(toStart: toStart, toStop: toStop)
-    }
-
-    private static func trailingReplicaIndex(_ containerName: String) -> Int {
-        guard let last = containerName.split(separator: "_").last,
-              let value = Int(last)
-        else { return 0 }
-        return value
-    }
-
     package static func execute(
         plan: Plan,
         projectName: String,
@@ -108,28 +20,14 @@ package enum ScaleReconcile {
         maxConcurrent: Int? = nil
     ) async throws -> [String] {
         let policy = WaveExecutionPolicy(maxConcurrent: maxConcurrent)
-        var affected: [String] = []
-        if !plan.toStop.isEmpty {
-            let stopResult = await ServiceRunner.parallelRun(
-                plan.toStop.map {
-                    ServiceRunner.ParallelRunItem(label: $0, collectOnSuccess: $0, value: $0)
-                },
-                maxConcurrent: policy.maxConcurrent
-            ) { name in
-                ComposeFileStaging.removeContainerStaging(
-                    projectName: projectName,
-                    containerName: name
-                )
-                try await ContainerTeardown.teardown(id: name, machineContext: machineContext)
-            }
-            if !stopResult.failures.isEmpty {
-                throw ComposeError.multipleServiceFailures(stopResult.failures)
-            }
-            affected.append(contentsOf: stopResult.succeeded)
-        }
-        if plan.toStart.isEmpty {
-            return affected
-        }
+        var affected = try await stopExcess(
+            names: plan.toStop,
+            projectName: projectName,
+            machineContext: machineContext,
+            maxConcurrent: policy.maxConcurrent
+        )
+        guard !plan.toStart.isEmpty else { return affected }
+
         let hostPullOutput = machineContext.isMachineMode ? nil : imagePullOutput
         if let hostPullOutput {
             try await ImagePullRunner.pullMissing(
@@ -138,22 +36,62 @@ package enum ScaleReconcile {
                 maxConcurrent: policy.maxConcurrent
             )
         }
+        let started = try await startMissing(
+            plans: plan.toStart,
+            imagePullOutput: hostPullOutput,
+            machineContext: machineContext,
+            maxConcurrent: policy.maxConcurrent
+        )
+        affected.append(contentsOf: started)
+        return affected
+    }
+
+    private static func stopExcess(
+        names: [String],
+        projectName: String,
+        machineContext: MachineContext,
+        maxConcurrent: Int?
+    ) async throws -> [String] {
+        guard !names.isEmpty else { return [] }
+        let stopResult = await ServiceRunner.parallelRun(
+            names.map {
+                ServiceRunner.ParallelRunItem(label: $0, collectOnSuccess: $0, value: $0)
+            },
+            maxConcurrent: maxConcurrent
+        ) { name in
+            ComposeFileStaging.removeContainerStaging(
+                projectName: projectName,
+                containerName: name
+            )
+            try await ContainerTeardown.teardown(id: name, machineContext: machineContext)
+        }
+        if !stopResult.failures.isEmpty {
+            throw ComposeError.multipleServiceFailures(stopResult.failures)
+        }
+        return stopResult.succeeded
+    }
+
+    private static func startMissing(
+        plans: [ServicePlan],
+        imagePullOutput: ImagePullOutput?,
+        machineContext: MachineContext,
+        maxConcurrent: Int?
+    ) async throws -> [String] {
         let startResult = await ServiceRunner.parallelRun(
-            plan.toStart.map {
+            plans.map {
                 ServiceRunner.ParallelRunItem(label: $0.name, collectOnSuccess: $0.name, value: $0)
             },
-            maxConcurrent: policy.maxConcurrent
+            maxConcurrent: maxConcurrent
         ) { servicePlan in
             try await ServiceRunner.runContainerWithFileMounts(
                 servicePlan,
-                imagePullOutput: hostPullOutput,
+                imagePullOutput: imagePullOutput,
                 machineContext: machineContext
             )
         }
         if !startResult.failures.isEmpty {
             throw ComposeError.multipleServiceFailures(startResult.failures)
         }
-        affected.append(contentsOf: startResult.succeeded)
-        return affected
+        return startResult.succeeded
     }
 }

@@ -62,36 +62,54 @@ struct ComposeXPCSample {
         var arguments = CommandLine.arguments.dropFirst()
         while let arg = arguments.first {
             arguments = arguments.dropFirst()
-            switch arg {
-            case "--mach":
-                options.useMach = true
-            case "--dry-run":
-                options.dryRun = true
-            case "--project", "-p":
-                options.projectName = arguments.first
-                if options.projectName != nil { arguments = arguments.dropFirst() }
-            case "--file", "-f":
-                if let path = arguments.first {
-                    options.files.append(path)
-                    arguments = arguments.dropFirst()
-                }
-            case "--scale":
-                if let entry = arguments.first {
-                    parseScaleEntry(entry, into: &options.scales)
-                    arguments = arguments.dropFirst()
-                }
-            case "status", "ps", "up", "down", "scale":
-                options.operation = arg
-            case "--help", "-h":
-                printUsage()
-                exit(0)
-            default:
-                fputs("Unknown argument: \(arg)\n", stderr)
-                printUsage()
-                exit(2)
-            }
+            applyArgument(arg, arguments: &arguments, options: &options)
         }
         return options
+    }
+
+    private static func applyArgument(
+        _ arg: String,
+        arguments: inout ArraySlice<String>,
+        options: inout Options
+    ) {
+        if arg == "--mach" {
+            options.useMach = true
+            return
+        }
+        if arg == "--dry-run" {
+            options.dryRun = true
+            return
+        }
+        if arg == "--project" || arg == "-p" {
+            options.projectName = arguments.first
+            if options.projectName != nil { arguments = arguments.dropFirst() }
+            return
+        }
+        if arg == "--file" || arg == "-f" {
+            if let path = arguments.first {
+                options.files.append(path)
+                arguments = arguments.dropFirst()
+            }
+            return
+        }
+        if arg == "--scale" {
+            if let entry = arguments.first {
+                parseScaleEntry(entry, into: &options.scales)
+                arguments = arguments.dropFirst()
+            }
+            return
+        }
+        if arg == "status" || arg == "ps" || arg == "up" || arg == "down" || arg == "scale" {
+            options.operation = arg
+            return
+        }
+        if arg == "--help" || arg == "-h" {
+            printUsage()
+            exit(0)
+        }
+        fputs("Unknown argument: \(arg)\n", stderr)
+        printUsage()
+        exit(2)
     }
 
     private static func parseScaleEntry(_ entry: String, into scales: inout [String: Int]) {
