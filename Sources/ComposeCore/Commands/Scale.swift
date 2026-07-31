@@ -57,7 +57,12 @@ public struct Scale: AsyncParsableCommand {
                 maxConcurrent: parallelOptions.resolvedMaxConcurrent(),
                 scaleOverrides: scaleOverrides
             )
-            _ = try await ProjectScaleRun.run(request)
+            let result = try await ProjectScaleRun.run(request)
+            if dryRunOptions.isEnabled {
+                for name in result.affectedContainers.sorted() {
+                    print("scale \(name)")
+                }
+            }
         }
     }
 }

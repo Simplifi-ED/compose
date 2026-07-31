@@ -45,7 +45,45 @@ Unsigned clients are always rejected. Ad-hoc signed binaries need a matching `te
 
 Always pass explicit compose file paths in `files[]`. The XPC listener does not inherit your app's working directory (especially under LaunchAgent, where CWD is `/`).
 
-For `scale`, include `scales` as a JSON object mapping service names to desired replica counts (for example `"scales": {"web": 3}`). Same delta reconcile semantics as `compose scale` on the CLI.
+For `scale`, include `scales` as a JSON object mapping service names to desired replica counts. Same delta reconcile semantics as `compose scale` on the CLI.
+
+**`scale` request** ([`docs/examples/xpc-scale-request.json`](examples/xpc-scale-request.json)):
+
+```json
+{
+  "projectName": "scale-smoke",
+  "files": ["/absolute/path/to/fixtures/scale-smoke/compose.yml"],
+  "scales": { "web": 3 }
+}
+```
+
+**`scale` dry-run** ([`docs/examples/xpc-scale-dry-run.json`](examples/xpc-scale-dry-run.json)):
+
+```json
+{
+  "projectName": "scale-smoke",
+  "files": ["/absolute/path/to/fixtures/scale-smoke/compose.yml"],
+  "dryRun": true,
+  "scales": { "web": 3 }
+}
+```
+
+**Sample client:**
+
+```bash
+# Terminal 1
+container compose xpc serve
+
+# Terminal 2 — scale web to 3 replicas
+compose-xpc-sample --project scale-smoke \
+  -f /absolute/path/to/fixtures/scale-smoke/compose.yml \
+  --scale web=3 scale
+
+# Dry-run
+compose-xpc-sample --project scale-smoke \
+  -f /absolute/path/to/fixtures/scale-smoke/compose.yml \
+  --scale web=3 --dry-run scale
+```
 
 ## Connect from your app
 

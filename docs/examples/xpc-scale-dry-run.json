@@ -1,0 +1,11 @@
+{
+  "projectName": "scale-smoke",
+  "files": [
+    "/absolute/path/to/compose/fixtures/scale-smoke/compose.yml"
+  ],
+  "dryRun": true,
+  "scales": {
+    "web": 3,
+    "api": 1
+  }
+}

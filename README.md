@@ -436,6 +436,42 @@ This plugin does **not** ship a built-in HPA controller or compose-file autoscal
 
 **Important:** static host ports (`"8080:80"`) will conflict across replicas and fail at startup. Use container-only ports (`"80"`) when scaling.
 
+### Examples
+
+Runnable fixture: [`fixtures/scale-smoke/compose.yml`](fixtures/scale-smoke/compose.yml). Full walkthrough: [`docs/examples/README.md`](docs/examples/README.md).
+
+```bash
+# Start baseline replicas (web=2 from deploy.replicas)
+container compose up -f fixtures/scale-smoke/compose.yml -p scale-smoke
+
+# Add a third replica without recreating web_1 or web_2
+container compose scale -f fixtures/scale-smoke/compose.yml -p scale-smoke --scale web=3
+
+# Remove excess replicas (stops web_2 and web_3; web_1 keeps running)
+container compose scale -f fixtures/scale-smoke/compose.yml -p scale-smoke --scale web=1
+
+# Plan only
+container compose scale -f fixtures/scale-smoke/compose.yml -p scale-smoke \
+  --scale web=2 --dry-run
+
+# Static host port — errors above one replica
+container compose scale -f fixtures/scale-smoke/compose.yml -p scale-smoke --scale api=2
+
+container compose down -f fixtures/scale-smoke/compose.yml -p scale-smoke
+```
+
+External controller skeleton (demo loop): [`docs/examples/scale-external-controller.sh`](docs/examples/scale-external-controller.sh).
+
+XPC `scale` JSON samples: [`docs/examples/xpc-scale-request.json`](docs/examples/xpc-scale-request.json), [`docs/examples/xpc-scale-dry-run.json`](docs/examples/xpc-scale-dry-run.json).
+
+```bash
+# Terminal 1: container compose xpc serve
+compose-xpc-sample --project scale-smoke \
+  -f fixtures/scale-smoke/compose.yml --scale web=3 scale
+```
+
+Live check: `make smoke-scale`.
+
 Containers are always named `{project}_{service}_{index}` (e.g. `demo_web_1`, `demo_web_2`).
 
 ### Resource limits
