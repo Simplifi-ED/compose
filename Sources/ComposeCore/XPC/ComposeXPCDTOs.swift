@@ -9,6 +9,7 @@ package struct ComposeXPCProjectRequest: Codable, Sendable, Equatable {
     package var dryRun: Bool
     package var removeVolumes: Bool
     package var removeOrphans: Bool
+    package var scales: [String: Int]
 
     package init(
         projectName: String? = nil,
@@ -18,7 +19,8 @@ package struct ComposeXPCProjectRequest: Codable, Sendable, Equatable {
         machineName: String? = nil,
         dryRun: Bool = false,
         removeVolumes: Bool = false,
-        removeOrphans: Bool = false
+        removeOrphans: Bool = false,
+        scales: [String: Int] = [:]
     ) {
         self.projectName = projectName
         self.files = files
@@ -28,6 +30,7 @@ package struct ComposeXPCProjectRequest: Codable, Sendable, Equatable {
         self.dryRun = dryRun
         self.removeVolumes = removeVolumes
         self.removeOrphans = removeOrphans
+        self.scales = scales
     }
 }
 

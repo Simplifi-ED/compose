@@ -41,9 +41,11 @@ If both arrays are empty, **no signed client is admitted** unless you set `"allo
 
 Unsigned clients are always rejected. Ad-hoc signed binaries need a matching `teamIDs` entry, a `clients` pair, or `allowAnySigned` for dev smoke tests.
 
-## `up` requests
+## `up` and `scale` requests
 
 Always pass explicit compose file paths in `files[]`. The XPC listener does not inherit your app's working directory (especially under LaunchAgent, where CWD is `/`).
+
+For `scale`, include `scales` as a JSON object mapping service names to desired replica counts (for example `"scales": {"web": 3}`). Same delta reconcile semantics as `compose scale` on the CLI.
 
 ## Connect from your app
 

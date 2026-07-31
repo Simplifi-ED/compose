@@ -6,4 +6,5 @@ package protocol ComposeXPCProtocol {
     func ps(requestJSON: String, reply: @escaping (String?, NSError?) -> Void)
     func up(requestJSON: String, reply: @escaping (String?, NSError?) -> Void)
     func down(requestJSON: String, reply: @escaping (String?, NSError?) -> Void)
+    func scale(requestJSON: String, reply: @escaping (String?, NSError?) -> Void)
 }

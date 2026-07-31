@@ -47,7 +47,7 @@ struct ComposeXPCSample {
             case "--project", "-p":
                 options.projectName = arguments.first
                 if options.projectName != nil { arguments = arguments.dropFirst() }
-            case "status", "ps", "up", "down":
+            case "status", "ps", "up", "down", "scale":
                 options.operation = arg
             case "--help", "-h":
                 printUsage()
@@ -111,6 +111,8 @@ struct ComposeXPCSample {
             proxy.up(requestJSON: requestJSON, reply: reply)
         case "down":
             proxy.down(requestJSON: requestJSON, reply: reply)
+        case "scale":
+            proxy.scale(requestJSON: requestJSON, reply: reply)
         default:
             fputs("error: unsupported operation \(operation)\n", stderr)
             exit(2)
@@ -120,7 +122,7 @@ struct ComposeXPCSample {
     private static func printUsage() {
         fputs(
             """
-            usage: compose-xpc-sample [--mach] --project NAME <status|ps|up|down>
+            usage: compose-xpc-sample [--mach] --project NAME <status|ps|up|down|scale>
 
             """,
             stderr
